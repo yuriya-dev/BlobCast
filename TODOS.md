@@ -34,14 +34,14 @@ Welcome to the BlobCast development tracker. In accordance with architectural an
 
 ---
 
-## 🛠️ Backend & On-Chain Roadmap (Status: 🕒 UPCOMING)
+## 🛠️ Backend & On-Chain Roadmap (Status: ⚡ Move Contracts Completed & Indexer Next)
 
-### 1. Sui Move Smart Contracts
-- [ ] **Profile Package** (`profile.move`): registration of decentralized custom usernames, handles, and Walrus profile blob references
-- [ ] **Post Package** (`post.move`): on-chain registration of published Walrus blob IDs, hashes, and ownership verified objects
-- [ ] **Interaction Package** (`interaction.move`): decentralized social primitives (Shared likes objects, follower networks)
-- [ ] **Tipping Package** (`tipping.move`): smart contract facilitating secure creator tips transfers and emitting event streams
+### 1. Sui Move Smart Contracts (Status: ✅ COMPLETED)
+- [x] **Profile Package** (`profile.move`): registration of decentralized custom usernames, handles, and Walrus profile blob references
+- [x] **Post Package** (`post.move`): on-chain registration of published Walrus blob IDs, hashes, and ownership verified objects
+- [x] **Interaction Package** (`interaction.move`): decentralized social primitives (Shared likes objects, follower networks)
+- [x] **Tipping Package** (`tipping.move`): smart contract facilitating secure creator tips transfers and emitting event streams
 
-### 2. Off-chain Relational Indexer & Cache
-- [ ] **PostgreSQL + Prisma**: relational indexer tracking Sui transaction events and updating metadata search tables
-- [ ] **Redis**: distributed cache computing trending tags scoring algorithms and active user telemetry
+### 2. Off-chain Relational Indexer & Cache (Status: ✅ COMPLETED)
+- [x] **PostgreSQL + Prisma**: relational indexer tracking Sui transaction events and updating metadata search tables ([indexer.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/server/indexer.ts))
+- [x] **Redis**: distributed cache computing trending tags scoring algorithms and active user telemetry ([redis.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/client/src/lib/redis.ts) & [indexer.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/server/indexer.ts))
