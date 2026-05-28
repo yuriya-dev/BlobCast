@@ -1,4 +1,5 @@
 import app from './app';
+import './indexer'; // Start the off-chain event indexer
 
 // Intercept uncaught synchronous programming mistakes to prevent silent process failures
 process.on('uncaughtException', (err: Error) => {

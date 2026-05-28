@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String         @id @default(uuid())
+  walletAddress   String         @unique @map("wallet_address")
+  username        String?        @unique
+  displayName     String?        @map("display_name")
+  avatarBlobId    String?        @map("avatar_blob_id")
+  bannerBlobId    String?        @map("banner_blob_id")
+  bio             String?
+  verified        Boolean        @default(false)
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  posts           Post[]         @relation("UserPosts")
+  likes           Like[]
+  comments        Comment[]      @relation("UserComments")
+  
+  // Follow relations
+  followers       Follow[]       @relation("FollowingUsers")
+  following       Follow[]       @relation("FollowerUsers")
+
+  // Notifications
+  notifications   Notification[] @relation("UserNotifications")
+  actions         Notification[] @relation("ActorNotifications")
+
+  @@map("users")
+}
+
+model Post {
+  id           String    @id @default(uuid())
+  authorId     String    @map("author_id")
+  suiObjectId  String?   @map("sui_object_id")
+  walrusBlobId String    @map("walrus_blob_id")
+  blobHash     String    @map("blob_hash")
+  contentType  Int       @map("content_type") // 0 = text, 1 = image, 2 = video, etc.
+  visibility   Int       @default(0) @map("visibility") // 0 = public, 1 = followers, etc.
+  replyToId    String?   @map("reply_to")
+  repostOfId   String?   @map("repost_of")
+  likeCount    Int       @default(0) @map("like_count")
+  commentCount Int       @default(0) @map("comment_count")
+  repostCount  Int       @default(0) @map("repost_count")
+  score        Float     @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  author       User      @relation("UserPosts", fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo      Post?     @relation("PostReplies", fields: [replyToId], references: [id], onDelete: Cascade)
+  replies      Post[]    @relation("PostReplies")
+  repostOf     Post?     @relation("PostReposts", fields: [repostOfId], references: [id], onDelete: Cascade)
+  reposts      Post[]    @relation("PostReposts")
+  
+  media        Media[]
+  likes        Like[]
+  comments     Comment[] @relation("PostComments")
+  notifications Notification[] @relation("PostNotifications")
+
+  @@map("posts")
+}
+
+model Media {
+  id           String   @id @default(uuid())
+  postId       String?  @map("post_id")
+  mediaType    String?  @map("media_type")
+  walrusBlobId String?  @map("walrus_blob_id")
+  mimeType     String?  @map("mime_type")
+  width        Int?
+  height       Int?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  post         Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("media")
+}
+
+model Follow {
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower    User     @relation("FollowerUsers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("FollowingUsers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+model Like {
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@map("likes")
+}
+
+model Comment {
+  id           String   @id @default(uuid())
+  postId       String   @map("post_id")
+  authorId     String   @map("author_id")
+  walrusBlobId String?  @map("walrus_blob_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  post         Post     @relation("PostComments", fields: [postId], references: [id], onDelete: Cascade)
+  author       User     @relation("UserComments", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   // e.g. "like", "follow", "comment", "repost", "tip"
+  actorId   String   @map("actor_id")
+  postId    String?  @map("post_id")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User     @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: Cascade)
+  post      Post?    @relation("PostNotifications", fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}

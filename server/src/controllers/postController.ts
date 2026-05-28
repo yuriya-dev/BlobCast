@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
-
-const prisma = new PrismaClient();
 
 /**
  * Controller to fetch all posts / timeline feed from Supabase with pagination support.

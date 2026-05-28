@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './lib/db';
 import { cache } from './lib/redis';
 import { tatum } from './lib/tatum';
-
-const prisma = new PrismaClient();
 
 class BlobCastIndexer {
     private isRunning: boolean = false;
