@@ -157,6 +157,48 @@ Card tidak boleh flat solid. Gunakan subtle pattern untuk surface:
 }
 ```
 
+### Walrus Mesh Gradient
+
+Untuk area hero, banner, atau surface promo yang butuh karakter lebih hidup, BlobCast boleh memakai efek mesh gradient ala Walrus. Kuncinya bukan satu linear gradient, melainkan tumpukan radial gradient transparan di atas latar gelap yang pekat.
+
+```css
+.walrus-mesh-bg {
+  background-color: #05070d;
+  background-image:
+    radial-gradient(ellipse at 50% 120%, rgba(0, 229, 255, 0.45) 0%, transparent 60%),
+    radial-gradient(ellipse at 90% 100%, rgba(138, 97, 219, 0.4) 0%, transparent 50%),
+    radial-gradient(ellipse at 30% 0%, rgba(0, 51, 204, 0.3) 0%, transparent 60%),
+    radial-gradient(ellipse at 10% 80%, rgba(13, 114, 133, 0.3) 0%, transparent 50%);
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.walrus-orb-bg {
+  background-color: #000000;
+  background-image:
+    radial-gradient(circle at 20% 70%, rgba(0, 229, 255, 0.7) 0%, transparent 55%),
+    radial-gradient(circle at 80% 80%, rgba(184, 150, 255, 0.6) 0%, transparent 60%),
+    radial-gradient(circle at 50% 20%, rgba(0, 42, 255, 0.7) 0%, transparent 65%),
+    radial-gradient(circle at 90% 40%, rgba(125, 245, 212, 0.3) 0%, transparent 50%);
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.walrus-text-gradient {
+  background: linear-gradient(90deg, #00e5ff 0%, #b28cff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+```
+
+**Catatan penggunaan:**
+
+- Pakai hanya untuk hero, banner, orb, atau elemen editorial yang memang ingin terasa seperti pendaran on-chain.
+- Tetap di atas latar gelap; jangan dipakai pada halaman light mode karena BlobCast tidak punya light mode.
+- Jika ingin efek lebih menyatu, letakkan gradien di elemen absolut di belakang konten lalu beri `filter: blur(24px)` pada layer itu, bukan pada teks atau konten utama.
+
 ### Efek Stempel / Ink
 
 Untuk badge dan tag — bukan pill mulus, tapi terasa seperti stempel karet:

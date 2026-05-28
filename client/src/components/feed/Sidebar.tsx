@@ -10,7 +10,8 @@ import {
   Bell, 
   User, 
   Zap, 
-  MessageSquareShare
+  MessageSquareShare,
+  Bookmark
 } from 'lucide-react';
 import { ConnectButton } from '@mysten/dapp-kit';
 
@@ -18,8 +19,11 @@ export function Sidebar() {
   const pathname = usePathname();
 
   const navigation = [
-    { name: 'Social Feed', href: '/feed', icon: Home },
-    { name: 'Developer Diagnostics', href: '/dev', icon: Terminal },
+    { name: 'Home Feed', href: '/feed', icon: Home },
+    { name: 'Explore Search', href: '/explore', icon: Compass },
+    { name: 'Bookmarks Archive', href: '/bookmarks', icon: Bookmark },
+    { name: 'Cyber Profile', href: '/profile', icon: User },
+    { name: 'Diagnostics', href: '/dev', icon: Terminal },
   ];
 
   return (

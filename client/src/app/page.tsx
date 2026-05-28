@@ -34,7 +34,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-between relative overflow-hidden min-h-screen">
+    <div className="flex-1 flex flex-col justify-between relative overflow-hidden min-h-screen walrus-orb-bg">
       
       {/* Background cyber orb decorations */}
       <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full bg-tatum-purple/5 filter blur-3xl z-0 pointer-events-none rotating-orb" />
@@ -95,7 +95,7 @@ export default function Home() {
             className="text-5xl md:text-7xl font-bold font-mono tracking-tight text-white leading-[1.08]"
           >
             Own your posts <br />
-            <span className="bg-gradient-to-r from-sui-cyan via-soft-white to-tatum-purple bg-clip-text text-transparent text-neon-glow">
+            <span className="walrus-text-gradient font-bold italic">
               forever.
             </span>
           </motion.h1>

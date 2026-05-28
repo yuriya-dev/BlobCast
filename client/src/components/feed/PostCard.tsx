@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import Link from 'next/link';
 
 interface PostCardProps {
   post: {
@@ -111,9 +112,9 @@ export function PostCard({ post }: PostCardProps) {
           {/* Header Metadata */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-sm text-soft-white font-sans hover:underline cursor-pointer">
+              <Link href="/profile" className="font-bold text-sm text-soft-white font-sans hover:underline cursor-pointer">
                 {post.author.displayName}
-              </span>
+              </Link>
               {post.author.verified && (
                 <BadgeCheck className="h-4 w-4 text-sui-cyan fill-sui-cyan/10" />
               )}
