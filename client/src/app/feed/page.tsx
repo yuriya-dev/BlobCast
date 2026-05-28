@@ -100,7 +100,7 @@ export default function SocialFeedPage() {
           contentType: p.contentType,
           text,
           hashtags: p.id === 'post-1' ? ['blobcast', 'sui'] : p.id === 'post-2' ? ['decentralized', 'walrus'] : (p.walrusContent as any)?.content?.hashtags || [],
-          mediaUrl: p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined,
+          mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
           likeCount: p.likeCount,
           commentCount: p.commentCount,
           repostCount: p.repostCount,
@@ -132,6 +132,7 @@ export default function SocialFeedPage() {
       repostCount: newPost.repostCount,
       score: newPost.score,
       createdAt: newPost.createdAt,
+      walrusContent: newPost.walrusContent,
     };
 
     mockDb.posts.unshift(mockPostObj);

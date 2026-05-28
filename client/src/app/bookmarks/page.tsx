@@ -1,45 +1,122 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Bookmark, 
-  Database, 
-  ExternalLink,
-  ShieldCheck, 
-  Share2, 
-  Heart,
-  MessageSquare,
-  Repeat2,
-  BadgeCheck
+  Database,
+  Loader2
 } from 'lucide-react';
-import Link from 'next/link';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
+import { PostCard } from '@/components/feed/PostCard';
+import { mockDb } from '@/lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function BookmarksPage() {
-  const [bookmarkedCasts, setBookmarkedCasts] = useState<any[]>([
-    {
-      id: 'post-1',
-      author: {
-        displayName: 'Vitalik Buterin',
-        username: 'vitalik',
-        walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
-        avatarInitials: 'VB',
-        verified: true
-      },
-      text: 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!',
-      walrusBlobId: 'walrus://vitalik-post-1-schema',
-      blobHash: 'sha256-07a82fb91ac48f32da6e5f1a3a41cd8d9e2b10aef73145610b',
-      likeCount: 142,
-      commentCount: 38,
-      repostCount: 12,
-      time: '2h ago'
-    }
-  ]);
+  const [bookmarkedCasts, setBookmarkedCasts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const removeBookmark = (id: string) => {
-    setBookmarkedCasts(prev => prev.filter(c => c.id !== id));
+  useEffect(() => {
+    loadBookmarks();
+    
+    // Set up a listener for storage events to update real-time
+    const handleStorageChange = () => {
+      loadBookmarks();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  const loadBookmarks = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
+        const bookmarkIds = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
+        
+        // Map users
+        const usersMap: Record<string, any> = {};
+        mockDb.users.forEach(u => {
+          usersMap[u.id] = u;
+        });
+
+        // Filter mock DB posts
+        const sourcePosts = mockDb.posts.filter(p => bookmarkIds.includes(p.id));
+        
+        const mapped = sourcePosts.map(p => {
+          const user = usersMap[p.authorId] || {
+            displayName: 'Anonymous Caster',
+            username: 'anonymous',
+            walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            avatarBlobId: '',
+            verified: false
+          };
+
+          let text = 'Immutable social post stored on Walrus.';
+          if (p.id === 'post-1') {
+            text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
+          } else if (p.id === 'post-2') {
+            text = 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!';
+          } else if (p.walrusContent) {
+            text = (p.walrusContent as any).content?.text || text;
+          }
+
+          return {
+            id: p.id,
+            author: {
+              displayName: user.displayName || 'Yuriya',
+              username: user.username || 'yuriya',
+              walletAddress: user.walletAddress || '0x91abc6f3e1b7...',
+              avatarBlobId: user.avatarBlobId || '',
+              verified: user.verified || false
+            },
+            walrusBlobId: p.walrusBlobId,
+            blobHash: p.blobHash,
+            contentType: p.contentType,
+            text,
+            hashtags: p.id === 'post-1' ? ['blobcast', 'sui'] : p.id === 'post-2' ? ['decentralized', 'walrus'] : (p.walrusContent as any)?.content?.hashtags || [],
+            mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+            likeCount: p.likeCount,
+            commentCount: p.commentCount,
+            repostCount: p.repostCount,
+            suiObjectId: p.suiObjectId || undefined,
+            createdAt: p.createdAt,
+          };
+        });
+
+        // Seed with a default mock bookmark if no user bookmarks exist yet
+        if (mapped.length === 0 && bookmarkIds.length === 0) {
+          setBookmarkedCasts([
+            {
+              id: 'post-1',
+              author: {
+                displayName: 'Vitalik Buterin',
+                username: 'vitalik',
+                walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
+                avatarBlobId: 'walrus://vitalik-avatar',
+                verified: true
+              },
+              text: 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!',
+              walrusBlobId: 'walrus://vitalik-post-1-schema',
+              blobHash: 'sha256-07a82fb91ac48f32da6e5f1a3a41cd8d9e2b10aef73145610b',
+              contentType: 0,
+              hashtags: ['blobcast', 'sui'],
+              likeCount: 142,
+              commentCount: 38,
+              repostCount: 12,
+              createdAt: new Date(Date.now() - 7200000)
+            }
+          ]);
+        } else {
+          setBookmarkedCasts(mapped);
+        }
+      } catch (e) {
+        console.warn("Failed to load bookmarks:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   return (
@@ -73,9 +150,20 @@ export default function BookmarksPage() {
             🔒 Verifiably Bookmarked Permanent Blobs (Decentralized Session)
           </span>
 
-          <AnimatePresence>
-            {bookmarkedCasts.length === 0 ? (
+          <AnimatePresence mode="wait">
+            {isLoading ? (
               <motion.div 
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center justify-center p-16"
+              >
+                <Loader2 className="h-6 w-6 animate-spin text-sui-cyan" />
+              </motion.div>
+            ) : bookmarkedCasts.length === 0 ? (
+              <motion.div 
+                key="empty"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -89,93 +177,16 @@ export default function BookmarksPage() {
                 </span>
               </motion.div>
             ) : (
-              <div className="flex flex-col gap-6">
+              <motion.div 
+                key="list"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col gap-6"
+              >
                 {bookmarkedCasts.map((post) => (
-                  <motion.div 
-                    key={post.id}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -15 }}
-                    className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/5 transition-all duration-300 relative group flex gap-4"
-                  >
-                    {/* Avatar initials */}
-                    <div className="h-10 w-10 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
-                      <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-xs text-sui-cyan">
-                        {post.author.avatarInitials}
-                      </div>
-                    </div>
-
-                    {/* Post content body */}
-                    <div className="flex-1 flex flex-col gap-3">
-                      
-                      {/* Header metadata info */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-sm text-soft-white font-sans">
-                            {post.author.displayName}
-                          </span>
-                          {post.author.verified && (
-                            <BadgeCheck className="h-4 w-4 text-sui-cyan fill-sui-cyan/10" />
-                          )}
-                          <span className="text-xs text-gray-500 font-mono">
-                            @{post.author.username}
-                          </span>
-                        </div>
-
-                        <span className="text-[10px] font-mono text-gray-500">
-                          {post.time}
-                        </span>
-                      </div>
-
-                      {/* Post body content text */}
-                      <p className="text-xs leading-relaxed text-gray-200 font-sans">
-                        {post.text}
-                      </p>
-
-                      {/* Walrus details box */}
-                      <div className="flex items-center justify-between gap-4 mt-2 bg-walrus-blue/40 border border-sui-cyan/5 rounded-cyber-md p-3">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <Database className="h-4 w-4 text-sui-cyan" />
-                          <div className="flex flex-col overflow-hidden">
-                            <span className="text-[8px] text-gray-400 font-mono uppercase tracking-wider">Walrus Blob Reference</span>
-                            <span className="text-[9px] font-mono text-sui-cyan truncate w-56" title={post.walrusBlobId}>
-                              {post.walrusBlobId}
-                            </span>
-                          </div>
-                        </div>
-
-                        <span className="text-[9px] font-mono text-emerald-400 bg-emerald-400/5 px-2 py-0.5 border border-emerald-400/25 uppercase font-bold flex items-center gap-1">
-                          <ShieldCheck className="h-3 w-3" /> VERIFIED
-                        </span>
-                      </div>
-
-                      {/* Action footer */}
-                      <div className="flex items-center justify-between mt-2 text-gray-500 text-[10px] font-mono border-t border-sui-cyan/5 pt-3">
-                        <button className="flex items-center gap-1.5 hover:text-rose-400 transition-colors">
-                          <Heart className="h-3.5 w-3.5 fill-rose-500/10" />
-                          <span>{post.likeCount}</span>
-                        </button>
-                        <button className="flex items-center gap-1.5 hover:text-sui-cyan transition-colors">
-                          <MessageSquare className="h-3.5 w-3.5" />
-                          <span>{post.commentCount}</span>
-                        </button>
-                        <button className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors">
-                          <Repeat2 className="h-3.5 w-3.5" />
-                          <span>{post.repostCount}</span>
-                        </button>
-
-                        <button 
-                          onClick={() => removeBookmark(post.id)}
-                          className="text-[9px] text-rose-400 hover:text-rose-300 font-mono border border-rose-500/10 hover:border-rose-500/40 rounded px-2.5 py-1 bg-rose-500/5 transition-all"
-                        >
-                          Remove Bookmark
-                        </button>
-                      </div>
-
-                    </div>
-                  </motion.div>
+                  <PostCard key={post.id} post={post} />
                 ))}
-              </div>
+              </motion.div>
             )}
           </AnimatePresence>
 

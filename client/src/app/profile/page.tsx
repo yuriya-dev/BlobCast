@@ -140,6 +140,7 @@ export default function ProfilePage() {
         contentType: p.contentType,
         text,
         hashtags: (p.walrusContent as any)?.content?.hashtags || ['blobcast', 'sui'],
+        mediaUrl: p.walrusContent?.media?.[0]?.blob_id || undefined,
         likeCount: p.likeCount,
         commentCount: p.commentCount,
         repostCount: p.repostCount,
