@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-sui-cyan: #6FE7FF;
+  --color-walrus-blue: #0B1F33;
+  --color-tatum-purple: #7C5CFF;
+  --color-deep-space: #050816;
+  --color-soft-white: #E6F1FF;
+  
+  --font-sans: var(--font-space-grotesk), var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+
+  /* Custom Cyber design tokens mapped to docs/design.md */
+  --radius-cyber-sm: 12px;
+  --radius-cyber-md: 18px;
+  --radius-cyber-lg: 24px;
+  --radius-cyber-xl: 32px;
+
+  --shadow-cyber-glow: 0 0 30px rgba(111, 231, 255, 0.15);
+}
+
+:root {
+  --background: #050816;
+  --foreground: #E6F1FF;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Premium Glassmorphic Overlay Utility */
+.glass-panel {
+  background: rgba(11, 31, 51, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(111, 231, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(11, 31, 51, 0.6);
+  border: 1px solid rgba(111, 231, 255, 0.2);
+  box-shadow: 0 0 25px rgba(111, 231, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Cyber Neon Text Shadows */
+.text-neon-glow {
+  text-shadow: 0 0 10px rgba(111, 231, 255, 0.5), 0 0 20px rgba(111, 231, 255, 0.2);
+}
+
+.text-purple-glow {
+  text-shadow: 0 0 10px rgba(124, 92, 255, 0.5), 0 0 20px rgba(124, 92, 255, 0.2);
+}
+
+/* Organic Floating Fluid Blob Animations (Walrus storage visual motif) */
+@keyframes morph-blob {
+  0% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+    transform: translate(0px, 0px) rotate(0deg) scale(1);
+  }
+  33% {
+    border-radius: 70% 30% 52% 48% / 60% 40% 60% 40%;
+    transform: translate(30px, -50px) rotate(120deg) scale(1.1);
+  }
+  66% {
+    border-radius: 28% 72% 37% 63% / 51% 53% 47% 49%;
+    transform: translate(-20px, 30px) rotate(240deg) scale(0.95);
+  }
+  100% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+    transform: translate(0px, 0px) rotate(360deg) scale(1);
+  }
+}
+
+.floating-blob {
+  animation: morph-blob 25s infinite alternate ease-in-out;
+  filter: blur(80px);
+  opacity: 0.15;
+}
+
+/* Rotating Sui Orb Particles */
+@keyframes rotate-orb {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.rotating-orb {
+  animation: rotate-orb 40s linear infinite;
+}
+
+/* Tatum Node Pulse Animation */
+@keyframes pulse-node {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #6FE7FF);
+  }
+}
+
+.node-pulse {
+  animation: pulse-node 2s infinite ease-in-out;
+}
+
+/* Shard Grid Pulse Loading */
+@keyframes shard-load {
+  0%, 100% {
+    background-color: rgba(111, 231, 255, 0.1);
+  }
+  50% {
+    background-color: rgba(111, 231, 255, 0.5);
+  }
+}
+
+.shard-pulse {
+  animation: shard-load 1.5s infinite ease-in-out;
+}
+
+/* Custom Scrollbar for cyber feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050816;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(111, 231, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(111, 231, 255, 0.4);
+}
