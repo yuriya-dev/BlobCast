@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Image, Send, Link, Smile, Globe, Loader2, Sparkles } from 'lucide-react';
+import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
 
@@ -15,6 +15,31 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [mediaUrl, setMediaUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [showMediaInput, setShowMediaInput] = useState(false);
+
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingMedia(true);
+    setShowMediaInput(true); // Open block to show uploading feedback!
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const blobInfo = await walrus.uploadBlob(base64data);
+        setMediaUrl(blobInfo.blobId);
+        setIsUploadingMedia(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Failed uploading media:", err);
+      alert("Error: Failed to upload media to Walrus.");
+      setIsUploadingMedia(false);
+      setShowMediaInput(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,17 +134,60 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           </div>
         </div>
 
-        {/* Dynamic media URL preview/input */}
+        {/* Dynamic media file selector & preview */}
         {showMediaInput && (
-          <div className="border border-sui-cyan/20 rounded-cyber-md bg-walrus-blue/30 px-3 py-2 text-xs flex items-center gap-2">
-            <Link className="h-3.5 w-3.5 text-sui-cyan" />
-            <input 
-              type="text" 
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              placeholder="Paste image/media URL or Walrus blob link..." 
-              className="bg-transparent border-none outline-none text-soft-white w-full font-mono"
-            />
+          <div className="border border-sui-cyan/15 rounded-cyber-md bg-walrus-blue/30 p-3 text-xs flex flex-col gap-2 relative">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                ⚡ Walrus Storage Shard registry
+              </span>
+              {mediaUrl && !isUploadingMedia && (
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setMediaUrl('');
+                    setShowMediaInput(false);
+                  }}
+                  className="text-[9px] font-mono text-rose-400 hover:text-white uppercase transition-colors"
+                >
+                  [Remove]
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 bg-deep-space/50 border border-sui-cyan/5 rounded-cyber-sm p-3">
+              <div className="h-12 w-16 rounded bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
+                {mediaUrl ? (
+                  <img 
+                    src={walrus.resolveImageUrl(mediaUrl)} 
+                    alt="Composer upload preview" 
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      // Fallback text if the image fails to load
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  'Upload'
+                )}
+              </div>
+              <div className="flex-1 flex flex-col gap-1 overflow-hidden">
+                {isUploadingMedia ? (
+                  <span className="text-[10px] font-mono text-sui-cyan animate-pulse flex items-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Querying Walrus Publisher...
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-[9px] font-mono text-emerald-400 uppercase tracking-wider font-bold">
+                      Persistent media certifier OK
+                    </span>
+                    <span className="text-[8px] font-mono text-gray-500 truncate block" title={mediaUrl}>
+                      ID: {mediaUrl}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -128,15 +196,21 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
         {/* Footer controls */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <button 
-              type="button"
-              onClick={() => setShowMediaInput(!showMediaInput)}
-              className={`p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all ${showMediaInput ? 'text-sui-cyan bg-sui-cyan/5' : ''}`}
-              title="Add media"
+          <div className="flex items-center gap-1.5 font-mono">
+            <input 
+              type="file" 
+              accept="image/*"
+              onChange={handleMediaUpload}
+              id="composer-media-file-input"
+              className="hidden"
+            />
+            <label 
+              htmlFor="composer-media-file-input"
+              className={`p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all cursor-pointer block`}
+              title="Upload media to Walrus"
             >
               <Image className="h-4 w-4" />
-            </button>
+            </label>
             <button 
               type="button"
               className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"

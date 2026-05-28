@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import Link from 'next/link';
+import { walrus } from '@/lib/walrus';
 
 interface PostCardProps {
   post: {
@@ -97,12 +98,20 @@ export function PostCard({ post }: PostCardProps) {
         
         {/* Avatar */}
         <div className="h-11 w-11 rounded-full bg-gradient-to-br from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
-          <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan">
+          <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan relative">
             {post.author.avatarBlobId ? (
-              <span className="text-neon-glow">{post.author.username.substring(0, 2).toUpperCase()}</span>
-            ) : (
-              'US'
-            )}
+              <img 
+                src={walrus.resolveImageUrl(post.author.avatarBlobId)} 
+                alt={`${post.author.displayName}'s avatar`}
+                className="h-full w-full object-cover z-10"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : null}
+            <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none">
+              {(post.author.displayName || post.author.username || 'US').substring(0, 2).toUpperCase()}
+            </span>
           </div>
         </div>
 
@@ -149,21 +158,23 @@ export function PostCard({ post }: PostCardProps) {
 
           {/* Optional Media preview */}
           {post.mediaUrl && (
-            <div className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-[350px]">
+            <div className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-[350px] bg-walrus-blue/40 flex items-center justify-center">
               {/* Premium overlay badge for Walrus persistence */}
               <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20">
-                <Database className="h-3 w-3 text-sui-cyan" />
+                <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
                 <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
                   Walrus Immutable Media
                 </span>
               </div>
-              <div className="w-full bg-walrus-blue flex items-center justify-center p-8 h-48 border-dashed border-2 border-sui-cyan/15 rounded-xl">
-                <div className="text-center">
-                  <Database className="h-8 w-8 text-sui-cyan mx-auto mb-2 animate-pulse" />
-                  <span className="text-xs font-mono text-gray-400 block">{post.mediaUrl}</span>
-                  <span className="text-[9px] text-gray-500 font-mono block mt-1">Chunk scattered across 120 nodes</span>
-                </div>
-              </div>
+              
+              <img 
+                src={walrus.resolveImageUrl(post.mediaUrl)} 
+                alt="Post media attachment" 
+                className="w-full object-cover max-h-[350px] hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             </div>
           )}
 

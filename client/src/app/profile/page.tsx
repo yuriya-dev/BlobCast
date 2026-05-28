@@ -57,6 +57,51 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
 
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAvatar(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const blobInfo = await walrus.uploadBlob(base64data);
+        setAvatarUrl(blobInfo.blobId);
+        setIsUploadingAvatar(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Failed uploading avatar:", err);
+      alert("Error: Failed to upload avatar to Walrus.");
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingBanner(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const blobInfo = await walrus.uploadBlob(base64data);
+        setBannerUrl(blobInfo.blobId);
+        setIsUploadingBanner(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Failed uploading banner:", err);
+      alert("Error: Failed to upload banner to Walrus.");
+      setIsUploadingBanner(false);
+    }
+  };
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -200,6 +245,16 @@ export default function ProfilePage() {
           
           {/* Cyberpunk Banner */}
           <div className="h-48 w-full walrus-mesh-bg relative overflow-hidden border-b border-sui-cyan/10">
+            {currentUser?.bannerBlobId ? (
+              <img 
+                src={walrus.resolveImageUrl(currentUser.bannerBlobId)} 
+                alt={`${currentUser?.displayName}'s banner`}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : null}
             {/* Cyber network lines in banner */}
             <div 
               className="absolute inset-0 opacity-[0.05]" 
@@ -216,8 +271,20 @@ export default function ProfilePage() {
           <div className="px-6 flex justify-between items-end -mt-16 mb-4 relative z-20">
             {/* Avatar image frame */}
             <div className="h-28 w-28 rounded-cyber-xl bg-gradient-to-tr from-sui-cyan to-tatum-purple p-1 shadow-cyber-glow">
-              <div className="h-full w-full rounded-[28px] bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-3xl font-black text-sui-cyan select-none">
-                YU
+              <div className="h-full w-full rounded-[28px] bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-3xl font-black text-sui-cyan select-none relative">
+                {currentUser?.avatarBlobId ? (
+                  <img 
+                    src={walrus.resolveImageUrl(currentUser.avatarBlobId)} 
+                    alt={`${currentUser?.displayName}'s avatar`}
+                    className="h-full w-full object-cover z-10"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : null}
+                <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0">
+                  {(currentUser?.displayName || currentUser?.username || 'YU').substring(0, 2).toUpperCase()}
+                </span>
               </div>
             </div>
 
@@ -410,30 +477,87 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Avatar Walrus Blob input */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>Avatar Walrus Blob ID</span>
-                    <span className="text-[8px] text-sui-cyan">Aggregator Resolved</span>
+                    <span>Avatar Web3 Identity</span>
+                    <span className="text-[8px] text-sui-cyan animate-pulse">Walrus Storage Upload</span>
                   </label>
-                  <input 
-                    type="text" 
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    className="bg-walrus-blue/40 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2.5 text-[10px] text-sui-cyan outline-none focus:border-sui-cyan/50 font-mono"
-                    placeholder="walrus://abc123avatar"
-                  />
+                  <div className="flex items-center gap-3 bg-deep-space/50 border border-sui-cyan/10 rounded-cyber-md p-3">
+                    <div className="h-12 w-12 rounded-full bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
+                      {avatarUrl ? (
+                        <img 
+                          src={walrus.resolveImageUrl(avatarUrl)} 
+                          alt="Avatar upload preview" 
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        'None'
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        id="avatar-file-input"
+                        className="hidden"
+                      />
+                      <label 
+                        htmlFor="avatar-file-input"
+                        className="px-3 py-1.5 bg-walrus-blue border border-sui-cyan/20 hover:border-sui-cyan/40 text-[10px] font-mono text-center text-gray-400 hover:text-white rounded-cyber-sm cursor-pointer transition-all uppercase block"
+                      >
+                        {isUploadingAvatar ? 'Uploading to Walrus...' : 'Select Avatar Image'}
+                      </label>
+                      <span className="text-[8px] font-mono text-gray-500 truncate block" title={avatarUrl}>
+                        {avatarUrl ? `Blob ID: ${avatarUrl}` : 'No image uploaded yet'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Banner Walrus Blob input */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Banner Walrus Blob ID</label>
-                  <input 
-                    type="text" 
-                    value={bannerUrl}
-                    onChange={(e) => setBannerUrl(e.target.value)}
-                    className="bg-walrus-blue/40 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2.5 text-[10px] text-sui-cyan outline-none focus:border-sui-cyan/50 font-mono"
-                    placeholder="walrus://banner456"
-                  />
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Banner Visual Backdrop</span>
+                    <span className="text-[8px] text-sui-cyan animate-pulse">Walrus Storage Upload</span>
+                  </label>
+                  <div className="flex items-center gap-3 bg-deep-space/50 border border-sui-cyan/10 rounded-cyber-md p-3">
+                    <div className="h-12 w-20 rounded-cyber-sm bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
+                      {bannerUrl ? (
+                        <img 
+                          src={walrus.resolveImageUrl(bannerUrl)} 
+                          alt="Banner upload preview" 
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        'None'
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleBannerUpload}
+                        id="banner-file-input"
+                        className="hidden"
+                      />
+                      <label 
+                        htmlFor="banner-file-input"
+                        className="px-3 py-1.5 bg-walrus-blue border border-sui-cyan/20 hover:border-sui-cyan/40 text-[10px] font-mono text-center text-gray-400 hover:text-white rounded-cyber-sm cursor-pointer transition-all uppercase block"
+                      >
+                        {isUploadingBanner ? 'Uploading to Walrus...' : 'Select Banner Image'}
+                      </label>
+                      <span className="text-[8px] font-mono text-gray-500 truncate block" title={bannerUrl}>
+                        {bannerUrl ? `Blob ID: ${bannerUrl}` : 'No image uploaded yet'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Verification alerts */}

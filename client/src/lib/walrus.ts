@@ -190,5 +190,49 @@ export const walrus = {
       isSimulated,
       shardsMap: generateMockStorageNodes(blobId, size),
     };
+  },
+
+  /**
+   * Resolve a Walrus blob ID to a URL that can be used directly in an <img> tag's src.
+   * If it's a simulated blob, it will fetch the base64 string from localStorage.
+   * If it's a real blob, it will point to the aggregator URL.
+   */
+  resolveImageUrl(blobId: string | null | undefined): string {
+    if (!blobId) return '';
+    
+    // Clean prefix if any
+    const cleanId = blobId.replace('walrus://', '');
+    
+    if (cleanId.startsWith('walrus_sim_')) {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(cleanId);
+        if (cached) {
+          // If the cached content is wrapped in quotes
+          if (cached.startsWith('"') && cached.endsWith('"')) {
+            try {
+              return JSON.parse(cached);
+            } catch {
+              return cached;
+            }
+          }
+          return cached;
+        }
+      }
+      return '';
+    }
+    
+    // Fallbacks for mock avatars in db.ts to make the design look stunning
+    if (cleanId.includes('avatar') || cleanId.includes('banner')) {
+      if (cleanId.includes('vitalik-avatar')) return 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=150&q=80';
+      if (cleanId.includes('vitalik-banner')) return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80';
+      if (cleanId.includes('yuriya-avatar')) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
+      if (cleanId.includes('yuriya-banner')) return 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=1200&q=80';
+      if (cleanId.includes('mysten-avatar')) return 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=150&q=80';
+      if (cleanId.includes('mysten-banner')) return 'https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&w=1200&q=80';
+      return `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanId}`;
+    }
+    
+    // Return standard Walrus testnet aggregator endpoint for raw binary media
+    return `${WALRUS_AGGREGATOR}/v1/blobs/${cleanId}`;
   }
 };
