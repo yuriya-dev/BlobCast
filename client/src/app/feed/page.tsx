@@ -21,6 +21,8 @@ import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostComposer } from '@/components/feed/PostComposer';
 import { PostCard } from '@/components/feed/PostCard';
 import { mockDb, MockPost } from '@/lib/db';
+import { api, ApiPost } from '@/lib/api';
+import { walrus } from '@/lib/walrus';
 
 export default function SocialFeedPage() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -39,12 +41,116 @@ export default function SocialFeedPage() {
     loadFeed();
   }, [isBackendDown]);
 
-  const loadFeed = () => {
+  // Load notifications from indexer telemetry REST API periodically
+  useEffect(() => {
+    const fetchNotifs = async () => {
+      if (isBackendDown) return;
+      try {
+        const response = await api.fetchNotifications();
+        if (response && response.data && response.data.notifications && response.data.notifications.length > 0) {
+          // Prepend latest backend notification, merge with defaults to ensure beautiful content variety
+          setNotifications(prev => {
+            const incoming = response.data.notifications;
+            const filtered = incoming.filter((inc: any) => !prev.some(p => p.id === inc.id));
+            if (filtered.length > 0) {
+              return [...filtered, ...prev].slice(0, 10);
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        // Silently capture offline states
+      }
+    };
+
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 5000); // Poll every 5s for real-time indexer dynamic action feel!
+    return () => clearInterval(interval);
+  }, [isBackendDown]);
+
+  const loadFeed = async () => {
     setIsLoading(true);
+
+    if (!isBackendDown) {
+      try {
+        const response = await api.fetchPosts(1, 20);
+        if (response && response.data && response.data.posts) {
+          const apiPosts = response.data.posts;
+          
+          const mapped = await Promise.all(apiPosts.map(async (p: ApiPost) => {
+            let text = 'Immutable social post stored on Walrus.';
+            let hashtags: string[] = [];
+            let mediaUrl: string | undefined = undefined;
+
+            // Check if we have dynamic Walrus blob content
+            if (p.walrusBlobId) {
+              try {
+                // Fetch the dynamic JSON schema payload from Walrus publisher/aggregator or localStorage
+                const walrusContent = await walrus.getBlob(p.walrusBlobId);
+                if (walrusContent && typeof walrusContent === 'object') {
+                  const contentObj = walrusContent as any;
+                  if (contentObj.content?.text) {
+                    text = contentObj.content.text;
+                  }
+                  if (contentObj.content?.hashtags) {
+                    hashtags = contentObj.content.hashtags;
+                  }
+                  if (contentObj.media && contentObj.media.length > 0) {
+                    // Extract image/media blobId
+                    mediaUrl = contentObj.media[0].blob_id;
+                  }
+                }
+              } catch (walrusErr) {
+                console.warn(`⚠️ Failed to fetch Walrus blob payload for ${p.walrusBlobId}:`, walrusErr);
+                // Fallback text if it fails to resolve
+                if (p.id === 'post-1') {
+                  text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
+                  hashtags = ['blobcast', 'sui'];
+                } else if (p.id === 'post-2') {
+                  text = 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!';
+                  hashtags = ['decentralized', 'walrus'];
+                  mediaUrl = 'walrus://blob-post-2-image';
+                } else {
+                  text = `Casting payload registered verifiably. Walrus Blob Reference: ${p.walrusBlobId}`;
+                }
+              }
+            }
+
+            // Construct unified post layout for feed rendering
+            return {
+              id: p.id,
+              author: {
+                displayName: p.author?.displayName || 'Anonymous Caster',
+                username: p.author?.username || 'anonymous',
+                walletAddress: p.author?.walletAddress || '0x000000...',
+                avatarBlobId: p.author?.avatarBlobId || '',
+                verified: p.author?.verified || false
+              },
+              walrusBlobId: p.walrusBlobId,
+              blobHash: p.blobHash,
+              contentType: p.contentType,
+              text: text,
+              hashtags: hashtags,
+              mediaUrl: mediaUrl,
+              likeCount: p.likeCount,
+              commentCount: p.commentCount,
+              repostCount: p.repostCount,
+              suiObjectId: p.suiObjectId || undefined,
+              createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+            };
+          }));
+
+          setPosts(mapped);
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("⚠️ Express Backend offline. Automatically falling back to resilient Walrus Decentralized Aggregator simulation.");
+      }
+    }
     
-    // Simulate loading duration
+    // Resilient Fallback to InMemory/Walrus aggregator simulated cache
     setTimeout(() => {
-      // Map mock DB posts to detailed post model structure required by PostCard
       const usersMap: Record<string, any> = {
         'usr-1-vitalik': {
           displayName: 'Vitalik Buterin',
@@ -69,10 +175,7 @@ export default function SocialFeedPage() {
         }
       };
 
-      // If backend is simulated DOWN, we load directly from the Walrus Decentralized Aggregator
-      // (simulating direct wallet/aggregator indexing bypassing standard server db indexes!).
       const sourcePosts = [...mockDb.posts];
-      
       const mapped = sourcePosts.map(p => {
         const author = usersMap[p.authorId] || {
           displayName: 'Anonymous Caster',
@@ -82,7 +185,6 @@ export default function SocialFeedPage() {
           verified: false
         };
 
-        // Standard text mapped
         let text = 'Immutable social post stored on Walrus.';
         if (p.id === 'post-1') {
           text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
@@ -109,14 +211,12 @@ export default function SocialFeedPage() {
         };
       });
 
-      // Sort by score/created date
       setPosts(mapped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       setIsLoading(false);
     }, 450);
   };
 
-  const handlePostCreated = (newPost: any) => {
-    // Append to mock DB so it persists in the session
+  const handlePostCreated = async (newPost: any) => {
     const mockPostObj: MockPost = {
       id: newPost.id,
       authorId: newPost.authorId,
@@ -134,6 +234,23 @@ export default function SocialFeedPage() {
       createdAt: newPost.createdAt,
       walrusContent: newPost.walrusContent,
     };
+
+    if (!isBackendDown) {
+      try {
+        await api.createPost({
+          authorId: 'usr-2-sademir', // Yuriya profile
+          suiObjectId: newPost.suiObjectId || null,
+          walrusBlobId: newPost.walrusBlobId,
+          blobHash: newPost.blobHash,
+          contentType: newPost.contentType,
+          visibility: newPost.visibility
+        });
+        loadFeed();
+        return;
+      } catch (err) {
+        console.warn("⚠️ Failed to post to Express backend. Storing in resilient session cache.");
+      }
+    }
 
     mockDb.posts.unshift(mockPostObj);
     loadFeed();

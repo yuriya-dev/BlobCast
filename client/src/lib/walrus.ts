@@ -67,6 +67,80 @@ function generateMockStorageNodes(blobId: string, size: number): WalrusBlobInfo[
   return shardsMap;
 }
 
+// IndexedDB Simulator to persist massive simulated base64 media files across page refreshes
+class IndexedDBSimulator {
+  private dbName = 'walrus_sim_db';
+  private storeName = 'blobs';
+  private db: IDBDatabase | null = null;
+
+  private init(): Promise<IDBDatabase> {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') {
+        reject(new Error('IndexedDB is not supported on the server side'));
+        return;
+      }
+      const request = indexedDB.open(this.dbName, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName);
+        }
+      };
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve(request.result);
+      };
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  }
+
+  async get(key: string): Promise<string | null> {
+    try {
+      const db = await this.init();
+      return new Promise((resolve) => {
+        const transaction = db.transaction(this.storeName, 'readonly');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.get(key);
+        request.onsuccess = () => {
+          resolve(request.result || null);
+        };
+        request.onerror = () => {
+          resolve(null);
+        };
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    try {
+      const db = await this.init();
+      return new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(this.storeName, 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.put(value, key);
+        request.onsuccess = () => {
+          resolve();
+        };
+        request.onerror = () => {
+          reject(request.error);
+        };
+      });
+    } catch (err) {
+      console.error('⚠️ IndexedDB write failed:', err);
+    }
+  }
+}
+
+const idbSimulator = typeof window !== 'undefined' ? new IndexedDBSimulator() : null;
+
+// RAM-backed Simulated Storage fallback to avoid LocalStorage QuotaExceededErrors on massive image uploads
+const simulatedMemoryStore = new Map<string, string>();
+
 export const walrus = {
   /**
    * Upload raw JSON or string content to Walrus publisher
@@ -110,11 +184,25 @@ export const walrus = {
     
     // Store in LocalStorage or Memory if on server/client
     if (typeof window !== 'undefined') {
-      localStorage.setItem(simulatedBlobId, serialized);
+      try {
+        localStorage.setItem(simulatedBlobId, serialized);
+      } catch (err) {
+        console.warn("⚠️ LocalStorage quota exceeded. Gracefully falling back to high-capacity in-memory session cache for base64 storage.");
+        simulatedMemoryStore.set(simulatedBlobId, serialized);
+      }
+
+      // Concurrently persist in IndexedDB as a bulletproof background backup to survive page refreshes
+      if (idbSimulator) {
+        idbSimulator.set(simulatedBlobId, serialized).catch(() => {});
+      }
     } else {
       // Server-side cache helper
-      const { cache } = require('./redis');
-      await cache.set(simulatedBlobId, serialized, 3600 * 24); // 24 hours persistence
+      try {
+        const { cache } = eval('require')('./redis');
+        await cache.set(simulatedBlobId, serialized, 3600 * 24); // 24 hours persistence
+      } catch (err) {
+        console.warn("⚠️ Failed to load server-side Redis cache helper:", err);
+      }
     }
 
     return {
@@ -137,10 +225,23 @@ export const walrus = {
     if (blobId.startsWith('walrus_sim_')) {
       let content: string | null = null;
       if (typeof window !== 'undefined') {
-        content = localStorage.getItem(blobId);
+        content = localStorage.getItem(blobId) || simulatedMemoryStore.get(blobId) || null;
+        
+        // If not found in localStorage or RAM (e.g. after page refresh), read asynchronously from IndexedDB!
+        if (!content && idbSimulator) {
+          content = await idbSimulator.get(blobId);
+          if (content) {
+            // Re-cache back into RAM for instant subsequent access
+            simulatedMemoryStore.set(blobId, content);
+          }
+        }
       } else {
-        const { cache } = require('./redis');
-        content = await cache.get(blobId);
+        try {
+          const { cache } = eval('require')('./redis');
+          content = await cache.get(blobId);
+        } catch (err) {
+          console.warn("⚠️ Failed to load server-side Redis cache helper:", err);
+        }
       }
 
       if (!content) {
@@ -194,7 +295,7 @@ export const walrus = {
 
   /**
    * Resolve a Walrus blob ID to a URL that can be used directly in an <img> tag's src.
-   * If it's a simulated blob, it will fetch the base64 string from localStorage.
+   * If it's a simulated blob, it will fetch the base64 string from localStorage or memory store.
    * If it's a real blob, it will point to the aggregator URL.
    */
   resolveImageUrl(blobId: string | null | undefined): string {
@@ -205,7 +306,7 @@ export const walrus = {
     
     if (cleanId.startsWith('walrus_sim_')) {
       if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem(cleanId);
+        const cached = localStorage.getItem(cleanId) || simulatedMemoryStore.get(cleanId);
         if (cached) {
           // If the cached content is wrapped in quotes
           if (cached.startsWith('"') && cached.endsWith('"')) {

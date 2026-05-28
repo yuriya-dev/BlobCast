@@ -21,6 +21,8 @@ import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostCard } from '@/components/feed/PostCard';
 import { mockDb, MockUser, MockPost } from '@/lib/db';
 import { walrus } from '@/lib/walrus';
+import { api } from '@/lib/api';
+import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 
 // Custom SVG component for Github icon to avoid library version inconsistencies
 function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -43,6 +45,9 @@ function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
 
 export default function ProfilePage() {
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
+  const bannerUrlResolved = useWalrusImage(currentUser?.bannerBlobId);
+  const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId);
+
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [totalTips, setTotalTips] = useState(148.5);
   const [isEditing, setIsEditing] = useState(false);
@@ -56,6 +61,8 @@ export default function ProfilePage() {
   const [github, setGithub] = useState('https://github.com/blobcast');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
+  const editAvatarUrlResolved = useWalrusImage(avatarUrl);
+  const editBannerUrlResolved = useWalrusImage(bannerUrl);
 
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -106,7 +113,96 @@ export default function ProfilePage() {
     loadProfile();
   }, []);
 
-  const loadProfile = () => {
+  const loadProfile = async () => {
+    try {
+      const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+      const response = await api.fetchUserProfile(walletAddress);
+      
+      if (response && response.data && response.data.user) {
+        const user = response.data.user;
+        setCurrentUser({
+          id: user.id,
+          walletAddress: user.walletAddress,
+          username: user.username,
+          displayName: user.displayName,
+          avatarBlobId: user.avatarBlobId,
+          bannerBlobId: user.bannerBlobId,
+          bio: user.bio,
+          verified: user.verified,
+          createdAt: new Date(user.createdAt)
+        });
+        setDisplayName(user.displayName || '');
+        setBio(user.bio || '');
+        setAvatarUrl(user.avatarBlobId || '');
+        setBannerUrl(user.bannerBlobId || '');
+
+        if (user.posts) {
+          const mapped = await Promise.all(user.posts.map(async (p: any) => {
+            let text = 'Immutable social post stored on Walrus.';
+            let hashtags: string[] = [];
+            let mediaUrl: string | undefined = undefined;
+
+            if (p.walrusBlobId) {
+              try {
+                const walrusContent = await walrus.getBlob(p.walrusBlobId);
+                if (walrusContent && typeof walrusContent === 'object') {
+                  const contentObj = walrusContent as any;
+                  if (contentObj.content?.text) {
+                    text = contentObj.content.text;
+                  }
+                  if (contentObj.content?.hashtags) {
+                    hashtags = contentObj.content.hashtags;
+                  }
+                  if (contentObj.media && contentObj.media.length > 0) {
+                    mediaUrl = contentObj.media[0].blob_id;
+                  }
+                }
+              } catch (walrusErr) {
+                console.warn(`⚠️ Failed to fetch Walrus blob payload for profile post ${p.walrusBlobId}:`, walrusErr);
+                if (p.id === 'post-1') {
+                  text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
+                  hashtags = ['blobcast', 'sui'];
+                } else if (p.id === 'post-2') {
+                  text = 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!';
+                  hashtags = ['decentralized', 'walrus'];
+                  mediaUrl = 'walrus://blob-post-2-image';
+                } else {
+                  text = `Casting payload registered verifiably. Walrus Blob Reference: ${p.walrusBlobId}`;
+                }
+              }
+            }
+
+            return {
+              id: p.id,
+              author: {
+                displayName: user.displayName || 'Yuriya',
+                username: user.username || 'yuriya',
+                walletAddress: user.walletAddress,
+                avatarBlobId: user.avatarBlobId || '',
+                verified: user.verified
+              },
+              walrusBlobId: p.walrusBlobId,
+              blobHash: p.blobHash,
+              contentType: p.contentType,
+              text,
+              hashtags,
+              mediaUrl,
+              likeCount: p.likeCount,
+              commentCount: p.commentCount,
+              repostCount: p.repostCount,
+              suiObjectId: p.suiObjectId || undefined,
+              createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+            };
+          }));
+
+          setProfilePosts(mapped);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ Failed to load profile from Express backend. Falling back to local offline mock db.");
+    }
+
     // Fetch Yuriya profile from mock DB (usr-2-sademir)
     const user = mockDb.users.find(u => u.id === 'usr-2-sademir') || null;
     if (user) {
@@ -131,7 +227,7 @@ export default function ProfilePage() {
         author: {
           displayName: user?.displayName || 'Yuriya',
           username: user?.username || 'yuriya',
-          walletAddress: user?.walletAddress || '0x91abc6f3e1b7...',
+          walletAddress: user?.walletAddress || '0x91abc6f3e1b...',
           avatarBlobId: user?.avatarBlobId || '',
           verified: user?.verified || false,
         },
@@ -173,6 +269,20 @@ export default function ProfilePage() {
 
       // Upload profile JSON schema to Walrus publisher
       const walrusUploadInfo = await walrus.uploadBlob(profileBlob);
+
+      // Save profile metadata to Supabase backend API
+      try {
+        await api.upsertUserProfile({
+          walletAddress: currentUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+          username: currentUser?.username || 'yuriya',
+          displayName: displayName,
+          bio: bio,
+          avatarBlobId: avatarUrl,
+          bannerBlobId: bannerUrl
+        });
+      } catch (backendErr) {
+        console.warn("⚠️ Failed to synchronize updated profile metadata with REST API server.");
+      }
 
       // Update mock DB
       if (currentUser) {
@@ -246,9 +356,9 @@ export default function ProfilePage() {
           
           {/* Cyberpunk Banner */}
           <div className="h-48 w-full walrus-mesh-bg relative overflow-hidden border-b border-sui-cyan/10">
-            {currentUser?.bannerBlobId ? (
+            {bannerUrlResolved ? (
               <img 
-                src={walrus.resolveImageUrl(currentUser.bannerBlobId)} 
+                src={bannerUrlResolved} 
                 alt={`${currentUser?.displayName}'s banner`}
                 className="h-full w-full object-cover"
                 onError={(e) => {
@@ -273,9 +383,9 @@ export default function ProfilePage() {
             {/* Avatar image frame */}
             <div className="h-28 w-28 rounded-cyber-xl bg-gradient-to-tr from-sui-cyan to-tatum-purple p-1 shadow-cyber-glow">
               <div className="h-full w-full rounded-[28px] bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-3xl font-black text-sui-cyan select-none relative">
-                {currentUser?.avatarBlobId ? (
+                {avatarUrlResolved ? (
                   <img 
-                    src={walrus.resolveImageUrl(currentUser.avatarBlobId)} 
+                    src={avatarUrlResolved} 
                     alt={`${currentUser?.displayName}'s avatar`}
                     className="h-full w-full object-cover z-10"
                     onError={(e) => {
@@ -485,9 +595,9 @@ export default function ProfilePage() {
                   </label>
                   <div className="flex items-center gap-3 bg-deep-space/50 border border-sui-cyan/10 rounded-cyber-md p-3">
                     <div className="h-12 w-12 rounded-full bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
-                      {avatarUrl ? (
+                      {editAvatarUrlResolved ? (
                         <img 
-                          src={walrus.resolveImageUrl(avatarUrl)} 
+                          src={editAvatarUrlResolved} 
                           alt="Avatar upload preview" 
                           className="h-full w-full object-cover"
                           onError={(e) => {
@@ -527,9 +637,9 @@ export default function ProfilePage() {
                   </label>
                   <div className="flex items-center gap-3 bg-deep-space/50 border border-sui-cyan/10 rounded-cyber-md p-3">
                     <div className="h-12 w-20 rounded-cyber-sm bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
-                      {bannerUrl ? (
+                      {editBannerUrlResolved ? (
                         <img 
-                          src={walrus.resolveImageUrl(bannerUrl)} 
+                          src={editBannerUrlResolved} 
                           alt="Banner upload preview" 
                           className="h-full w-full object-cover"
                           onError={(e) => {

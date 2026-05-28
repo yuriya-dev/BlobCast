@@ -24,6 +24,17 @@ class BlobCastIndexer {
         if (cachedCheckpoint) {
             this.currentCheckpoint = parseInt(cachedCheckpoint, 10);
             console.log(`🔄 [BlobCast Indexer] Recovered last sequence from cache: #${this.currentCheckpoint}`);
+        } else {
+            // Dynamically initialize from live SUI tip block on startup if no cache exists
+            try {
+                const client = tatum.getClient(this.network);
+                const latestCheckpoint = await client.getLatestCheckpointSequenceNumber();
+                this.currentCheckpoint = Number(latestCheckpoint);
+                console.log(`📡 [BlobCast Indexer] Dynamic startup: Tracking live events starting at on-chain tip block #${this.currentCheckpoint}`);
+                await cache.set('indexer:last_checkpoint', this.currentCheckpoint.toString());
+            } catch (err) {
+                console.log(`⚠️ [BlobCast Indexer] On-chain tip fetch busy. Defaulting to static block sequence #${this.currentCheckpoint}`);
+            }
         }
 
         this.indexingLoop();
@@ -48,6 +59,14 @@ class BlobCastIndexer {
                 // Get latest checkpoint from Tatum Sui RPC
                 const latestCheckpoint = await client.getLatestCheckpointSequenceNumber();
                 const targetCheckpoint = Number(latestCheckpoint);
+
+                // Auto-FastForward Guard: If our indexer is too far behind the on-chain tip,
+                // fast-forward directly to the tip block to avoid endless loop logging and resource exhaustion.
+                if (targetCheckpoint - this.currentCheckpoint > 50) {
+                    console.log(`🚀 [BlobCast Indexer] Tracked sequence is too far behind (${targetCheckpoint - this.currentCheckpoint} blocks). Fast-forwarding directly to live on-chain tip block: #${targetCheckpoint}`);
+                    this.currentCheckpoint = targetCheckpoint;
+                    await cache.set('indexer:last_checkpoint', this.currentCheckpoint.toString());
+                }
 
                 if (this.currentCheckpoint < targetCheckpoint) {
                     console.log(`🔎 [BlobCast Indexer] Querying checkpoints #${this.currentCheckpoint} to #${targetCheckpoint}...`);

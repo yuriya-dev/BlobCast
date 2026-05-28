@@ -11,7 +11,8 @@ import {
   User, 
   Zap, 
   MessageSquareShare,
-  Bookmark
+  Bookmark,
+  Wallet
 } from 'lucide-react';
 import { ConnectButton } from '@mysten/dapp-kit';
 
@@ -19,11 +20,12 @@ export function Sidebar() {
   const pathname = usePathname();
 
   const navigation = [
-    { name: 'Home Feed', href: '/feed', icon: Home },
-    { name: 'Explore Search', href: '/explore', icon: Compass },
-    { name: 'Bookmarks Archive', href: '/bookmarks', icon: Bookmark },
-    { name: 'Cyber Profile', href: '/profile', icon: User },
-    { name: 'Diagnostics', href: '/dev', icon: Terminal },
+    { name: 'Home', href: '/feed', icon: Home },
+    { name: 'Explore', href: '/explore', icon: Compass },
+    { name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
+    { name: 'Profile', href: '/profile', icon: User },
+    { name: 'Wallet', href: '/wallet', icon: Wallet },
+    // { name: 'Diagnostics', href: '/dev', icon: Terminal },
   ];
 
   return (

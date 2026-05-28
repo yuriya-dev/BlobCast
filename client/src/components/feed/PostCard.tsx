@@ -19,6 +19,7 @@ import confetti from 'canvas-confetti';
 import Link from 'next/link';
 import { walrus } from '@/lib/walrus';
 import { mockDb } from '@/lib/db';
+import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 
 interface PostCardProps {
   post: {
@@ -45,6 +46,9 @@ interface PostCardProps {
 }
 
 export function PostCard({ post }: PostCardProps) {
+  const avatarUrlResolved = useWalrusImage(post.author.avatarBlobId);
+  const mediaUrlResolved = useWalrusImage(post.mediaUrl);
+
   const [likes, setLikes] = useState(post.likeCount);
   const [hasLiked, setHasLiked] = useState(false);
   const [tipsCount, setTipsCount] = useState(0);
@@ -267,9 +271,9 @@ export function PostCard({ post }: PostCardProps) {
         {/* Avatar */}
         <div className="h-11 w-11 rounded-full bg-gradient-to-br from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
           <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan relative">
-            {post.author.avatarBlobId ? (
+            {avatarUrlResolved ? (
               <img 
-                src={walrus.resolveImageUrl(post.author.avatarBlobId)} 
+                src={avatarUrlResolved} 
                 alt={`${post.author.displayName}'s avatar`}
                 className="h-full w-full object-cover z-10"
                 onError={(e) => {
@@ -325,7 +329,7 @@ export function PostCard({ post }: PostCardProps) {
           )}
 
           {/* Optional Media preview */}
-          {post.mediaUrl && (
+          {mediaUrlResolved && (
             <div className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-[350px] bg-walrus-blue/40 flex items-center justify-center">
               {/* Premium overlay badge for Walrus persistence */}
               <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20">
@@ -336,7 +340,7 @@ export function PostCard({ post }: PostCardProps) {
               </div>
               
               <img 
-                src={walrus.resolveImageUrl(post.mediaUrl)} 
+                src={mediaUrlResolved} 
                 alt="Post media attachment" 
                 className="w-full object-cover max-h-[350px] hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
                 onError={(e) => {
@@ -481,16 +485,14 @@ export function PostCard({ post }: PostCardProps) {
                           {/* Comment author avatar */}
                           <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
                             <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-[9px] font-bold text-sui-cyan relative">
-                              {comment.author.avatarBlobId ? (
-                                <img 
-                                  src={walrus.resolveImageUrl(comment.author.avatarBlobId)} 
-                                  alt={`${comment.author.displayName}'s avatar`}
-                                  className="h-full w-full object-cover z-10"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : null}
+                              <WalrusImage 
+                                blobId={comment.author.avatarBlobId} 
+                                alt={`${comment.author.displayName}'s avatar`}
+                                className="h-full w-full object-cover z-10"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
                               <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none text-neon-glow font-mono text-[9px]">
                                 {comment.author.username.substring(0, 2).toUpperCase()}
                               </span>

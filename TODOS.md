@@ -1,47 +1,59 @@
-# BlobCast — Project TODOS Tracker
+# BlobCast — Project TODOS & Stage-by-Stage Roadmap
 
-Welcome to the BlobCast development tracker. In accordance with architectural and user requirements, we have prioritized and **completed 100% of the frontend features** (including immersive cyber mechanics, wallet configurations, real-time filters, live diagnostic telemetry, and social layout panels). We are now prepared for Move smart contract deployments and relational indexers.
-
----
-
-## 🚀 Frontend Feature Checklist (Status: 100% COMPLETED)
-
-### 1. Portal & Entry Point (Status: ✅ COMPLETED)
-- [x] Immersive Cyberpunk Landing Page (`client/src/app/page.tsx`)
-- [x] Multi-resolution hero grids, visual details, and action gates
-- [x] Connected Wallet wrapper gates using `@mysten/dapp-kit`
-- [x] Feature highlight card grid with custom lucide icons
-
-### 2. Core DecentSocial Feed (`client/src/app/feed/page.tsx`) (Status: ✅ COMPLETED)
-- [x] Three-column layout (Left Sidebar Nav, Middle Feed, Right Trending stats)
-- [x] Reusable `PostCard` rendering text, hashtag tags, Walrus JSON blob details, and tipping controls
-- [x] Reusable `PostComposer` serializing schema schemas and executing mock Walrus publisher node uploads
-- [x] SUI tipping with real-time dynamic canvas-confetti particle explosions
-- [x] "Simulated Backend Outage Mode" dynamically rerouting queries exclusively through direct decentralized Walrus storage aggregators
-- [x] Real-time visual search and hashtag filtration bar with interactive clear action filters
-- [x] Immersive slide-out **System Activity Logs / Notifications Drawer** rendering tip verifications, like signatures, and indexer schemas
-
-### 3. User Identity & Profile System (`client/src/app/profile/page.tsx`) (Status: ✅ COMPLETED)
-- [x] Premium visual profile hub featuring banner overlays, rotatable avatars, and verified badges
-- [x] Dynamic stats tracker computing Cast metrics, Followers count, and SUI Tips Received
-- [x] Interactive "Edit Profile" modal compiling visual schemas and publishing profile JSON schemas directly to Walrus storage
-- [x] Profile casting timeline tabbed filters (Casts, Media, and Likes history)
-
-### 4. Developer & Network Diagnostics Console (`client/src/app/dev/page.tsx`) (Status: ✅ COMPLETED)
-- [x] Live Tatum RPC Sui network roundtrip latency ping monitoring and area chart rendering
-- [x] Walrus Shards Inspector mapping Reed-Solomon 120-shard distribution registries across worldwide server nodes
-- [x] Interactive simulated storage node outage toggle demonstrating real-time Reed-Solomon math-based file reconstruction and recovery thresholds
+Welcome to the BlobCast development tracker. This tracker organizes the next development milestones into clear, sequential stages representing the pathway to a fully decentralized, production-ready Web3 social network.
 
 ---
 
-## 🛠️ Backend & On-Chain Roadmap (Status: ⚡ Move Contracts Completed & Indexer Next)
+## 🚀 Completed Milestones (100% Completed)
 
-### 1. Sui Move Smart Contracts (Status: ✅ COMPLETED)
-- [x] **Profile Package** (`profile.move`): registration of decentralized custom usernames, handles, and Walrus profile blob references
-- [x] **Post Package** (`post.move`): on-chain registration of published Walrus blob IDs, hashes, and ownership verified objects
-- [x] **Interaction Package** (`interaction.move`): decentralized social primitives (Shared likes objects, follower networks)
-- [x] **Tipping Package** (`tipping.move`): smart contract facilitating secure creator tips transfers and emitting event streams
+### 1. Cyberpunk Frontend Client (`client/`)
+- [x] **Immersive Landing Portal**: High-resolution cyber hero landing page with Web3 action gates (`client/src/app/page.tsx`).
+- [x] **Portal Feed Dashboard**: Three-column cyber feed rendering permanent casts, search filtration, and real-time trending widgets.
+- [x] **Wallet & Profiles Integration**: Complete Web3 profile hub supporting banner overlays, verified badges, and Walrus metadata schema registration.
+- [x] **My Wallet Telemetry**: Dashboard containing connected wallet details, 7-day revenue growth analytics, and tipping verification logs.
+- [x] **Sui Dapp-Kit integration**: Installed and configured `@mysten/dapp-kit` for instant wallet handshakes.
 
-### 2. Off-chain Relational Indexer & Cache (Status: ✅ COMPLETED)
-- [x] **PostgreSQL + Prisma**: relational indexer tracking Sui transaction events and updating metadata search tables ([indexer.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/server/indexer.ts))
-- [x] **Redis**: distributed cache computing trending tags scoring algorithms and active user telemetry ([redis.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/client/src/lib/redis.ts) & [indexer.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/server/indexer.ts))
+### 2. Move Smart Contracts (`move/`)
+- [x] **Profile Registration Module** (`profile.move`): Decentralized handle mapping and Walrus reference storage.
+- [x] **Casting Registry Module** (`post.move`): On-chain registration of Walrus blob IDs and ownership verification.
+- [x] **Interaction Module** (`interaction.move`): Shared likes registries and decentralized follow systems.
+- [x] **Tipping Core Module** (`tipping.move`): Smart contract coordinating secure Sui tips and emitting real-time event streams.
+
+### 3. Backend & Indexer Infrastructure (`server/`)
+- [x] **Prisma 7 Database Schema**: Created PostgreSQL relational schemas with strict maps for users, posts, likes, comments, and notifications.
+- [x] **Centralized Database Client**: Built unified `db.ts` utilizing `PrismaPg` and `pg.Pool` connection pool for secure Supabase integration.
+- [x] **Sui Event Indexer**: Active, high-availability event parsing daemon powered by Tatum SUI RPC gateways, tracking checkpoints and syncing state.
+- [x] **Supabase DB Sync & Seed**: Pushed schema definitions successfully to the live Supabase cloud database and completed seeding.
+
+---
+
+## 🛠️ Next Development Milestones (Stage-by-Stage)
+
+### 📈 Stage 1: Full Client-to-API Integration (Status: ✅ COMPLETED)
+*Goal: Link the Next.js frontend state management to the active Express backend REST APIs running on port 8080 instead of in-memory fallbacks.*
+
+- [x] **Configure Base API Gateways**: Setup unified Axios/fetch helper pointing to `http://localhost:8080/api` in frontend configurations.
+- [x] **Connect Post Timeline Feed**: Replace client-side mock lists with active backend GET queries (`/api/posts?page=1&limit=15`).
+- [x] **Connect User Profile Sync**: Wire up the visual edit profile modal to trigger REST POST actions (`/api/users`) to update Supabase.
+- [x] **Synchronize System Drawer Telemetry**: Feed real-time indexer and notification events from the server database directly to the feed logs panel.
+
+### 🪙 Stage 2: Live Move Smart Contract Wallet Interactions (Status: 📅 Planned)
+*Goal: Sign and execute actual Sui Devnet/Testnet transactions using the connected browser extension wallet.*
+
+- [ ] **Implement Sui Tipping Actions**: Connect the "Tip Creator" button to `@mysten/dapp-kit`'s transaction block executor to transfer SUI on-chain.
+- [ ] **On-chain Cast Registries**: Sign Move transactions when composing casts, pinning their ownership and Walrus hashes directly to the Sui ledger.
+- [ ] **Listen & Index Live Events**: Ensure the backend `indexer.ts` catches these live tipping and registration events and pushes verified state modifications to Supabase.
+
+### 🌊 Stage 3: Decentralized Walrus Media Aggregation (Status: 📅 Planned)
+*Goal: Move from mock asset caching to permanent, raw media storage across the worldwide Walrus protocol shard networks.*
+
+- [ ] **Establish Walrus Gateway URLs**: Define production Aggregator and Publisher nodes (e.g., `https://publisher.walrus.space`) in environment files.
+- [ ] **JSON Schema Packaging**: Finalize serialization of decentralized social posts (wrapping text, hashtags, media arrays) into formal JSON formats.
+- [ ] **Reed-Solomon Shard Verifications**: Render real-time visual telemetry showing media files reconstructing from distributed shard blocks.
+
+### 🛡️ Stage 4: Production Hardening & Optimization (Status: 📅 Planned)
+*Goal: Secure database pools, set up index keys, and prepare for production hosting.*
+
+- [ ] **Enable Prisma Accelerate/Direct Connections**: Configure connection pool thresholds to handle heavy social load spikes.
+- [ ] **Database Index Optimization**: Add composite index keys on `wallet_address`, `author_id`, and `created_at` columns inside the database schema for sub-millisecond queries.
+- [ ] **Production Build & Deploy**: Execute client Next.js output optimizations and compile server TypeScript to clean production JavaScript.

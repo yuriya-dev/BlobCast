@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/db';
+import { cache } from '../lib/redis';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 
@@ -106,5 +107,18 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
         status: 'success',
         message: 'Post reference registered verifiably in Supabase database',
         data: { post }
+    });
+});
+
+/**
+ * Controller to fetch the latest indexer telemetry notifications from Redis cache.
+ */
+export const getNotifications = asyncHandler(async (req: Request, res: Response) => {
+    const rawNotif = await cache.get('notifications:latest');
+    const notifications = rawNotif ? [JSON.parse(rawNotif)] : [];
+
+    res.status(200).json({
+        status: 'success',
+        data: { notifications }
     });
 });

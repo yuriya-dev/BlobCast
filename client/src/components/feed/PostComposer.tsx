@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
+import { WalrusImage } from '@/hooks/useWalrusImage';
 
 interface PostComposerProps {
   onPostCreated: (newPost: any) => void;
@@ -158,8 +159,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             <div className="flex items-center gap-4 bg-deep-space/50 border border-sui-cyan/5 rounded-cyber-sm p-3">
               <div className="h-12 w-16 rounded bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
                 {mediaUrl ? (
-                  <img 
-                    src={walrus.resolveImageUrl(mediaUrl)} 
+                  <WalrusImage 
+                    blobId={mediaUrl} 
                     alt="Composer upload preview" 
                     className="h-full w-full object-cover"
                     onError={(e) => {
@@ -167,9 +168,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
-                ) : (
-                  'Upload'
-                )}
+                ) : null}
+                {!mediaUrl && 'Upload'}
               </div>
               <div className="flex-1 flex flex-col gap-1 overflow-hidden">
                 {isUploadingMedia ? (
