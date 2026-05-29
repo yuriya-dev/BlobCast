@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Smile, Image } from 'lucide-react';
-import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
+import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import { walrus } from '@/lib/walrus';
 
@@ -13,7 +13,7 @@ interface PostCardCommentComposerProps {
   newCommentText: string;
   setNewCommentText: (text: string) => void;
   isPostingComment: boolean;
-  handleCommentSubmit: (e: React.FormEvent) => void;
+  handleCommentSubmit: (e: React.FormEvent, commentMediaItems?: any[]) => void;
 }
 
 export function PostCardCommentComposer({
@@ -184,7 +184,7 @@ export function PostCardCommentComposer({
           )}
         </button>
 
-        <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef} className="bottom-full left-[63.5%] mb-2 z-50">
+        <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-full left-[63.5%] mb-2 z-50">
           <div
             className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
             style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
@@ -192,7 +192,7 @@ export function PostCardCommentComposer({
             <EmojiPicker
               onEmojiClick={handleEmojiClick}
               theme={Theme.DARK}
-              emojiStyle="twitter"
+              emojiStyle={EmojiStyle.TWITTER}
               width="320px"
               height="360px"
               searchPlaceHolder="Search emoji"

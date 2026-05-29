@@ -8,6 +8,7 @@ import {
     createComment, 
     repostPost 
 } from '../controllers/postController';
+import { requireAuth } from '../middleware/authMiddleware';
 
 const router = Router();
 
@@ -21,15 +22,15 @@ router.get('/notifications', getNotifications);
 router.get('/:id', getPostById);
 
 // POST /api/posts - Register new permanent post reference metadata
-router.post('/', createPost);
+router.post('/', requireAuth, createPost);
 
 // POST /api/posts/:id/like - Toggle post liking in the indexer DB
-router.post('/:id/like', likePost);
+router.post('/:id/like', requireAuth, likePost);
 
 // POST /api/posts/:id/comments - Register a permanent sub-blob comment relationship
-router.post('/:id/comments', createComment);
+router.post('/:id/comments', requireAuth, createComment);
 
 // POST /api/posts/:id/repost - Repost an existing post reference
-router.post('/:id/repost', repostPost);
+router.post('/:id/repost', requireAuth, repostPost);
 
 export default router;

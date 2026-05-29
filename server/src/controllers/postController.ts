@@ -92,14 +92,23 @@ export const getPostById = asyncHandler(async (req: Request, res: Response) => {
  */
 export const createPost = asyncHandler(async (req: Request, res: Response) => {
     const { authorId, suiObjectId, walrusBlobId, blobHash, contentType, visibility } = req.body;
+    const sessionUser = req.authUser;
 
-    if (!authorId || !walrusBlobId || !blobHash) {
-        throw new AppError('Author, Walrus Blob ID, and Hash parameters are required to register post', 400);
+    if (!sessionUser) {
+        throw new AppError('Authentication required to create posts', 401);
+    }
+
+    if (authorId && authorId !== sessionUser.id) {
+        throw new AppError('Post author must match the authenticated user', 403);
+    }
+
+    if (!walrusBlobId || !blobHash) {
+        throw new AppError('Walrus Blob ID and Hash parameters are required to register post', 400);
     }
 
     // Verify if the author profile exists
     const author = await prisma.user.findUnique({
-        where: { id: authorId }
+        where: { id: sessionUser.id }
     });
 
     if (!author) {
@@ -108,7 +117,7 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
 
     const post = await prisma.post.create({
         data: {
-            authorId,
+            authorId: sessionUser.id,
             suiObjectId: suiObjectId || null,
             walrusBlobId,
             blobHash,
@@ -149,23 +158,34 @@ export const getNotifications = asyncHandler(async (req: Request, res: Response)
 export const likePost = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params; // Post ID
     const { userId } = req.body;
+    const sessionUser = req.authUser;
 
-    if (!id || !userId) {
-        throw new AppError('Post ID and User ID parameters are required to like', 400);
+    if (!sessionUser) {
+        throw new AppError('Authentication required to like posts', 401);
     }
+
+    if (userId && userId !== sessionUser.id) {
+        throw new AppError('Like author must match the authenticated user', 403);
+    }
+
+    if (!id) {
+        throw new AppError('Post ID is required to like', 400);
+    }
+
+    const resolvedUserId = sessionUser.id;
 
     // Verify post exists
     const post = await prisma.post.findUnique({ where: { id } });
     if (!post) throw new AppError('Post not found', 404);
 
     // Verify user exists
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: resolvedUserId } });
     if (!user) throw new AppError('User profile not found', 404);
 
     // Check if user already liked this post
     const existingLike = await prisma.like.findUnique({
         where: {
-            userId_postId: { userId, postId: id }
+            userId_postId: { userId: resolvedUserId, postId: id }
         }
     });
 
@@ -174,7 +194,7 @@ export const likePost = asyncHandler(async (req: Request, res: Response) => {
         // Remove like
         await prisma.like.delete({
             where: {
-                userId_postId: { userId, postId: id }
+                userId_postId: { userId: resolvedUserId, postId: id }
             }
         });
         // Decrement post like_count
@@ -185,7 +205,7 @@ export const likePost = asyncHandler(async (req: Request, res: Response) => {
     } else {
         // Add like
         await prisma.like.create({
-            data: { userId, postId: id }
+            data: { userId: resolvedUserId, postId: id }
         });
         // Increment post like_count
         await prisma.post.update({
@@ -210,9 +230,18 @@ export const likePost = asyncHandler(async (req: Request, res: Response) => {
 export const createComment = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params; // Post ID
     const { authorId, walrusBlobId } = req.body;
+    const sessionUser = req.authUser;
 
-    if (!id || !authorId || !walrusBlobId) {
-        throw new AppError('Post ID, author ID, and Walrus Blob ID are required to comment', 400);
+    if (!sessionUser) {
+        throw new AppError('Authentication required to comment', 401);
+    }
+
+    if (authorId && authorId !== sessionUser.id) {
+        throw new AppError('Comment author must match the authenticated user', 403);
+    }
+
+    if (!id || !walrusBlobId) {
+        throw new AppError('Post ID and Walrus Blob ID are required to comment', 400);
     }
 
     // Verify post exists
@@ -220,14 +249,14 @@ export const createComment = asyncHandler(async (req: Request, res: Response) =>
     if (!post) throw new AppError('Post not found', 404);
 
     // Verify author exists
-    const author = await prisma.user.findUnique({ where: { id: authorId } });
+    const author = await prisma.user.findUnique({ where: { id: sessionUser.id } });
     if (!author) throw new AppError('Author profile not found', 404);
 
     // Create Comment in database
     const comment = await prisma.comment.create({
         data: {
             postId: id,
-            authorId,
+            authorId: sessionUser.id,
             walrusBlobId
         },
         include: {
@@ -255,23 +284,34 @@ export const createComment = asyncHandler(async (req: Request, res: Response) =>
 export const repostPost = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params; // Original Post ID
     const { authorId } = req.body;
+    const sessionUser = req.authUser;
 
-    if (!id || !authorId) {
-        throw new AppError('Post ID and Author ID parameters are required to repost', 400);
+    if (!sessionUser) {
+        throw new AppError('Authentication required to repost', 401);
     }
+
+    if (authorId && authorId !== sessionUser.id) {
+        throw new AppError('Repost author must match the authenticated user', 403);
+    }
+
+    if (!id) {
+        throw new AppError('Post ID is required to repost', 400);
+    }
+
+    const resolvedAuthorId = sessionUser.id;
 
     // Verify original post exists
     const originalPost = await prisma.post.findUnique({ where: { id } });
     if (!originalPost) throw new AppError('Original post not found', 404);
 
     // Verify author exists
-    const author = await prisma.user.findUnique({ where: { id: authorId } });
+    const author = await prisma.user.findUnique({ where: { id: resolvedAuthorId } });
     if (!author) throw new AppError('Author profile not found', 404);
 
     // Check if user already reposted this post
     const existingRepost = await prisma.post.findFirst({
         where: {
-            authorId,
+            authorId: resolvedAuthorId,
             repostOfId: id
         }
     });
@@ -291,7 +331,7 @@ export const repostPost = asyncHandler(async (req: Request, res: Response) => {
         // Create the repost post entry
         await prisma.post.create({
             data: {
-                authorId,
+                authorId: resolvedAuthorId,
                 repostOfId: id,
                 walrusBlobId: originalPost.walrusBlobId,
                 blobHash: originalPost.blobHash,

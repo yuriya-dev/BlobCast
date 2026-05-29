@@ -7,11 +7,13 @@ import { motion } from 'framer-motion';
 import { ArrowRight, CircleCheckBig, Sparkles, Wallet } from 'lucide-react';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 import { api } from '@/lib/api';
-import { formatWalletAddress, getOnboardingProfileKey } from '@/lib/onboarding';
+import { formatWalletAddress } from '@/lib/onboarding';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function RegisterPage() {
   const router = useRouter();
   const account = useCurrentAccount();
+  const { user: authUser, refreshSession } = useAuth();
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,6 +37,17 @@ export default function RegisterPage() {
       setErrorMessage('');
       setSuccessMessage('');
 
+      if (authUser && authUser.walletAddress.toLowerCase() === account.address.toLowerCase()) {
+        setUsername(authUser.username || '');
+        setDisplayName(authUser.displayName || '');
+        if (authUser.username && authUser.displayName) {
+          setSuccessMessage('Profile loaded from active session. Redirecting to feed...');
+          router.push('/feed');
+        }
+        setIsLoadingProfile(false);
+        return;
+      }
+
       try {
         const response = await api.fetchUserProfile(account.address);
         if (!active) return;
@@ -42,25 +55,25 @@ export default function RegisterPage() {
         const user = response.data.user;
         setUsername(user.username || '');
         setDisplayName(user.displayName || '');
+        
         if (user.username && user.displayName) {
-          setSuccessMessage('Profile loaded. You can update it or continue to the feed.');
+          setSuccessMessage('Profile already registered. Auto-redirecting to feed...');
+          setIsSubmitting(true);
+          try {
+            await api.loginWithWallet(account.address);
+            await refreshSession();
+            router.push('/feed');
+          } catch {
+            setErrorMessage('Auto-redirect failed. Please click Save Profile to continue.');
+          } finally {
+            setIsSubmitting(false);
+          }
         }
       } catch {
         if (!active) return;
 
-        const stored = typeof window !== 'undefined' ? localStorage.getItem(getOnboardingProfileKey(account.address)) : null;
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored) as { username?: string; displayName?: string };
-            setUsername(parsed.username || '');
-            setDisplayName(parsed.displayName || '');
-            if (parsed.username && parsed.displayName) {
-              setSuccessMessage('Local profile loaded.');
-            }
-          } catch {
-            // ignore invalid storage data
-          }
-        }
+        setUsername('');
+        setDisplayName('');
       } finally {
         if (active) {
           setIsLoadingProfile(false);
@@ -73,7 +86,7 @@ export default function RegisterPage() {
     return () => {
       active = false;
     };
-  }, [account?.address]);
+  }, [account?.address, authUser]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -95,22 +108,13 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
     try {
-      await api.upsertUserProfile({
+      await api.registerWithWallet({
         walletAddress: account.address,
         username: nextUsername,
         displayName: nextDisplayName,
       });
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          getOnboardingProfileKey(account.address),
-          JSON.stringify({
-            username: nextUsername,
-            displayName: nextDisplayName,
-            savedAt: new Date().toISOString(),
-          })
-        );
-      }
+      await refreshSession();
 
       setSuccessMessage('Profile saved successfully.');
       router.push('/feed');

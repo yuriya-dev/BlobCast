@@ -51,10 +51,16 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
  * Controller to register or update user identity schemas directly in Supabase.
  */
 export const upsertUserProfile = asyncHandler(async (req: Request, res: Response) => {
-    const { walletAddress, username, displayName, avatarBlobId, bannerBlobId, bio, website, github, pinnedPostId } = req.body;
+    const { walletAddress: bodyWalletAddress, username, displayName, avatarBlobId, bannerBlobId, bio, website, github, pinnedPostId } = req.body;
+    const sessionWalletAddress = req.authUser?.walletAddress;
+    const walletAddress = bodyWalletAddress || sessionWalletAddress;
 
     if (!walletAddress) {
         throw new AppError('Wallet address is required to register identity', 400);
+    }
+
+    if (sessionWalletAddress && bodyWalletAddress && bodyWalletAddress.toLowerCase() !== sessionWalletAddress.toLowerCase()) {
+        throw new AppError('You can only update your own profile', 403);
     }
 
     const user = await prisma.user.upsert({
@@ -87,5 +93,20 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
         status: 'success',
         message: 'Identity profile successfully synchronized with Supabase',
         data: { user }
+    });
+});
+
+/**
+ * Controller to fetch all registered users in the database.
+ */
+export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
+    const users = await prisma.user.findMany({
+        take: 50,
+        orderBy: { createdAt: 'desc' }
+    });
+
+    res.status(200).json({
+        status: 'success',
+        data: { users }
     });
 });

@@ -13,8 +13,10 @@ import { mockDb } from '@/lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function BookmarksPage() {
+  const { user: authUser } = useAuth();
   const [bookmarkedCasts, setBookmarkedCasts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -115,11 +117,11 @@ export default function BookmarksPage() {
               const mockP = mockDb.posts.find(p => p.id === id);
               if (mockP) {
                 const u = mockDb.users.find(user => user.id === mockP.authorId) || {
-                  displayName: 'Yuriya',
-                  username: 'yuriya',
-                  walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
-                  avatarBlobId: 'walrus://yuriya-avatar',
-                  verified: true
+                  displayName: authUser?.displayName || 'Yuriya',
+                  username: authUser?.username || 'yuriya',
+                  walletAddress: authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+                  avatarBlobId: authUser?.avatarBlobId || 'walrus://yuriya-avatar',
+                  verified: authUser?.verified || true
                 };
                 return {
                   id: mockP.id,

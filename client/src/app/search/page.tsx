@@ -534,9 +534,18 @@ function SearchContent() {
                       className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/5 relative group flex flex-col sm:flex-row gap-4 justify-between items-start"
                     >
                       <div className="flex gap-3">
-                        <div className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
-                          <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan">
-                            {(creator.displayName || creator.username || 'YU').substring(0, 2).toUpperCase()}
+                        <div className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0 overflow-hidden">
+                          <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan relative">
+                            {creator.username ? (
+                              <img 
+                                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${creator.username}`} 
+                                alt={creator.displayName || ''}
+                                className="h-full w-full object-cover z-10"
+                              />
+                            ) : null}
+                            <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0">
+                              {(creator.displayName || creator.username || 'YU').substring(0, 2).toUpperCase()}
+                            </span>
                           </div>
                         </div>
 

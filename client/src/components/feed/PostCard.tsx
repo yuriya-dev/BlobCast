@@ -30,6 +30,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { PostCardVerificationPanel } from './PostCardVerificationPanel';
 import { PostCardCommentComposer } from './PostCardCommentComposer';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 type PostAuthor = {
   displayName: string;
@@ -93,7 +94,8 @@ interface PostCardProps {
 export function PostCard({ post, onCommentCreated, hideCommentComposer = false, onPin }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const CURRENT_USER_WALLET = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+  const { user: authUser } = useAuth();
+  const CURRENT_USER_WALLET = authUser?.walletAddress || '0x0000...';
 
   // Resolve original author and post ID if this post is a repost
   const authorResolved = post.repostOf ? post.repostOf.author : post.author;
@@ -120,11 +122,12 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   // Check ownership: only the post's own author can pin/delete
   const isOwnPost = authorResolved.walletAddress.toLowerCase() === CURRENT_USER_WALLET.toLowerCase();
   
-  const avatarUrlResolved = useWalrusImage(authorResolved.avatarBlobId);
+  const avatarUrlResolved = useWalrusImage(authorResolved.avatarBlobId) || 
+    (authorResolved.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${authorResolved.username}` : '');
 
   const [likes, setLikes] = useState(post.likeCount);
   const [hasLiked, setHasLiked] = useState(() => {
-    const currentUserId = 'usr-2-sademir';
+    const currentUserId = authUser?.id || '';
     return post.likes?.some((like) => like.userId === currentUserId) ?? false;
   });
   const [tipsCount, setTipsCount] = useState(0);
@@ -186,7 +189,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
 
   const [reposts, setReposts] = useState(post.repostCount);
   const [hasReposted, setHasReposted] = useState(() => {
-    const currentUserId = 'usr-2-sademir';
+    const currentUserId = authUser?.id || '';
     return post.reposts?.some((repost) => repost.authorId === currentUserId) ?? false;
   });
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -264,12 +267,16 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!authUser) {
+      alert('Please login first.');
+      return;
+    }
     const nextLiked = !hasLiked;
     setHasLiked(nextLiked);
     setLikes(prev => nextLiked ? prev + 1 : prev - 1);
 
     try {
-      const userId = 'usr-2-sademir';
+      const userId = authUser.id;
       const res = await api.likePost(targetPostId, userId);
       if (res && res.data) {
         setLikes(res.data.likeCount);
@@ -284,6 +291,10 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
 
   const handleRepost = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!authUser) {
+      alert('Please login first.');
+      return;
+    }
     const nextReposted = !hasReposted;
     setHasReposted(nextReposted);
     setReposts(prev => nextReposted ? prev + 1 : prev - 1);
@@ -299,7 +310,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     }
 
     try {
-      const authorId = 'usr-2-sademir';
+      const authorId = authUser.id;
       const res = await api.repostPost(targetPostId, authorId);
       if (res && res.data) {
         setReposts(res.data.repostCount);
@@ -342,6 +353,10 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
     e.preventDefault();
     if (!newCommentText.trim() && commentMediaItems.length === 0) return;
+    if (!authUser) {
+      alert('Please login first.');
+      return;
+    }
 
     setIsPostingComment(true);
     try {
@@ -349,7 +364,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
         version: 1,
         type: 'comment',
         post_id: targetPostId,
-        author_wallet: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        author_wallet: authUser.walletAddress,
         created_at: Math.floor(Date.now() / 1000),
         content: {
           text: newCommentText
@@ -367,7 +382,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
       }
 
       const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
-      const authorId = 'usr-2-sademir';
+      const authorId = authUser.id;
 
       try {
         const response = await api.createComment(targetPostId, authorId, walrusUploadInfo.blobId);
@@ -389,7 +404,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
       mockDb.comments.push({
         id: `comment_${Date.now()}`,
         postId: targetPostId,
-        authorId: 'usr-2-sademir',
+        authorId: authUser.id,
         walrusBlobId: walrusUploadInfo.blobId,
         createdAt: new Date()
       });
@@ -402,7 +417,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
         onCommentCreated({
           id: `comment_${Date.now()}`,
           postId: targetPostId,
-          authorId: 'usr-2-sademir',
+          authorId: authUser.id,
           createdAt: new Date()
         });
       }
@@ -456,7 +471,6 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     e.stopPropagation();
     setShowMenu(false);
     const nextPinned = !isPinned;
-    setIsPinned(nextPinned);
     if (onPin) onPin(targetPostId, nextPinned);
   };
 
@@ -865,8 +879,16 @@ function ActivityModal({
           {activeTabData && activeTabData.data.length > 0 ? (
             activeTabData.data.map((item: any, idx: number) => (
               <div key={idx} className="flex items-center gap-3 bg-walrus-blue/30 border border-sui-cyan/5 rounded-cyber-md p-3">
-                <div className="h-9 w-9 rounded-full bg-linear-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-sui-cyan shrink-0">
-                  {item.user ? (item.user.displayName || item.user.username || '??').substring(0, 2).toUpperCase() : '??'}
+                <div className="h-9 w-9 rounded-full bg-linear-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-sui-cyan shrink-0 overflow-hidden relative">
+                  {item.user?.username ? (
+                    <img 
+                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${item.user.username}`} 
+                      alt={item.user.displayName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    item.user ? (item.user.displayName || item.user.username || '??').substring(0, 2).toUpperCase() : '??'
+                  )}
                 </div>
                 <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
                   <span className="text-xs font-semibold text-white font-sans truncate">

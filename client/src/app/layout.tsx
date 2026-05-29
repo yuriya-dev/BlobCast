@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, Inter } from 'next/font/google';
 import { SuiProvider } from '@/components/providers/SuiProvider';
+import { AuthGate, AuthProvider } from '@/components/providers/AuthProvider';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -49,9 +50,13 @@ export default function RootLayout({
 
         {/* Global Web3 Provider Context */}
         <SuiProvider>
-          <div className="relative z-10 flex-1 flex flex-col min-h-full">
-            {children}
-          </div>
+          <AuthProvider>
+            <AuthGate>
+              <div className="relative z-10 flex-1 flex flex-col min-h-full">
+                {children}
+              </div>
+            </AuthGate>
+          </AuthProvider>
         </SuiProvider>
         
       </body>

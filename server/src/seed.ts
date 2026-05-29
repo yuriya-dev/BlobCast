@@ -29,7 +29,7 @@ async function main() {
   const user2 = await prisma.user.create({
     data: {
       id: 'usr-2-sademir',
-      walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+      walletAddress: '0x14b6a2164130de573dcdd114299ba144629979fe9423bc8e81bc06754e6b3e43',
       username: 'yuriya',
       displayName: 'Yuriya',
       avatarBlobId: 'walrus://yuriya-avatar',

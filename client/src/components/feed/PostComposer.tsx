@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database, X } from 'lucide-react';
-import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
+import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface PostComposerProps {
   onPostCreated: (newPost: any) => void;
@@ -16,6 +17,7 @@ interface PostComposerProps {
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const account = useCurrentAccount();
+  const { user: authUser } = useAuth();
   interface MediaItem {
     blobId: string;
     type: 'image' | 'video';
@@ -32,13 +34,26 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   // Read from avatarBlobId directly — no hardcoded fallback so we don't override the user's actual upload
   const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
 
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
+      if (authUser) {
+        const persistedAvatarBlobId = typeof window !== 'undefined' ? localStorage.getItem('blobcast_my_avatar_blob_id') : null;
+        setCurrentUser({
+          ...authUser,
+          avatarBlobId: authUser.avatarBlobId || persistedAvatarBlobId || null,
+        });
+        return;
+      }
+
       try {
-        const wallet = account?.address || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+        const wallet = account?.address;
+        if (!wallet) {
+          return;
+        }
         const res = await api.fetchUserProfile(wallet);
         if (res && res.data && res.data.user) {
           const userData = res.data.user;
@@ -60,7 +75,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       
       // Offline fallback: use mockDb but override avatarBlobId with whatever was saved by the user
       const user = { ...(
-        mockDb.users.find(u => u.id === 'usr-2-sademir') || {
+        mockDb.users.find(u => u.walletAddress === account?.address) || {
           displayName: 'Yuriya',
           username: 'yuriya',
           avatarBlobId: null as string | null
@@ -75,7 +90,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     };
 
     fetchUser();
-  }, [account]);
+  }, [account?.address, authUser]);
 
   const userInitials = (currentUser?.displayName || currentUser?.username || 'YU')
     .substring(0, 2)
@@ -193,12 +208,18 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     e.preventDefault();
     if (!text.trim() && mediaItems.length === 0) return;
 
+    const activeUser = authUser || currentUser;
+    if (!activeUser) {
+      alert('Please login first.');
+      return;
+    }
+
     setIsUploading(true);
     try {
       const postBlob = {
         version: 1,
         type: 'post',
-        author_wallet: account?.address || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        author_wallet: activeUser.walletAddress,
         created_at: Math.floor(Date.now() / 1000),
         content: {
           text: text,
@@ -222,7 +243,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
       onPostCreated({
         id: `post_${Date.now()}`,
-        authorId: 'usr-2-sademir',
+        authorId: activeUser.id,
         suiObjectId: `0x${Math.random().toString(16).substring(2, 18)}sui_object`,
         walrusBlobId: walrusUploadInfo.blobId,
         blobHash: `sha256-${Math.random().toString(36).substring(2, 10)}`,
@@ -262,9 +283,9 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         <div className="flex gap-4">
           <div className="h-10 w-10 rounded-full bg-linear-to-tr from-sui-cyan to-tatum-purple p-0.5 shrink-0">
             <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs font-bold text-sui-cyan relative">
-              {avatarUrlResolved ? (
+              {finalAvatar ? (
                 <img 
-                  src={avatarUrlResolved} 
+                  src={finalAvatar} 
                   alt="My avatar"
                   className="h-full w-full object-cover z-10"
                   onError={(e) => {
@@ -397,7 +418,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                 <EmojiPicker
                   onEmojiClick={handleEmojiClick}
                   theme={Theme.DARK}
-                  emojiStyle="twitter"
+                  emojiStyle={EmojiStyle.TWITTER}
                   width="320px"
                   height="360px"
                   searchPlaceHolder="Search emoji"

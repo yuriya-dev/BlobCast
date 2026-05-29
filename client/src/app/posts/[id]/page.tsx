@@ -2,16 +2,31 @@
 
 import React, { useState, useEffect, useRef, use } from 'react';
 import { ArrowLeft, Loader2, Terminal, ShieldCheck, Database, MessageSquare, Image, Smile } from 'lucide-react';
-import EmojiPicker, { Theme, type EmojiClickData } from 'emoji-picker-react';
+import EmojiPicker, { Theme, type EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import Link from 'next/link';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostCard } from '@/components/feed/PostCard';
-import { WalrusImage } from '@/hooks/useWalrusImage';
+import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
+
+function CommentComposerAvatar({ authUser }: { authUser: any }) {
+  const imageUrl = useWalrusImage(authUser?.avatarBlobId);
+  const finalUrl = imageUrl || (authUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${authUser.username}` : '');
+  if (!finalUrl) return null;
+  return <img src={finalUrl} alt="My avatar" className="h-full w-full object-cover z-10" />;
+}
+
+function CommentAuthorAvatar({ author }: { author: any }) {
+  const imageUrl = useWalrusImage(author?.avatarBlobId);
+  const finalUrl = imageUrl || (author?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${author.username}` : '');
+  if (!finalUrl) return null;
+  return <img src={finalUrl} alt="Author avatar" className="h-full w-full object-cover z-10" />;
+}
 import { api } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
 import { mockDb } from '@/lib/db';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -19,6 +34,7 @@ interface PageProps {
 
 export default function PostDetailPage({ params }: PageProps) {
   const { id } = use(params);
+  const { user: authUser } = useAuth();
   const [post, setPost] = useState<any | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -201,6 +217,10 @@ export default function PostDetailPage({ params }: PageProps) {
   const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
     e.preventDefault();
     if (!newCommentText.trim() && commentMediaItems.length === 0) return;
+    if (!authUser) {
+      alert('Please login first.');
+      return;
+    }
 
     setIsPostingComment(true);
     try {
@@ -208,7 +228,7 @@ export default function PostDetailPage({ params }: PageProps) {
         version: 1,
         type: 'comment',
         post_id: id,
-        author_wallet: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        author_wallet: authUser.walletAddress,
         created_at: Math.floor(Date.now() / 1000),
         content: {
           text: newCommentText
@@ -226,7 +246,7 @@ export default function PostDetailPage({ params }: PageProps) {
       }
 
       const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
-      const authorId = 'usr-2-sademir'; // Default Caster (Yuriya)
+      const authorId = authUser.id; // Default Caster (Yuriya)
 
       try {
         const response = await api.createComment(id, authorId, walrusUploadInfo.blobId);
@@ -243,7 +263,7 @@ export default function PostDetailPage({ params }: PageProps) {
       mockDb.comments.push({
         id: `comment_${Date.now()}`,
         postId: id,
-        authorId: authorId,
+        authorId: authUser.id,
         walrusBlobId: walrusUploadInfo.blobId,
         createdAt: new Date()
       });
@@ -417,8 +437,9 @@ export default function PostDetailPage({ params }: PageProps) {
                     {/* User Avatar */}
                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
                       <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan relative">
-                        <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue select-none pointer-events-none font-mono">
-                          YU
+                        <CommentComposerAvatar authUser={authUser} />
+                        <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none font-mono">
+                          {(authUser?.displayName || authUser?.username || 'YU').substring(0, 2).toUpperCase()}
                         </span>
                       </div>
                     </div>
@@ -471,7 +492,7 @@ export default function PostDetailPage({ params }: PageProps) {
                               <Smile className="h-4 w-4" />
                             </button>
 
-                            <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef} className="bottom-full mb-2 z-50">
+                            <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-full mb-2 z-50">
                               <div
                                 className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
                                 style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
@@ -479,7 +500,7 @@ export default function PostDetailPage({ params }: PageProps) {
                                 <EmojiPicker
                                   onEmojiClick={handleEmojiClick}
                                   theme={Theme.DARK}
-                                  emojiStyle="twitter"
+                                  emojiStyle={EmojiStyle.TWITTER}
                                   width="320px"
                                   height="360px"
                                   searchPlaceHolder="Search emoji"
@@ -531,14 +552,7 @@ export default function PostDetailPage({ params }: PageProps) {
                         {/* Comment author avatar */}
                         <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
                           <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs font-bold text-sui-cyan relative">
-                            <WalrusImage 
-                              blobId={comment.author?.avatarBlobId} 
-                              alt={`${comment.author?.displayName}'s avatar`}
-                              className="h-full w-full object-cover z-10"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
+                            <CommentAuthorAvatar author={comment.author} />
                             <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 text-neon-glow font-mono text-[10px]">
                               {(comment.author?.displayName || comment.author?.username || 'AN').substring(0, 2).toUpperCase()}
                             </span>

@@ -18,8 +18,38 @@ import {
   Shield,
   Database,
   Zap,
+  UserPlus,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Sidebar } from '@/components/feed/Sidebar';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useWalrusImage } from '@/hooks/useWalrusImage';
+import { api } from '@/lib/api';
+
+// -- Message Avatar Helper with Dicebear robot fallback -----------------------
+
+function MessageUserAvatar({ user, className }: { user: any; className?: string }) {
+  const imageUrl = useWalrusImage(user?.avatarBlobId);
+  const finalUrl = imageUrl || (user?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` : '');
+  
+  return (
+    <div className={`rounded-full bg-linear-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-white relative overflow-hidden shrink-0 ${className || 'h-11 w-11'}`}>
+      {finalUrl ? (
+        <img 
+          src={finalUrl} 
+          alt={user?.displayName} 
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+      <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none font-mono">
+        {(user?.displayName || user?.username || 'US').substring(0, 2).toUpperCase()}
+      </span>
+    </div>
+  );
+}
 
 // -- Static conversation + message data ----------------------------------------
 
@@ -30,52 +60,52 @@ const CURRENT_USER = {
   avatarInitials: 'YU',
 };
 
-const conversations = [
+const initialConversations = [
   {
     id: 'conv-1',
-    user: { id: 'usr-1-vitalik', displayName: 'Vitalik Buterin', username: 'vitalik', avatarInitials: 'VB', verified: true, online: true },
+    user: { id: 'usr-1-vitalik', displayName: 'Vitalik Buterin', username: 'vitalik', avatarInitials: 'VB', verified: true, online: true, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000001' },
     lastMessage: 'Incredible work on BlobCast! The Walrus integration is 🔥',
     lastTime: '2m ago',
     unread: 2,
   },
   {
     id: 'conv-2',
-    user: { id: 'usr-3-mysten', displayName: 'Mysten Labs', username: 'mystenlabs', avatarInitials: 'ML', verified: true, online: true },
+    user: { id: 'usr-3-mysten', displayName: 'Mysten Labs', username: 'mystenlabs', avatarInitials: 'ML', verified: true, online: true, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000003' },
     lastMessage: "We'd love to feature BlobCast in our ecosystem showcase.",
     lastTime: '1h ago',
     unread: 0,
   },
   {
     id: 'conv-3',
-    user: { id: 'usr-4-sui', displayName: 'Sui Network', username: 'suinetwork', avatarInitials: 'SN', verified: true, online: false },
+    user: { id: 'usr-4-sui', displayName: 'Sui Network', username: 'suinetwork', avatarInitials: 'SN', verified: true, online: false, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000004' },
     lastMessage: 'Grant application approved ✅ Congrats!',
     lastTime: '3h ago',
     unread: 1,
   },
   {
     id: 'conv-4',
-    user: { id: 'usr-5-walrus', displayName: 'Walrus Protocol', username: 'walrusprotocol', avatarInitials: 'WP', verified: true, online: false },
+    user: { id: 'usr-5-walrus', displayName: 'Walrus Protocol', username: 'walrusprotocol', avatarInitials: 'WP', verified: true, online: false, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000005' },
     lastMessage: 'Your blob storage quota has been upgraded.',
     lastTime: 'Yesterday',
     unread: 0,
   },
   {
     id: 'conv-5',
-    user: { id: 'usr-6-cyber', displayName: 'CyberCaster_9', username: 'cybercaster9', avatarInitials: 'CC', verified: false, online: true },
+    user: { id: 'usr-6-cyber', displayName: 'CyberCaster_9', username: 'cybercaster9', avatarInitials: 'CC', verified: false, online: true, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000006' },
     lastMessage: "When's the token launch? 🚀",
     lastTime: '2d ago',
     unread: 0,
   },
   {
     id: 'conv-6',
-    user: { id: 'usr-7-nika', displayName: 'Nika_Warz', username: 'nikawarz', avatarInitials: 'NW', verified: false, online: false },
+    user: { id: 'usr-7-nika', displayName: 'Nika_Warz', username: 'nikawarz', avatarInitials: 'NW', verified: false, online: false, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000007' },
     lastMessage: 'gm ser 👋 LFG BlobCast',
     lastTime: '3d ago',
     unread: 0,
   },
   {
     id: 'conv-7',
-    user: { id: 'usr-8-defi', displayName: 'DeFi Maxi', username: 'defimaxi', avatarInitials: 'DM', verified: false, online: true },
+    user: { id: 'usr-8-defi', displayName: 'DeFi Maxi', username: 'defimaxi', avatarInitials: 'DM', verified: false, online: true, walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000008' },
     lastMessage: 'Is BlobCast token on Cetus already?',
     lastTime: '4d ago',
     unread: 0,
@@ -132,6 +162,8 @@ const avatarColors: Record<string, string> = {
 };
 
 export default function MessagesPage() {
+  const { user: authUser } = useAuth();
+  const [convList, setConvList] = useState(initialConversations);
   const [activeConvId, setActiveConvId] = useState<string | null>('conv-1');
   const [searchQuery, setSearchQuery] = useState('');
   const [messages, setMessages] = useState<Record<string, Message[]>>(initialMessages);
@@ -139,13 +171,92 @@ export default function MessagesPage() {
   const [isMobileListVisible, setIsMobileListVisible] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeConv = conversations.find(c => c.id === activeConvId);
+  // New message search states
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [newChatSearchQuery, setNewChatSearchQuery] = useState('');
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // DM filters state (all / unread)
+  const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all');
+
+  const activeConv = convList.find(c => c.id === activeConvId);
   const activeMessages = activeConvId ? (messages[activeConvId] || []) : [];
 
-  const filteredConvs = conversations.filter(c =>
-    c.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.user.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter conversations based on search term AND tabs (all / unread)
+  const filteredConvs = convList.filter(c => {
+    const matchesSearch = c.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.user.username.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (filterMode === 'unread') {
+      return matchesSearch && c.unread > 0;
+    }
+    return matchesSearch;
+  });
+
+  // Fetch all registered users for DMs modal search
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await api.fetchAllUsers();
+        if (res && res.data && Array.isArray(res.data.users)) {
+          setAllUsers(res.data.users);
+        }
+      } catch (err) {
+        console.warn("Failed to load registered users for chat search:", err);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const handleCreateOrSelectConversation = (user: any) => {
+    const existingConv = convList.find(c => 
+      c.user.id === user.id || 
+      c.user.walletAddress?.toLowerCase() === user.walletAddress.toLowerCase()
+    );
+    
+    if (existingConv) {
+      setActiveConvId(existingConv.id);
+      setIsMobileListVisible(false);
+    } else {
+      const newConvId = `conv_dyn_${Date.now()}`;
+      const newConv = {
+        id: newConvId,
+        user: {
+          id: user.id,
+          displayName: user.displayName || 'Anonymous Caster',
+          username: user.username || 'anonymous',
+          avatarInitials: (user.displayName || user.username || 'AN').substring(0, 2).toUpperCase(),
+          avatarBlobId: user.avatarBlobId,
+          verified: user.verified || false,
+          online: true,
+          walletAddress: user.walletAddress
+        },
+        lastMessage: 'Started a new sealed chat session.',
+        lastTime: 'Just now',
+        unread: 0
+      };
+      
+      setConvList(prev => [newConv, ...prev]);
+      setMessages(prev => ({ ...prev, [newConvId]: [] }));
+      setActiveConvId(newConvId);
+      setIsMobileListVisible(false);
+    }
+    
+    setShowNewChatModal(false);
+    setNewChatSearchQuery('');
+  };
+
+  const filteredUsersForNewChat = allUsers
+    .filter(u => u.walletAddress.toLowerCase() !== authUser?.walletAddress?.toLowerCase())
+    .filter(u => {
+      if (!newChatSearchQuery) return true;
+      const term = newChatSearchQuery.toLowerCase();
+      return (
+        (u.username || '').toLowerCase().includes(term) ||
+        (u.displayName || '').toLowerCase().includes(term) ||
+        u.walletAddress.toLowerCase().includes(term)
+      );
+    });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -156,7 +267,7 @@ export default function MessagesPage() {
     if (!text || !activeConvId) return;
     const newMsg: Message = {
       id: `msg-${Date.now()}`,
-      senderId: CURRENT_USER.id,
+      senderId: authUser?.id || CURRENT_USER.id,
       text,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       walrusBlobId: `walrus_sim_dm_${Date.now()}`,
@@ -192,16 +303,21 @@ export default function MessagesPage() {
         `}>
 
           {/* Sticky header (Messages title + search) */}
-          <div className="flex-shrink-0 glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-5 py-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="flex-shrink-0 glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-5 py-4 flex flex-col gap-3.5">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-sui-cyan" />
                 <h2 className="font-mono font-bold text-sm tracking-wider uppercase text-white">Messages</h2>
               </div>
-              <button className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-sui-cyan/10 text-gray-500 hover:text-sui-cyan transition-all">
-                <MoreHorizontal className="h-4 w-4" />
+              <button 
+                onClick={() => setShowNewChatModal(true)} 
+                className="h-8 w-8 flex items-center justify-center rounded-xl bg-sui-cyan/10 border border-sui-cyan/20 text-sui-cyan hover:bg-sui-cyan/20 hover:text-white transition-all shadow-cyber-glow cursor-pointer"
+                title="New Chat Session"
+              >
+                <UserPlus className="h-4 w-4" />
               </button>
             </div>
+            
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
               <input
@@ -211,6 +327,33 @@ export default function MessagesPage() {
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full bg-walrus-blue/40 border border-sui-cyan/10 rounded-cyber-md pl-8 pr-3 py-2 text-xs font-mono text-gray-300 placeholder-gray-600 focus:outline-none focus:border-sui-cyan/30 transition-colors"
               />
+            </div>
+
+            {/* Premium tab/pill selectors */}
+            <div className="flex gap-1.5 bg-deep-space/40 p-1 rounded-xl border border-sui-cyan/10">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`flex-1 text-center py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                  filterMode === 'all'
+                    ? 'bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space shadow-cyber-glow'
+                    : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterMode('unread')}
+                className={`flex-1 text-center py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  filterMode === 'unread'
+                    ? 'bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space shadow-cyber-glow'
+                    : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                Unread
+                {convList.some(c => c.unread > 0) && (
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -228,11 +371,9 @@ export default function MessagesPage() {
                   }`}
                 >
                   <div className="relative flex-shrink-0">
-                    <div className={`h-11 w-11 rounded-full bg-gradient-to-br ${avatarColors[conv.user.id] || 'from-sui-cyan/30 to-tatum-purple/30'} flex items-center justify-center font-mono text-xs font-bold text-white`}>
-                      {conv.user.avatarInitials}
-                    </div>
+                    <MessageUserAvatar user={conv.user} className="h-11 w-11" />
                     {conv.user.online && (
-                      <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 border-2 border-deep-space" />
+                      <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 border-2 border-deep-space z-20" />
                     )}
                   </div>
                   <div className="flex-1 overflow-hidden">
@@ -282,10 +423,10 @@ export default function MessagesPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </button>
 
-                <div className={`h-9 w-9 rounded-full bg-gradient-to-br ${avatarColors[activeConv.user.id] || 'from-sui-cyan/30 to-tatum-purple/30'} flex items-center justify-center font-mono text-xs font-bold text-white flex-shrink-0 relative`}>
-                  {activeConv.user.avatarInitials}
+                <div className="relative flex-shrink-0">
+                  <MessageUserAvatar user={activeConv.user} className="h-9 w-9" />
                   {activeConv.user.online && (
-                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-deep-space" />
+                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-deep-space z-20" />
                   )}
                 </div>
 
@@ -293,8 +434,14 @@ export default function MessagesPage() {
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-bold text-white font-sans">{activeConv.user.displayName}</span>
                     {activeConv.user.verified && <BadgeCheck className="h-3.5 w-3.5 text-sui-cyan" />}
+                    <Link 
+                      href={`/profile?wallet=${activeConv.user.walletAddress || ''}`}
+                      className="ml-2 text-[9px] font-mono font-bold uppercase text-sui-cyan hover:text-white border border-sui-cyan/20 hover:border-sui-cyan/60 px-2.5 py-0.5 rounded-full bg-sui-cyan/5 transition-all cursor-pointer"
+                    >
+                      View Profile
+                    </Link>
                   </div>
-                  <span className="text-[10px] font-mono text-gray-500">
+                  <span className="text-[10px] font-mono text-gray-500 block mt-0.5">
                     @{activeConv.user.username} · {activeConv.user.online
                       ? <span className="text-emerald-400">Active now</span>
                       : 'Offline'}
@@ -332,7 +479,7 @@ export default function MessagesPage() {
                 </div>
 
                 {activeMessages.map((msg, idx) => {
-                  const isMe = msg.senderId === CURRENT_USER.id;
+                  const isMe = msg.senderId === (authUser?.id || CURRENT_USER.id);
                   const showAvatar = !isMe && (idx === 0 || activeMessages[idx - 1]?.senderId !== msg.senderId);
                   return (
                     <motion.div
@@ -343,8 +490,8 @@ export default function MessagesPage() {
                       className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
                     >
                       {!isMe && (
-                        <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${avatarColors[activeConv.user.id] || 'from-sui-cyan/30 to-tatum-purple/30'} flex items-center justify-center font-mono text-[10px] font-bold text-white flex-shrink-0 ${!showAvatar ? 'invisible' : ''}`}>
-                          {activeConv.user.avatarInitials}
+                        <div className={`flex-shrink-0 ${!showAvatar ? 'invisible' : ''}`}>
+                          <MessageUserAvatar user={activeConv.user} className="h-8 w-8" />
                         </div>
                       )}
 
@@ -368,9 +515,7 @@ export default function MessagesPage() {
                       </div>
 
                       {isMe && (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-sui-cyan/40 to-tatum-purple/40 flex items-center justify-center font-mono text-[10px] font-bold text-white flex-shrink-0">
-                          YU
-                        </div>
+                        <MessageUserAvatar user={authUser} className="h-8 w-8" />
                       )}
                     </motion.div>
                   );
@@ -441,6 +586,61 @@ export default function MessagesPage() {
         </div>
 
       </div>
+
+      {showNewChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md glass-panel border border-sui-cyan/20 rounded-cyber-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.8)]">
+            <div className="flex items-center justify-between border-b border-sui-cyan/10 pb-3 mb-4">
+              <h3 className="font-mono font-bold text-xs uppercase tracking-wider text-sui-cyan">Start new sealed session</h3>
+              <button 
+                onClick={() => { setShowNewChatModal(false); setNewChatSearchQuery(''); }}
+                className="text-[10px] font-mono text-gray-500 hover:text-white uppercase transition-colors cursor-pointer"
+              >
+                [Close]
+              </button>
+            </div>
+            
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search username or wallet address..."
+                value={newChatSearchQuery}
+                onChange={e => setNewChatSearchQuery(e.target.value)}
+                className="w-full bg-walrus-blue/50 border border-sui-cyan/15 rounded-cyber-md pl-8 pr-3 py-2 text-xs font-mono text-gray-200 focus:outline-none focus:border-sui-cyan/35 placeholder:text-gray-600"
+              />
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto flex flex-col gap-2 scrollbar-cyber">
+              {filteredUsersForNewChat.length === 0 ? (
+                <div className="text-center py-6 text-[10px] font-mono text-gray-500">
+                  {newChatSearchQuery ? 'No registered users match your search' : 'Type to search registered casters'}
+                </div>
+              ) : (
+                filteredUsersForNewChat.map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleCreateOrSelectConversation(user)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-cyber-md border border-transparent hover:border-sui-cyan/10 hover:bg-sui-cyan/5 text-left transition-all cursor-pointer"
+                  >
+                    <MessageUserAvatar user={user} className="h-8 w-8" />
+                    <div className="flex-1 overflow-hidden">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white truncate font-sans">{user.displayName || 'Anonymous Caster'}</span>
+                        {user.verified && <BadgeCheck className="h-3.5 w-3.5 text-sui-cyan flex-shrink-0" />}
+                      </div>
+                      <div className="text-[9px] font-mono text-gray-500 truncate">
+                        @{user.username || 'anonymous'} · {user.walletAddress.substring(0, 6)}...{user.walletAddress.substring(user.walletAddress.length - 4)}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

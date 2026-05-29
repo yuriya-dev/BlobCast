@@ -6,6 +6,7 @@ import { errorMiddleware } from './middleware/errorMiddleware';
 import { AppError } from './utils/appError';
 import userRoutes from './routes/userRoutes';
 import postRoutes from './routes/postRoutes';
+import authRoutes from './routes/authRoutes';
 
 // Load environment configurations
 dotenv.config();
@@ -14,7 +15,8 @@ const app: Application = express();
 
 // --- 1. Global Middleware Configs ---
 app.use(cors({
-    origin: '*', // Allow all origins for the hackathon developer plug-and-play simplicity
+    origin: true,
+    credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -27,6 +29,7 @@ app.use(loggerMiddleware);
 // --- 2. API Routes Mapping ---
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/auth', authRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

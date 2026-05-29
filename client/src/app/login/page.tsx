@@ -7,11 +7,13 @@ import { motion } from 'framer-motion';
 import { ArrowRight, CircleCheckBig, Sparkles, Wallet } from 'lucide-react';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 import { api } from '@/lib/api';
-import { formatWalletAddress, getOnboardingProfileKey } from '@/lib/onboarding';
+import { formatWalletAddress } from '@/lib/onboarding';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function LoginPage() {
   const router = useRouter();
   const account = useCurrentAccount();
+  const { user: authUser, refreshSession } = useAuth();
   const [isChecking, setIsChecking] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connect your wallet to continue.');
   const [errorMessage, setErrorMessage] = useState('');
@@ -31,6 +33,21 @@ export default function LoginPage() {
       setIsChecking(true);
       setErrorMessage('');
 
+      if (authUser && authUser.walletAddress.toLowerCase() === account.address.toLowerCase()) {
+        const found = Boolean(authUser.username && authUser.displayName);
+        if (!active) return;
+        setProfileFound(found);
+        if (found) {
+          setStatusMessage('Active session found. Redirecting...');
+          router.push('/feed');
+        } else {
+          setStatusMessage('Session detected. Finish your profile registration next.');
+          router.push('/register');
+        }
+        setIsChecking(false);
+        return;
+      }
+
       try {
         const response = await api.fetchUserProfile(account.address);
         if (!active) return;
@@ -38,25 +55,29 @@ export default function LoginPage() {
         const user = response.data.user;
         const found = Boolean(user.username && user.displayName);
         setProfileFound(found);
-        setStatusMessage(found ? 'Profile found. You can go straight to the feed.' : 'Wallet connected. Finish your profile registration next.');
+        
+        if (found) {
+          setStatusMessage('Profile found. Redirecting to feed automatically...');
+          setIsChecking(true);
+          try {
+            await api.loginWithWallet(account.address);
+            await refreshSession();
+            router.push('/feed');
+          } catch {
+            setErrorMessage('Auto-redirect failed. Please click button to continue.');
+          } finally {
+            setIsChecking(false);
+          }
+        } else {
+          setStatusMessage('Wallet connected. Finish your profile registration next.');
+          router.push('/register');
+        }
       } catch {
         if (!active) return;
 
-        const stored = typeof window !== 'undefined' ? localStorage.getItem(getOnboardingProfileKey(account.address)) : null;
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored) as { username?: string; displayName?: string };
-            const found = Boolean(parsed.username && parsed.displayName);
-            setProfileFound(found);
-            setStatusMessage(found ? 'Local profile found. You can go straight to the feed.' : 'Wallet connected. Finish your profile registration next.');
-          } catch {
-            setProfileFound(false);
-            setStatusMessage('Wallet connected. Finish your profile registration next.');
-          }
-        } else {
-          setProfileFound(false);
-          setStatusMessage('Wallet connected. Finish your profile registration next.');
-        }
+        setProfileFound(false);
+        setStatusMessage('Wallet connected. Finish your profile registration next.');
+        router.push('/register');
       } finally {
         if (active) {
           setIsChecking(false);
@@ -69,7 +90,7 @@ export default function LoginPage() {
     return () => {
       active = false;
     };
-  }, [account?.address]);
+  }, [account?.address, authUser]);
 
   const handleContinue = async () => {
     if (!account?.address) {
@@ -81,22 +102,25 @@ export default function LoginPage() {
     setErrorMessage('');
 
     try {
-      const response = await api.fetchUserProfile(account.address);
+      const response = await api.loginWithWallet(account.address);
       const user = response.data.user;
       const ready = Boolean(user.username && user.displayName);
-      router.push(ready ? '/feed' : '/register');
-    } catch {
-      const stored = typeof window !== 'undefined' ? localStorage.getItem(getOnboardingProfileKey(account.address)) : null;
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as { username?: string; displayName?: string };
-          router.push(parsed.username && parsed.displayName ? '/feed' : '/register');
-          return;
-        } catch {
-          // fall through
-        }
+      if (!ready) {
+        router.push('/register');
+        return;
       }
-      router.push('/register');
+
+      await refreshSession();
+      router.push('/feed');
+    } catch {
+      try {
+        const response = await api.fetchUserProfile(account.address);
+        const user = response.data.user;
+        router.push(user.username && user.displayName ? '/feed' : '/register');
+        return;
+      } catch {
+        router.push('/register');
+      }
     } finally {
       setIsChecking(false);
     }

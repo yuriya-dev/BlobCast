@@ -16,6 +16,7 @@ import {
   Globe
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostCard } from '@/components/feed/PostCard';
@@ -23,6 +24,7 @@ import { mockDb, MockUser, MockPost } from '@/lib/db';
 import { walrus } from '@/lib/walrus';
 import { api } from '@/lib/api';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Custom SVG component for Github icon to avoid library version inconsistencies
 function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -44,9 +46,14 @@ function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export default function ProfilePage() {
+  const { user: authUser } = useAuth();
+  const searchParams = useSearchParams();
+  const queryWallet = searchParams?.get('wallet');
+
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
   const bannerUrlResolved = useWalrusImage(currentUser?.bannerBlobId);
-  const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId);
+  const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId) || 
+    (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
 
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [likedPosts, setLikedPosts] = useState<any[]>([]);
@@ -113,7 +120,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
-  }, []);
+  }, [queryWallet, authUser]);
 
   const loadProfile = async () => {
     if (typeof window !== 'undefined') {
@@ -126,9 +133,10 @@ export default function ProfilePage() {
     let resolvedUserId = 'usr-2-sademir';
     let databasePinnedPostId: string | null = null;
 
+    const targetWalletAddress = queryWallet || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+
     try {
-      const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
-      const response = await api.fetchUserProfile(walletAddress);
+      const response = await api.fetchUserProfile(targetWalletAddress);
       
       if (response && response.data && response.data.user) {
         const user = response.data.user;
@@ -257,7 +265,8 @@ export default function ProfilePage() {
       console.warn("⚠️ Failed to load profile from Express backend. Falling back to local offline mock db.", err);
       
       // Fetch Yuriya profile from mock DB (usr-2-sademir)
-      const user = mockDb.users.find(u => u.id === 'usr-2-sademir') || null;
+      const user = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWalletAddress.toLowerCase()) || 
+                   mockDb.users.find(u => u.id === 'usr-2-sademir') || null;
       if (user) {
         setCurrentUser(user);
         setDisplayName(user.displayName || '');
@@ -269,7 +278,7 @@ export default function ProfilePage() {
       }
 
       // Filter Yuriya posts
-      const userPosts = mockDb.posts.filter(p => p.authorId === 'usr-2-sademir');
+      const userPosts = mockDb.posts.filter(p => p.authorId === user?.id || p.authorId === 'usr-2-sademir');
       
       // Map to feed structure
       const mapped = userPosts.map(p => {
@@ -428,9 +437,9 @@ export default function ProfilePage() {
     const yuriyaLikes = likedMapped.filter(p => 
       p.likes.some((l: any) => 
         l.userId === resolvedUserId || 
-        l.userId === 'usr-2-sademir' ||
-        l.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase() ||
-        l.user?.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase()
+        l.userId === authUser?.id ||
+        l.walletAddress?.toLowerCase() === targetWalletAddress.toLowerCase() ||
+        l.user?.walletAddress?.toLowerCase() === targetWalletAddress.toLowerCase()
       )
     );
     setLikedPosts(yuriyaLikes);
@@ -461,8 +470,8 @@ export default function ProfilePage() {
       // Save profile metadata to Supabase backend API
       try {
         await api.upsertUserProfile({
-          walletAddress: currentUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
-          username: currentUser?.username || 'yuriya',
+          walletAddress: currentUser?.walletAddress || authUser?.walletAddress || '',
+          username: currentUser?.username || authUser?.username || '',
           displayName: displayName,
           bio: bio,
           avatarBlobId: avatarUrl,
@@ -492,9 +501,9 @@ export default function ProfilePage() {
         // Push notification of profile update
         mockDb.notifications.unshift({
           id: `notif_${Date.now()}`,
-          userId: 'usr-2-sademir',
+          userId: authUser?.id || 'usr-2-sademir',
           type: 'system',
-          actorId: 'usr-2-sademir',
+          actorId: authUser?.id || 'usr-2-sademir',
           postId: null,
           isRead: false,
           createdAt: new Date()
@@ -531,7 +540,7 @@ export default function ProfilePage() {
     // 2. Sync with database via API
     try {
       await api.upsertUserProfile({
-        walletAddress: currentUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        walletAddress: currentUser?.walletAddress || authUser?.walletAddress || '',
         pinnedPostId: nextPinnedId
       });
     } catch (err) {
@@ -651,13 +660,15 @@ export default function ProfilePage() {
             </div>
 
             {/* Edit Profile Button */}
-            <button 
-              onClick={() => setIsEditing(true)}
-              className="px-4 py-2 rounded-cyber-md border border-sui-cyan/20 hover:border-sui-cyan/50 bg-walrus-blue/60 backdrop-filter backdrop-blur-md text-xs font-mono font-bold tracking-wide text-soft-white hover:text-sui-cyan transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-              Edit Profile
-            </button>
+            {(!queryWallet || queryWallet.toLowerCase() === authUser?.walletAddress?.toLowerCase()) && (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2 rounded-cyber-md border border-sui-cyan/20 hover:border-sui-cyan/50 bg-walrus-blue/60 backdrop-filter backdrop-blur-md text-xs font-mono font-bold tracking-wide text-soft-white hover:text-sui-cyan transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+                Edit Profile
+              </button>
+            )}
           </div>
 
           {/* User Bio Information */}

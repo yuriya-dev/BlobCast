@@ -23,8 +23,10 @@ import { PostCard } from '@/components/feed/PostCard';
 import { mockDb, MockPost } from '@/lib/db';
 import { api, ApiPost } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function SocialFeedPage() {
+  const { user: authUser } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [isBackendDown, setIsBackendDown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,9 +50,11 @@ export default function SocialFeedPage() {
       }
     }
 
+    if (!authUser) return;
+
     try {
       await api.upsertUserProfile({
-        walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        walletAddress: authUser.walletAddress,
         pinnedPostId: nextPinnedId
       });
     } catch (err) {
@@ -63,11 +67,10 @@ export default function SocialFeedPage() {
     loadFeed();
 
     // Sync latest pinned post from DB to localStorage on feed mount
-    if (!isBackendDown) {
+    if (!isBackendDown && authUser) {
       (async () => {
         try {
-          const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
-          const res = await api.fetchUserProfile(walletAddress);
+          const res = await api.fetchUserProfile(authUser.walletAddress);
           if (res && res.data && res.data.user) {
             const user = res.data.user;
             if (typeof window !== 'undefined') {
@@ -91,7 +94,7 @@ export default function SocialFeedPage() {
         setSearchQuery(search);
       }
     }
-  }, [isBackendDown]);
+  }, [isBackendDown, authUser]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -259,6 +262,16 @@ export default function SocialFeedPage() {
         }
       };
 
+      if (authUser) {
+        usersMap[authUser.id] = {
+          displayName: authUser.displayName,
+          username: authUser.username,
+          walletAddress: authUser.walletAddress,
+          avatarBlobId: authUser.avatarBlobId,
+          verified: authUser.verified
+        };
+      }
+
       const sourcePosts = [...mockDb.posts];
       const mapped = sourcePosts.map(p => {
         const author = usersMap[p.authorId] || {
@@ -321,10 +334,10 @@ export default function SocialFeedPage() {
       walrusContent: newPost.walrusContent,
     };
 
-    if (!isBackendDown) {
+    if (!isBackendDown && authUser) {
       try {
         await api.createPost({
-          authorId: 'usr-2-sademir', // Yuriya profile
+          authorId: authUser.id,
           suiObjectId: newPost.suiObjectId || null,
           walrusBlobId: newPost.walrusBlobId,
           blobHash: newPost.blobHash,

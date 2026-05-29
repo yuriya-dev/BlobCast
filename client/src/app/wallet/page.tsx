@@ -22,6 +22,7 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { mockDb } from '@/lib/db';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { 
   AreaChart, 
   Area, 
@@ -36,6 +37,7 @@ import {
 
 export default function MyWalletPage() {
   const account = useCurrentAccount();
+  const { user: authUser } = useAuth();
   const [totalTips, setTotalTips] = useState(148.5);
   const [suiBalance, setSuiBalance] = useState(254.20);
   const [walrusShardsCount, setWalrusShardsCount] = useState(120);
@@ -192,7 +194,7 @@ export default function MyWalletPage() {
               <div className="z-10 flex flex-col gap-1.5 my-3">
                 <span className="text-[10px] font-mono text-gray-400">Account Address:</span>
                 <span className="text-xs font-mono text-sui-cyan break-all bg-walrus-blue/50 border border-sui-cyan/10 rounded-lg p-2 block font-semibold">
-                  {account?.address || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'}
+                  {account?.address || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'}
                 </span>
               </div>
 
