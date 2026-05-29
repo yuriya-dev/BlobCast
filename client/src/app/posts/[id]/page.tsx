@@ -21,6 +21,8 @@ export default function PostDetailPage({ params }: PageProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [isPostingComment, setIsPostingComment] = useState(false);
 
   useEffect(() => {
     loadPostAndComments();
@@ -88,7 +90,32 @@ export default function PostDetailPage({ params }: PageProps) {
           } : null
         };
 
-        const mappedComments = p.comments || [];
+        const rawComments = p.comments || [];
+        const mappedComments = await Promise.all(rawComments.map(async (c: any) => {
+          let commentText = 'Verifiable sub-blob commentary published on Walrus.';
+          if (c.walrusBlobId) {
+            try {
+              const content = await walrus.getBlob(c.walrusBlobId);
+              if (content && typeof content === 'object') {
+                const contentObj = content as any;
+                if (contentObj.content?.text) {
+                  commentText = contentObj.content.text;
+                }
+              }
+            } catch (err) {
+              console.warn(`⚠️ Failed to resolve Walrus comment content for ${c.walrusBlobId}:`, err);
+            }
+          }
+          return {
+            id: c.id,
+            postId: c.postId,
+            authorId: c.authorId,
+            walrusBlobId: c.walrusBlobId,
+            createdAt: c.createdAt,
+            author: c.author,
+            text: commentText
+          };
+        }));
 
         setPost(mappedPost);
         setComments(mappedComments);
@@ -159,9 +186,55 @@ export default function PostDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleCommentSubmit = (newComment: any) => {
-    // Reload thread to show new comments dynamically
-    loadPostAndComments();
+  const handleCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentText.trim()) return;
+
+    setIsPostingComment(true);
+    try {
+      const commentBlob = {
+        version: 1,
+        type: 'comment',
+        post_id: id,
+        author_wallet: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        created_at: Math.floor(Date.now() / 1000),
+        content: {
+          text: newCommentText
+        }
+      };
+
+      const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
+      const authorId = 'usr-2-sademir'; // Default Caster (Yuriya)
+
+      try {
+        const response = await api.createComment(id, authorId, walrusUploadInfo.blobId);
+        if (response && response.data && response.data.comment) {
+          await loadPostAndComments();
+          setNewCommentText('');
+          return;
+        }
+      } catch (apiErr) {
+        console.warn("⚠️ API offline. Comment falling back to local cache.", apiErr);
+      }
+
+      // Offline DB fallback
+      mockDb.comments.push({
+        id: `comment_${Date.now()}`,
+        postId: id,
+        authorId: authorId,
+        walrusBlobId: walrusUploadInfo.blobId,
+        createdAt: new Date()
+      });
+
+      await loadPostAndComments();
+      setNewCommentText('');
+
+    } catch (err) {
+      console.error("❌ Failed to upload comment to Walrus:", err);
+      alert("Error: Could not publish comment blob to Walrus.");
+    } finally {
+      setIsPostingComment(false);
+    }
   };
 
   return (
@@ -220,8 +293,67 @@ export default function PostDetailPage({ params }: PageProps) {
               <>
                 {/* Parent social cast rendering */}
                 {post && (
-                  <PostCard post={{ ...post, commentCount: comments.length }} />
+                  <PostCard post={{ ...post, commentCount: comments.length }} hideCommentComposer={true} />
                 )}
+
+                {/* Premium Cyberpunk Comment Composer */}
+                <div className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/10 bg-walrus-blue/10 relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-sui-cyan/2 to-tatum-purple/2 pointer-events-none" />
+                  <div className="flex gap-4 relative z-10">
+                    {/* User Avatar */}
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
+                      <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan relative">
+                        <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue select-none pointer-events-none font-mono">
+                          YU
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Composer Input Area */}
+                    <form onSubmit={handleCommentSubmit} className="flex-1 flex flex-col gap-3">
+                      <div className="relative">
+                        <textarea
+                          id="detail-comment-textarea"
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          placeholder="Publish dynamic commentary permanently to Walrus shards..."
+                          className="w-full bg-deep-space/40 border border-sui-cyan/15 rounded-cyber-md px-4 py-3 text-xs text-soft-white outline-none focus:border-sui-cyan/50 focus:ring-1 focus:ring-sui-cyan/30 font-sans resize-none min-h-[70px] placeholder-gray-500 transition-all duration-300"
+                          maxLength={280}
+                          required
+                          disabled={isPostingComment}
+                        />
+                        <div className="absolute bottom-2.5 right-3 text-[9px] font-mono text-gray-500">
+                          {newCommentText.length}/280
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        {/* Shard verification status indicator */}
+                        <div className="flex items-center gap-1.5 font-mono text-[9px] text-gray-400">
+                          <Database className="h-3.5 w-3.5 text-sui-cyan" />
+                          <span>Walrus JSON-LD commentary schema</span>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isPostingComment || !newCommentText.trim()}
+                          className="px-5 py-2.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-extrabold font-mono text-xs hover:opacity-95 hover:shadow-cyber-glow active:scale-[0.97] transition-all disabled:opacity-30 flex items-center gap-2 cursor-pointer"
+                        >
+                          {isPostingComment ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              <span>Casting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Verify & Cast</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
 
                 {/* Subtitle comment count index */}
                 <div className="flex items-center gap-2 border-b border-sui-cyan/5 pb-2 mt-2">

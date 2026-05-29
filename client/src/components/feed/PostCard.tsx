@@ -58,9 +58,10 @@ interface PostCardProps {
     } | null;
   };
   onCommentCreated?: (comment: any) => void;
+  hideCommentComposer?: boolean;
 }
 
-export function PostCard({ post, onCommentCreated }: PostCardProps) {
+export function PostCard({ post, onCommentCreated, hideCommentComposer = false }: PostCardProps) {
   const router = useRouter();
   
   // Resolve original author and post ID if this post is a repost
@@ -73,6 +74,10 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
   const [likes, setLikes] = useState(post.likeCount);
   const [hasLiked, setHasLiked] = useState(false);
   const [tipsCount, setTipsCount] = useState(0);
+
+  const [showComments, setShowComments] = useState(false);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [isPostingComment, setIsPostingComment] = useState(false);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -107,10 +112,7 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
     }
   }, [post.likes, post.reposts]);
   
-  const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState<any[]>([]);
-  const [newCommentText, setNewCommentText] = useState('');
-  const [isPostingComment, setIsPostingComment] = useState(false);
+
 
   // Hydrate bookmark state on mount
   useEffect(() => {
@@ -125,47 +127,7 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
     }
   }, [targetPostId]);
 
-  // Load mock or real comments when thread is opened
-  useEffect(() => {
-    if (showComments && comments.length === 0) {
-      const existingComments = mockDb.comments.filter(c => c.postId === targetPostId);
-      if (existingComments.length > 0) {
-        const mapped = existingComments.map(c => {
-          const user = mockDb.users.find(u => u.id === c.authorId) || {
-            displayName: 'Anonymous Caster',
-            username: 'anonymous',
-            avatarBlobId: ''
-          };
-          return {
-            id: c.id,
-            author: {
-              displayName: user.displayName,
-              username: user.username,
-              avatarBlobId: user.avatarBlobId
-            },
-            text: (c.walrusBlobId || '').startsWith('walrus://blob-comment-') 
-              ? 'Excellent point! Storing this commentary permanently on Walrus as well.' 
-              : 'Verifiable sub-blob published on Walrus.',
-            createdAt: c.createdAt
-          };
-        });
-        setComments(mapped);
-      } else if (post.commentCount > 0) {
-        setComments([
-          {
-            id: `comment_seed_${targetPostId}`,
-            author: {
-              displayName: 'Vitalik Buterin',
-              username: 'vitalik',
-              avatarBlobId: 'walrus://vitalik-avatar'
-            },
-            text: 'Decentralized social layers are growing rapidly. Incredible interface design here!',
-            createdAt: new Date(Date.now() - 3600000)
-          }
-        ]);
-      }
-    }
-  }, [showComments, targetPostId, post.commentCount, comments.length]);
+
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -262,27 +224,15 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
       };
 
       const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
-
       const authorId = 'usr-2-sademir';
+
       try {
         const response = await api.createComment(targetPostId, authorId, walrusUploadInfo.blobId);
         if (response && response.data && response.data.comment) {
           const com = response.data.comment;
-          setComments(prev => [
-            ...prev,
-            {
-              id: com.id,
-              author: {
-                displayName: com.author?.displayName || 'Yuriya',
-                username: com.author?.username || 'yuriya',
-                avatarBlobId: com.author?.avatarBlobId || 'walrus://yuriya-avatar'
-              },
-              text: newCommentText,
-              createdAt: new Date(com.createdAt)
-            }
-          ]);
           setNewCommentText('');
           post.commentCount += 1;
+          setShowComments(false);
           
           if (onCommentCreated) {
             onCommentCreated(com);
@@ -301,22 +251,18 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
         createdAt: new Date()
       });
 
-      setComments(prev => [
-        ...prev,
-        {
-          id: `comment_${Date.now()}`,
-          author: {
-            displayName: 'Yuriya',
-            username: 'yuriya',
-            avatarBlobId: 'walrus://yuriya-avatar'
-          },
-          text: newCommentText,
-          createdAt: new Date()
-        }
-      ]);
-
       setNewCommentText('');
       post.commentCount += 1;
+      setShowComments(false);
+
+      if (onCommentCreated) {
+        onCommentCreated({
+          id: `comment_${Date.now()}`,
+          postId: targetPostId,
+          authorId: 'usr-2-sademir',
+          createdAt: new Date()
+        });
+      }
 
     } catch (err) {
       console.error("❌ Failed to upload comment to Walrus:", err);
@@ -325,6 +271,8 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
       setIsPostingComment(false);
     }
   };
+
+
 
   const handleTip = () => {
     setTipsCount(prev => prev + 1.5);
@@ -536,10 +484,22 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
             </button>
             
             <button 
-              onClick={() => setShowComments(!showComments)}
-              className={`flex items-center gap-1.5 group transition-colors ${showComments ? 'text-sui-cyan font-bold' : 'hover:text-sui-cyan'}`}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                if (hideCommentComposer) {
+                  const inputEl = document.getElementById('detail-comment-textarea');
+                  if (inputEl) {
+                    inputEl.focus();
+                    inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                } else {
+                  setShowComments(!showComments); 
+                }
+              }}
+              className={`flex items-center gap-1.5 group transition-colors ${showComments && !hideCommentComposer ? 'text-sui-cyan font-bold' : 'hover:text-sui-cyan'}`}
+              title="Comment on Cast"
             >
-              <MessageSquare className={`h-4 w-4 transition-transform group-active:scale-125 ${showComments ? 'fill-sui-cyan/10' : ''}`} />
+              <MessageSquare className={`h-4 w-4 transition-transform group-active:scale-125 ${showComments && !hideCommentComposer ? 'fill-sui-cyan/10' : ''}`} />
               <span>{post.commentCount}</span>
             </button>
 
@@ -571,82 +531,44 @@ export function PostCard({ post, onCommentCreated }: PostCardProps) {
             </button>
           </div>
 
-          {/* Expandable Cyberpunk Comments Section */}
+          {/* Comment submit form inside PostCard */}
           <AnimatePresence>
-            {showComments && (
+            {!hideCommentComposer && showComments && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden mt-4 border-t border-sui-cyan/10 pt-4"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex flex-col gap-3.5">
-                  {/* Comments list */}
-                  <div className="flex flex-col gap-3">
-                    {comments.length === 0 ? (
-                      <span className="text-[10px] text-gray-500 font-mono text-center py-2 block">
-                        No comments casted yet. Be the first to verify comment!
-                      </span>
+                <form onSubmit={handleCommentSubmit} className="flex gap-3 items-center mt-1">
+                  <input 
+                    type="text"
+                    value={newCommentText}
+                    onChange={(e) => setNewCommentText(e.target.value)}
+                    placeholder="Verify dynamic comment on Walrus nodes..."
+                    className="flex-1 bg-walrus-blue/30 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-sans"
+                    maxLength={140}
+                    required
+                    disabled={isPostingComment}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isPostingComment || !newCommentText.trim()}
+                    className="px-4 py-2 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isPostingComment ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
-                      comments.map((comment) => (
-                        <div key={comment.id} className="flex gap-3 bg-walrus-blue/20 border border-sui-cyan/5 rounded-cyber-sm p-3 text-xs">
-                          {/* Comment author avatar */}
-                          <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
-                            <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-[9px] font-bold text-sui-cyan relative">
-                              <WalrusImage 
-                                blobId={comment.author.avatarBlobId} 
-                                alt={`${comment.author.displayName}'s avatar`}
-                                className="h-full w-full object-cover z-10"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                              <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none text-neon-glow font-mono text-[9px]">
-                                {comment.author.username.substring(0, 2).toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Comment text body */}
-                          <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-                            <div className="flex items-center gap-1.5 font-mono text-[9px] text-gray-500">
-                              <span className="font-bold text-gray-300">{comment.author.displayName}</span>
-                              <span>@{comment.author.username}</span>
-                            </div>
-                            <p className="text-gray-200 font-sans text-xs leading-relaxed">{comment.text}</p>
-                          </div>
-                        </div>
-                      ))
+                      'Reply'
                     )}
-                  </div>
-
-                  {/* Comment submit form */}
-                  <form onSubmit={handleCommentSubmit} className="flex gap-3 items-center mt-1">
-                    <input 
-                      type="text"
-                      value={newCommentText}
-                      onChange={(e) => setNewCommentText(e.target.value)}
-                      placeholder="Verify dynamic comment on Walrus nodes..."
-                      className="flex-1 bg-walrus-blue/30 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-sans"
-                      maxLength={140}
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={isPostingComment || !newCommentText.trim()}
-                      className="px-4 py-2 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      {isPostingComment ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        'Reply'
-                      )}
-                    </button>
-                  </form>
-                </div>
+                  </button>
+                </form>
               </motion.div>
             )}
           </AnimatePresence>
+
+
 
         </div>
 
