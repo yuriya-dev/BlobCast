@@ -32,6 +32,9 @@ export interface ApiUser {
   pinnedPostId?: string | null;
   verified: boolean;
   createdAt: string;
+  followersCount?: number;
+  followingCount?: number;
+  isFollowing?: boolean;
 }
 
 export interface ApiSessionResponse {
@@ -109,6 +112,26 @@ export const api = {
       cache: 'no-store'
     }));
     return parseJsonResponse(res, 'Failed to fetch registered users');
+  },
+
+  /**
+   * Follow a user by their wallet address.
+   */
+  async followUser(walletAddress: string): Promise<{ status: string; message: string }> {
+    const res = await fetch(`${BASE_URL}/users/${walletAddress}/follow`, requestInit({
+      method: 'POST'
+    }));
+    return parseJsonResponse(res, 'Failed to follow user');
+  },
+
+  /**
+   * Unfollow a user by their wallet address.
+   */
+  async unfollowUser(walletAddress: string): Promise<{ status: string; message: string }> {
+    const res = await fetch(`${BASE_URL}/users/${walletAddress}/unfollow`, requestInit({
+      method: 'POST'
+    }));
+    return parseJsonResponse(res, 'Failed to unfollow user');
   },
 
   /**

@@ -11,9 +11,10 @@ import {
   BadgeCheck, 
   Users, 
   ShieldCheck, 
-  Loader2,
   CheckCircle,
-  Globe
+  Globe,
+  Loader2,
+  UserPlus
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -50,7 +51,7 @@ export default function ProfilePage() {
   const searchParams = useSearchParams();
   const queryWallet = searchParams?.get('wallet');
 
-  const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
   const bannerUrlResolved = useWalrusImage(currentUser?.bannerBlobId);
   const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId) || 
     (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
@@ -62,6 +63,41 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+
+  const handleFollowToggle = async () => {
+    if (!currentUser || !authUser) return;
+    setIsTogglingFollow(true);
+    try {
+      const targetWallet = currentUser.walletAddress;
+      if (currentUser.isFollowing) {
+        await api.unfollowUser(targetWallet);
+        setCurrentUser((prev: any) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            isFollowing: false,
+            followersCount: Math.max(0, (prev.followersCount || 0) - 1)
+          };
+        });
+      } else {
+        await api.followUser(targetWallet);
+        setCurrentUser((prev: any) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            isFollowing: true,
+            followersCount: (prev.followersCount || 0) + 1
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Failed to toggle follow status:", err);
+      alert("Failed to update follow relationship. Please try again.");
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  };
 
   // Edit form states
   const [displayName, setDisplayName] = useState('');
@@ -660,14 +696,34 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Edit Profile Button */}
-            {(!queryWallet || queryWallet.toLowerCase() === authUser?.walletAddress?.toLowerCase()) && (
+            {/* Edit Profile or Follow/Unfollow Button */}
+            {(!queryWallet || queryWallet.toLowerCase() === authUser?.walletAddress?.toLowerCase()) ? (
               <button 
                 onClick={() => setIsEditing(true)}
                 className="px-4 py-2 rounded-cyber-md border border-sui-cyan/20 hover:border-sui-cyan/50 bg-walrus-blue/60 backdrop-filter backdrop-blur-md text-xs font-mono font-bold tracking-wide text-soft-white hover:text-sui-cyan transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Edit3 className="h-3.5 w-3.5" />
                 Edit Profile
+              </button>
+            ) : (
+              <button 
+                onClick={handleFollowToggle}
+                disabled={isTogglingFollow}
+                className={`px-5 py-2 rounded-cyber-md text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer ${
+                  currentUser?.isFollowing 
+                    ? 'border border-rose-500/30 hover:border-rose-500/60 bg-rose-500/10 text-rose-300 hover:text-rose-200'
+                    : 'bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space hover:opacity-95 shadow-cyber-glow'
+                }`}
+              >
+                {isTogglingFollow ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : currentUser?.isFollowing ? (
+                  'Unfollow'
+                ) : (
+                  <>
+                    <UserPlus className="h-3.5 w-3.5" /> Follow
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -716,11 +772,11 @@ export default function ProfilePage() {
               </div>
               <div className="text-center md:text-left border-r border-sui-cyan/5">
                 <span className="text-[10px] uppercase font-mono text-gray-500 tracking-wider">Followers</span>
-                <p className="text-lg font-bold font-mono text-white mt-0.5">1,248</p>
+                <p className="text-lg font-bold font-mono text-white mt-0.5">{currentUser?.followersCount !== undefined ? currentUser.followersCount : '0'}</p>
               </div>
               <div className="text-center md:text-left border-r border-sui-cyan/5">
                 <span className="text-[10px] uppercase font-mono text-gray-500 tracking-wider">Following</span>
-                <p className="text-lg font-bold font-mono text-white mt-0.5">384</p>
+                <p className="text-lg font-bold font-mono text-white mt-0.5">{currentUser?.followingCount !== undefined ? currentUser.followingCount : '0'}</p>
               </div>
               <div className="text-center md:text-left">
                 <span className="text-[10px] uppercase font-mono text-amber-400 flex items-center gap-1 justify-center md:justify-start">

@@ -222,7 +222,7 @@ export default function ExplorePage() {
                         {creator.followers} Followers
                       </span>
                       <Link 
-                        href="/profile"
+                        href={`/profile?wallet=${creator.walletAddress}`}
                         className="px-4 py-1.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-[10px] uppercase flex items-center gap-1 hover:opacity-90 active:scale-[0.98] transition-all w-full sm:w-auto justify-center"
                       >
                         View Profile <ArrowRight className="h-3 w-3" />

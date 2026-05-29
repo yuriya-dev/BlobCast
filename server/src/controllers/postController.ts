@@ -19,13 +19,29 @@ export const getAllPosts = asyncHandler(async (req: Request, res: Response) => {
         include: {
             author: true,
             media: true,
-            likes: true,
-            reposts: true,
+            likes: {
+                include: {
+                    user: true
+                }
+            },
+            reposts: {
+                include: {
+                    author: true
+                }
+            },
             repostOf: {
                 include: {
                     author: true,
-                    likes: true,
-                    reposts: true
+                    likes: {
+                        include: {
+                            user: true
+                        }
+                    },
+                    reposts: {
+                        include: {
+                            author: true
+                        }
+                    }
                 }
             }
         }
@@ -65,13 +81,29 @@ export const getPostById = asyncHandler(async (req: Request, res: Response) => {
                 include: { author: true },
                 orderBy: { createdAt: 'asc' }
             },
-            likes: true,
-            reposts: true,
+            likes: {
+                include: {
+                    user: true
+                }
+            },
+            reposts: {
+                include: {
+                    author: true
+                }
+            },
             repostOf: {
                 include: {
                     author: true,
-                    likes: true,
-                    reposts: true
+                    likes: {
+                        include: {
+                            user: true
+                        }
+                    },
+                    reposts: {
+                        include: {
+                            author: true
+                        }
+                    }
                 }
             }
         }
