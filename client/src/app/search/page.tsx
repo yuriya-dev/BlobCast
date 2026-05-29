@@ -194,6 +194,8 @@ function SearchContent() {
           text,
           hashtags: (p.walrusContent as any)?.content?.hashtags || [],
           mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+          media: p.walrusContent?.media || (p.contentType === 1 ? [{ type: 'image', blob_id: 'walrus://blob-post-2-image' }] : []),
+          walrusContent: p.walrusContent,
           likeCount: p.likeCount,
           commentCount: p.commentCount,
           repostCount: p.repostCount,
@@ -324,7 +326,7 @@ function SearchContent() {
       <main className="flex-1 border-r border-sui-cyan/5 flex flex-col h-screen overflow-y-auto scrollbar-cyber">
         
         {/* User-Defined 1. App Bar (Bagian Paling Atas) */}
-        <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 sticky top-0 z-40 flex items-center justify-between gap-4">
+        <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 sticky top-0 z-40 flex items-center justify-between gap-4 flex-shrink-0">
           {/* Kiri: Ikon Kembali */}
           <button 
             onClick={() => router.back()}
@@ -356,7 +358,7 @@ function SearchContent() {
         </header>
 
         {/* User-Defined 2. Tab Menu Navigasi */}
-        <nav className="flex border-b border-sui-cyan/5 px-6 font-mono text-xs z-30 sticky top-[73px] bg-deep-space/95 backdrop-blur-xl">
+        <nav className="flex border-b border-sui-cyan/5 px-6 font-mono text-xs z-30 sticky top-[73px] bg-deep-space/95 backdrop-blur-xl flex-shrink-0">
           <div className="flex w-full justify-between sm:justify-start gap-2">
             {(['top', 'latest', 'people', 'media'] as const).map(tab => (
               <button 
@@ -376,7 +378,7 @@ function SearchContent() {
 
         {/* Dynamic Ticker/Asset Section (Only rendered if search query starts with '$') */}
         {isTickerSearch && (
-          <div className="mx-6 mt-6 p-6 glass-panel rounded-cyber-xl border border-sui-cyan/10 relative overflow-hidden flex flex-col gap-5 shadow-cyber-glow">
+          <div className="mx-6 mt-6 p-6 glass-panel rounded-cyber-xl border border-sui-cyan/10 relative overflow-hidden flex flex-col gap-5 shadow-cyber-glow flex-shrink-0">
             
             {/* Cyberpunk ambient chart glow */}
             <div className="absolute -top-10 -right-10 w-36 h-36 bg-sui-cyan/10 rounded-full blur-2xl pointer-events-none" />

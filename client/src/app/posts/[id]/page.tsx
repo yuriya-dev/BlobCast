@@ -39,6 +39,7 @@ export default function PostDetailPage({ params }: PageProps) {
         let text = 'Immutable social post stored on Walrus.';
         let hashtags: string[] = [];
         let mediaUrl: string | undefined = undefined;
+        let media: any[] = [];
 
         if (p.walrusBlobId) {
           try {
@@ -48,6 +49,7 @@ export default function PostDetailPage({ params }: PageProps) {
               if (contentObj.content?.text) text = contentObj.content.text;
               if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
               if (contentObj.media && contentObj.media.length > 0) {
+                media = contentObj.media;
                 mediaUrl = contentObj.media[0].blob_id;
               }
             }
@@ -71,6 +73,7 @@ export default function PostDetailPage({ params }: PageProps) {
           text: text,
           hashtags: hashtags,
           mediaUrl: mediaUrl,
+          media: media,
           likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
           commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
           repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
@@ -154,6 +157,8 @@ export default function PostDetailPage({ params }: PageProps) {
           : 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!',
         hashtags: ['decentralized', 'walrus'],
         mediaUrl: offlinePost.id === 'post-2' ? 'walrus://blob-post-2-image' : undefined,
+        media: offlinePost.walrusContent?.media || (offlinePost.id === 'post-2' ? [{ type: 'image', blob_id: 'walrus://blob-post-2-image' }] : []),
+        walrusContent: offlinePost.walrusContent,
         likeCount: offlinePost.likeCount,
         commentCount: offlinePost.commentCount,
         repostCount: offlinePost.repostCount,

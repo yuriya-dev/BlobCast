@@ -16,7 +16,9 @@ import {
   Pin,
   Trash2,
   X,
-  Quote
+  Quote,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -24,7 +26,7 @@ import Link from 'next/link';
 import { walrus } from '@/lib/walrus';
 import { mockDb } from '@/lib/db';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { PostCardVerificationPanel } from './PostCardVerificationPanel';
 import { PostCardCommentComposer } from './PostCardCommentComposer';
@@ -45,6 +47,13 @@ interface PostCardProps {
     text: string;
     hashtags: string[];
     mediaUrl?: string;
+    media?: Array<{
+      type: string;
+      blob_id: string;
+      mime?: string;
+      width?: number;
+      height?: number;
+    }>;
     likeCount: number;
     commentCount: number;
     repostCount: number;
@@ -70,12 +79,31 @@ interface PostCardProps {
 
 export function PostCard({ post, onCommentCreated, hideCommentComposer = false, onPin }: PostCardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const CURRENT_USER_ID = 'usr-2-sademir';
   const CURRENT_USER_WALLET = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
 
   // Resolve original author and post ID if this post is a repost
   const authorResolved = post.repostOf ? post.repostOf.author : post.author;
   const targetPostId = post.repostOf ? post.repostOf.id : post.id;
+
+  const mediaItems = React.useMemo(() => {
+    if (post.media && post.media.length > 0) {
+      return post.media;
+    }
+    const walrusMedia = (post as any).walrusContent?.media;
+    if (walrusMedia && Array.isArray(walrusMedia) && walrusMedia.length > 0) {
+      return walrusMedia;
+    }
+    if (post.mediaUrl) {
+      const isVideo = post.mediaUrl.endsWith('.mp4') || post.mediaUrl.includes('video') || post.contentType === 2;
+      return [{
+        type: isVideo ? 'video' : 'image',
+        blob_id: post.mediaUrl
+      }];
+    }
+    return [];
+  }, [post]);
 
   // Check ownership: only the post's own author can pin/delete
   const isOwnPost = authorResolved.walletAddress.toLowerCase() === CURRENT_USER_WALLET.toLowerCase();
@@ -479,7 +507,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
               {authorResolved.verified && (
                 <BadgeCheck className="h-4 w-4 text-sui-cyan fill-sui-cyan/10" />
               )}
-              {isPinned && (
+              {isPinned && pathname === '/profile' && (
                 <span className="flex items-center gap-0.5 text-[8px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">
                   <Pin className="h-2.5 w-2.5" /> Pinned
                 </span>
@@ -579,25 +607,8 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
           )}
 
           {/* Optional Media preview */}
-          {mediaUrlResolved && (
-            <div className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-[350px] bg-walrus-blue/40 flex items-center justify-center">
-              {/* Premium overlay badge for Walrus persistence */}
-              <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20">
-                <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
-                <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
-                  Walrus Immutable Media
-                </span>
-              </div>
-              
-              <img 
-                src={mediaUrlResolved} 
-                alt="Post media attachment" 
-                className="w-full object-cover max-h-[350px] hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-            </div>
+          {mediaItems.length > 0 && (
+            <PostMediaGallery items={mediaItems} />
           )}
 
           {/* Walrus Storage Reference badge bar */}
@@ -848,5 +859,220 @@ function ActivityModal({
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+function VideoPlayer({ blobId }: { blobId: string }) {
+  const videoUrl = useWalrusImage(blobId);
+  if (!videoUrl) {
+    return (
+      <div className="w-full h-[250px] flex items-center justify-center bg-walrus-blue/20">
+        <Loader2 className="h-5 w-5 text-sui-cyan animate-spin" />
+      </div>
+    );
+  }
+  return (
+    <video 
+      src={videoUrl} 
+      controls 
+      className="w-full h-auto max-h-[450px] rounded-cyber-md bg-black" 
+      playsInline
+    />
+  );
+}
+
+function PostMediaGallery({ items }: { items: any[] }) {
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+
+  const getGridClass = (count: number) => {
+    if (count === 1) return 'grid-cols-1';
+    if (count === 2) return 'grid-cols-2 h-[260px]';
+    if (count === 3) return 'grid-cols-2 h-[320px]';
+    return 'grid-cols-2 h-[320px]';
+  };
+
+  const handlePrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedIdx === null) return;
+    setSelectedIdx(prev => (prev !== null && prev > 0 ? prev - 1 : items.length - 1));
+  };
+
+  const handleNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedIdx === null) return;
+    setSelectedIdx(prev => (prev !== null && prev < items.length - 1 ? prev + 1 : 0));
+  };
+
+  if (items.length === 0) return null;
+
+  if (items[0].type === 'video') {
+    return (
+      <div className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/15 relative bg-black flex items-center justify-center no-navigate">
+        <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20 animate-fade-in pointer-events-none">
+          <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
+          <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
+            Walrus Immutable Video
+          </span>
+        </div>
+        <VideoPlayer blobId={items[0].blob_id} />
+      </div>
+    );
+  }
+
+  if (items.length === 1) {
+    return (
+      <>
+        <div 
+          onClick={(e) => { e.stopPropagation(); setSelectedIdx(0); }}
+          className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-[450px] bg-[#080e18]/80 flex items-center justify-center no-navigate hover:opacity-95 transition-opacity"
+        >
+          <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20 pointer-events-none">
+            <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
+            <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
+              Walrus Immutable Media
+            </span>
+          </div>
+          <WalrusImage 
+            blobId={items[0].blob_id} 
+            alt="Post media attachment" 
+            className="w-full h-auto max-h-[450px] object-contain hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
+          />
+        </div>
+
+        <AnimatePresence>
+          {selectedIdx !== null && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={(e) => { e.stopPropagation(); setSelectedIdx(null); }}
+              className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 no-navigate"
+            >
+              <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
+                <span className="text-[9px] font-mono text-sui-cyan bg-walrus-blue/80 px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg select-none max-w-[80%] truncate">
+                  <Database className="h-3.5 w-3.5 animate-pulse" />
+                  <span>Walrus Blob: {items[selectedIdx].blob_id}</span>
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedIdx(null); }}
+                  className="h-9 w-9 rounded-full bg-white/10 hover:bg-rose-600 border border-white/10 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  title="Close"
+                >
+                  <X className="h-4.5 w-4.5" />
+                </button>
+              </div>
+
+              <div className="relative w-full max-w-5xl max-h-[80vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                <div className="rounded-cyber-lg overflow-hidden border border-sui-cyan/20 bg-deep-space/50 p-2 shadow-cyber-glow max-w-full max-h-full flex items-center justify-center select-none">
+                  <WalrusImage 
+                    blobId={items[selectedIdx].blob_id} 
+                    alt="Lightbox image"
+                    className="max-w-full max-h-[75vh] object-contain"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className={`mt-2 grid gap-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 bg-[#080e18]/40 relative ${getGridClass(items.length)}`}>
+        <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20 pointer-events-none">
+          <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
+          <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
+            Walrus Gallery ({items.length})
+          </span>
+        </div>
+
+        {items.slice(0, 4).map((item, idx) => {
+          let itemClass = "h-full w-full object-cover hover:scale-[1.02] transition-transform duration-500 cursor-pointer";
+          let wrapperClass = "relative overflow-hidden w-full h-full bg-deep-space hover:opacity-95 transition-all";
+
+          if (items.length === 3 && idx === 0) {
+            wrapperClass += " row-span-2 h-full";
+          }
+
+          return (
+            <div 
+              key={item.blob_id} 
+              className={wrapperClass}
+              onClick={(e) => { e.stopPropagation(); setSelectedIdx(idx); }}
+            >
+              <WalrusImage 
+                blobId={item.blob_id} 
+                alt={`Post gallery image ${idx + 1}`} 
+                className={itemClass}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <AnimatePresence>
+        {selectedIdx !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={(e) => { e.stopPropagation(); setSelectedIdx(null); }}
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 no-navigate"
+          >
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
+              <span className="text-[9px] font-mono text-sui-cyan bg-walrus-blue/80 px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg select-none max-w-[80%] truncate">
+                <Database className="h-3.5 w-3.5 animate-pulse" />
+                <span>Walrus Blob: {items[selectedIdx].blob_id}</span>
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedIdx(null); }}
+                className="h-9 w-9 rounded-full bg-white/10 hover:bg-rose-600 border border-white/10 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                title="Close"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            <div className="relative w-full max-w-5xl max-h-[80vh] flex items-center justify-center group" onClick={(e) => e.stopPropagation()}>
+              {items.length > 1 && (
+                <button
+                  onClick={handlePrev}
+                  className="absolute left-4 z-20 h-11 w-11 rounded-full bg-black/60 hover:bg-sui-cyan/20 border border-sui-cyan/20 flex items-center justify-center text-white hover:text-sui-cyan hover:scale-105 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                  title="Previous image"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+              )}
+
+              <div className="rounded-cyber-lg overflow-hidden border border-sui-cyan/20 bg-deep-space/50 p-2 shadow-cyber-glow max-w-full max-h-full flex items-center justify-center select-none">
+                <WalrusImage 
+                  blobId={items[selectedIdx].blob_id} 
+                  alt={`Lightbox image ${selectedIdx + 1}`}
+                  className="max-w-full max-h-[75vh] object-contain"
+                />
+              </div>
+
+              {items.length > 1 && (
+                <button
+                  onClick={handleNext}
+                  className="absolute right-4 z-20 h-11 w-11 rounded-full bg-black/60 hover:bg-sui-cyan/20 border border-sui-cyan/20 flex items-center justify-center text-white hover:text-sui-cyan hover:scale-105 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                  title="Next image"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              )}
+            </div>
+
+            {items.length > 1 && (
+              <div className="absolute bottom-6 font-mono text-xs text-gray-400 bg-black/45 border border-white/5 px-3 py-1.5 rounded-full select-none">
+                {selectedIdx + 1} / {items.length}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

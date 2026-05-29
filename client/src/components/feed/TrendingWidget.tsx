@@ -2,8 +2,10 @@
 
 import React from 'react';
 import { TrendingUp, Flame, Database, Compass } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export function TrendingWidget() {
+  const router = useRouter();
   const trendingTags = [
     { name: 'blobcast', posts: '4,289 blobs cast', trend: '+142%' },
     { name: 'walrus', posts: '12,980 shards saved', trend: '+85%' },
@@ -23,7 +25,11 @@ export function TrendingWidget() {
 
         <div className="flex flex-col gap-4">
           {trendingTags.map((tag, idx) => (
-            <div key={tag.name} className="flex justify-between items-start group cursor-pointer">
+            <div 
+              key={tag.name} 
+              onClick={() => router.push(`/search?q=${encodeURIComponent('#' + tag.name)}`)}
+              className="flex justify-between items-start group cursor-pointer"
+            >
               <div>
                 <span className="text-xs font-mono text-sui-cyan group-hover:underline">#{tag.name}</span>
                 <span className="text-[10px] text-gray-500 font-mono block mt-0.5">{tag.posts}</span>

@@ -56,20 +56,6 @@ export default function SocialFeedPage() {
     } catch (err) {
       console.warn("⚠️ Failed to synchronize pinned post in PostgreSQL:", err);
     }
-
-    setPosts(prev => {
-      const idx = prev.findIndex(p => (p.repostOf ? p.repostOf.id : p.id) === postId || p.id === postId);
-      if (idx === -1) return prev;
-      const updated = [...prev];
-      const [pinnedPost] = updated.splice(idx, 1);
-      if (pinned) {
-        return [pinnedPost, ...updated];
-      } else {
-        // Move back to original position (after current pinned items at top) — just append after index 0
-        updated.splice(Math.min(1, updated.length), 0, pinnedPost);
-        return updated;
-      }
-    });
   };
 
   // Load feed on mount
@@ -139,16 +125,6 @@ export default function SocialFeedPage() {
 
     const sortAndPinPosts = (postsList: any[]) => {
       const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      if (typeof window !== 'undefined') {
-        const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
-        if (pinnedId) {
-          const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
-          if (pinIdx !== -1) {
-            const [pinnedPost] = sorted.splice(pinIdx, 1);
-            sorted.unshift(pinnedPost);
-          }
-        }
-      }
       return sorted;
     };
 
@@ -162,6 +138,7 @@ export default function SocialFeedPage() {
             let text = 'Immutable social post stored on Walrus.';
             let hashtags: string[] = [];
             let mediaUrl: string | undefined = undefined;
+            let media: any[] = [];
 
             // Check if we have dynamic Walrus blob content
             if (p.walrusBlobId) {
@@ -177,7 +154,7 @@ export default function SocialFeedPage() {
                     hashtags = contentObj.content.hashtags;
                   }
                   if (contentObj.media && contentObj.media.length > 0) {
-                    // Extract image/media blobId
+                    media = contentObj.media;
                     mediaUrl = contentObj.media[0].blob_id;
                   }
                 }
@@ -213,6 +190,7 @@ export default function SocialFeedPage() {
               text: text,
               hashtags: hashtags,
               mediaUrl: mediaUrl,
+              media: media,
               likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
               commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
               repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
@@ -296,6 +274,8 @@ export default function SocialFeedPage() {
           text,
           hashtags: p.id === 'post-1' ? ['blobcast', 'sui'] : p.id === 'post-2' ? ['decentralized', 'walrus'] : (p.walrusContent as any)?.content?.hashtags || [],
           mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+          media: p.walrusContent?.media || (p.contentType === 1 ? [{ type: 'image', blob_id: 'walrus://blob-post-2-image' }] : []),
+          walrusContent: p.walrusContent,
           likeCount: p.likeCount,
           commentCount: p.commentCount,
           repostCount: p.repostCount,

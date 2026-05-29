@@ -54,6 +54,7 @@ export default function BookmarksPage() {
                 let text = 'Immutable social post stored on Walrus.';
                 let hashtags: string[] = [];
                 let mediaUrl: string | undefined = undefined;
+                let media: any[] = [];
 
                 if (p.walrusBlobId) {
                   try {
@@ -63,6 +64,7 @@ export default function BookmarksPage() {
                       if (contentObj.content?.text) text = contentObj.content.text;
                       if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
                       if (contentObj.media && contentObj.media.length > 0) {
+                        media = contentObj.media;
                         mediaUrl = contentObj.media[0].blob_id;
                       }
                     }
@@ -86,6 +88,7 @@ export default function BookmarksPage() {
                   text: text,
                   hashtags: hashtags,
                   mediaUrl: mediaUrl,
+                  media: media,
                   likeCount: p.likeCount,
                   commentCount: p.commentCount,
                   repostCount: p.repostCount,
@@ -129,6 +132,8 @@ export default function BookmarksPage() {
                     : 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!',
                   hashtags: ['decentralized', 'walrus'],
                   mediaUrl: mockP.id === 'post-2' ? 'walrus://blob-post-2-image' : undefined,
+                  media: mockP.walrusContent?.media || (mockP.id === 'post-2' ? [{ type: 'image', blob_id: 'walrus://blob-post-2-image' }] : []),
+                  walrusContent: mockP.walrusContent,
                   likeCount: mockP.likeCount,
                   commentCount: mockP.commentCount,
                   repostCount: mockP.repostCount,

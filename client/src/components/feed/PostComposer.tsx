@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database } from 'lucide-react';
+import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database, X } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
@@ -14,8 +14,13 @@ interface PostComposerProps {
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const account = useCurrentAccount();
+  interface MediaItem {
+    blobId: string;
+    type: 'image' | 'video';
+  }
+
   const [text, setText] = useState('');
-  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showMediaInput, setShowMediaInput] = useState(false);
 
@@ -71,36 +76,94 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     .substring(0, 2)
     .toUpperCase();
 
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingMedia(true);
-    setShowMediaInput(true); // Open block to show uploading feedback!
-    try {
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        const blobInfo = await walrus.uploadBlob(base64data);
-        setMediaUrl(blobInfo.blobId);
-        setIsUploadingMedia(false);
-      };
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
       reader.readAsDataURL(file);
-    } catch (err) {
-      console.error("Failed uploading media:", err);
-      alert("Error: Failed to upload media to Walrus.");
-      setIsUploadingMedia(false);
-      setShowMediaInput(false);
+    });
+  };
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    let newItems = [...mediaItems];
+
+    for (const file of files) {
+      const isImg = file.type.startsWith('image/');
+      const isVid = file.type.startsWith('video/');
+
+      if (!isImg && !isVid) {
+        alert("Hanya file gambar atau video yang didukung.");
+        continue;
+      }
+
+      if (isVid) {
+        if (newItems.length > 0) {
+          alert("Tidak dapat menggabungkan foto dan video dalam satu post! Maksimal 1 video.");
+          break;
+        }
+        
+        setIsUploadingMedia(true);
+        setShowMediaInput(true);
+        try {
+          const base64data = await readFileAsDataURL(file);
+          const blobInfo = await walrus.uploadBlob(base64data);
+          newItems.push({
+            blobId: blobInfo.blobId,
+            type: 'video'
+          });
+          setMediaItems([...newItems]);
+        } catch (err) {
+          console.error("Failed uploading video:", err);
+          alert("Error: Gagal mengunggah video ke Walrus.");
+        } finally {
+          setIsUploadingMedia(false);
+        }
+        break;
+      }
+
+      if (isImg) {
+        if (newItems.some(i => i.type === 'video')) {
+          alert("Tidak dapat menggabungkan foto dan video dalam satu post!");
+          break;
+        }
+        const imageCount = newItems.filter(i => i.type === 'image').length;
+        if (imageCount >= 4) {
+          alert("Maksimal 4 foto untuk sekali post!");
+          break;
+        }
+
+        setIsUploadingMedia(true);
+        setShowMediaInput(true);
+        try {
+          const base64data = await readFileAsDataURL(file);
+          const blobInfo = await walrus.uploadBlob(base64data);
+          newItems.push({
+            blobId: blobInfo.blobId,
+            type: 'image'
+          });
+          setMediaItems([...newItems]);
+        } catch (err) {
+          console.error("Failed uploading image:", err);
+          alert("Error: Gagal mengunggah foto ke Walrus.");
+        } finally {
+          setIsUploadingMedia(false);
+        }
+      }
     }
+    
+    e.target.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() && !mediaUrl) return;
+    if (!text.trim() && mediaItems.length === 0) return;
 
     setIsUploading(true);
     try {
-      // Build Post Blob schema matching spec in full_architecture.md
       const postBlob = {
         version: 1,
         type: 'post',
@@ -111,32 +174,28 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           hashtags: extractHashtags(text),
           mentions: []
         },
-        media: mediaUrl ? [
-          {
-            type: 'image',
-            blob_id: mediaUrl.startsWith('walrus') ? mediaUrl : `walrus://${mediaUrl}`,
-            mime: 'image/png',
-            width: 800,
-            height: 600
-          }
-        ] : [],
+        media: mediaItems.map(item => ({
+          type: item.type,
+          blob_id: item.blobId.startsWith('walrus') ? item.blobId : `walrus://${item.blobId}`,
+          mime: item.type === 'video' ? 'video/mp4' : 'image/png',
+          width: 800,
+          height: 600
+        })),
         metadata: {
           language: 'en',
           client: 'blobcast-web'
         }
       };
 
-      // Upload payload JSON blob directly to Walrus decentralized storage!
       const walrusUploadInfo = await walrus.uploadBlob(postBlob);
 
-      // Trigger callback with new created mock post data
       onPostCreated({
         id: `post_${Date.now()}`,
-        authorId: 'usr-2-sademir', // Yuriya profile
+        authorId: 'usr-2-sademir',
         suiObjectId: `0x${Math.random().toString(16).substring(2, 18)}sui_object`,
         walrusBlobId: walrusUploadInfo.blobId,
         blobHash: `sha256-${Math.random().toString(36).substring(2, 10)}`,
-        contentType: mediaUrl ? 1 : 0,
+        contentType: mediaItems.length > 0 ? 1 : 0,
         visibility: 0,
         replyToId: null,
         repostOfId: null,
@@ -145,12 +204,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         repostCount: 0,
         score: 0,
         createdAt: new Date(),
-        // Embed the actual loaded Walrus content for fast rendering
         walrusContent: postBlob,
       });
 
       setText('');
-      setMediaUrl('');
+      setMediaItems([]);
       setShowMediaInput(false);
     } catch (e) {
       console.error("❌ Failed publishing post to Walrus:", e);
@@ -204,53 +262,64 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           <div className="border border-sui-cyan/15 rounded-cyber-md bg-walrus-blue/30 p-3 text-xs flex flex-col gap-2 relative">
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                ⚡ Walrus Storage Shard registry
+                ⚡ Walrus Storage Shard registry ({mediaItems.length} media)
               </span>
-              {mediaUrl && !isUploadingMedia && (
+              {mediaItems.length > 0 && !isUploadingMedia && (
                 <button 
                   type="button"
                   onClick={() => {
-                    setMediaUrl('');
+                    setMediaItems([]);
                     setShowMediaInput(false);
                   }}
                   className="text-[9px] font-mono text-rose-400 hover:text-white uppercase transition-colors"
                 >
-                  [Remove]
+                  [Remove All]
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-4 bg-deep-space/50 border border-sui-cyan/5 rounded-cyber-sm p-3">
-              <div className="h-12 w-16 rounded bg-walrus-blue border border-sui-cyan/20 overflow-hidden flex items-center justify-center font-mono text-[9px] text-sui-cyan uppercase flex-shrink-0 relative">
-                {mediaUrl ? (
-                  <WalrusImage 
-                    blobId={mediaUrl} 
-                    alt="Composer upload preview" 
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      // Fallback text if the image fails to load
-                      (e.target as HTMLElement).style.display = 'none';
+            <div className={`grid gap-2 ${
+              mediaItems.length === 1 ? 'grid-cols-1' :
+              mediaItems.length === 2 ? 'grid-cols-2' :
+              mediaItems.length === 3 ? 'grid-cols-3' :
+              'grid-cols-2 grid-rows-2'
+            }`}>
+              {mediaItems.map((item, idx) => (
+                <div key={item.blobId} className="relative group rounded-cyber-sm overflow-hidden border border-sui-cyan/20 bg-deep-space aspect-video flex items-center justify-center">
+                  {item.type === 'image' ? (
+                    <WalrusImage 
+                      blobId={item.blobId} 
+                      alt="Composer upload preview" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-black/40">
+                      <span className="text-[10px] font-mono text-sui-cyan animate-pulse">🎥 Video Blob</span>
+                      <span className="text-[8px] font-mono text-gray-500 truncate max-w-full px-2 mt-1">ID: {item.blobId}</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = mediaItems.filter((_, i) => i !== idx);
+                      setMediaItems(updated);
+                      if (updated.length === 0) setShowMediaInput(false);
                     }}
-                  />
-                ) : null}
-                {!mediaUrl && 'Upload'}
-              </div>
-              <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-                {isUploadingMedia ? (
-                  <span className="text-[10px] font-mono text-sui-cyan animate-pulse flex items-center gap-1.5">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Querying Walrus Publisher...
+                    className="absolute top-1.5 right-1.5 bg-black/75 hover:bg-rose-600/90 text-white rounded-full p-1 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                    title="Remove item"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              {isUploadingMedia && (
+                <div className="border border-sui-cyan/15 rounded-cyber-sm bg-walrus-blue/20 aspect-video flex flex-col items-center justify-center text-center p-3">
+                  <Loader2 className="h-4 w-4 text-sui-cyan animate-spin mb-1" />
+                  <span className="text-[9px] font-mono text-sui-cyan animate-pulse uppercase tracking-wider">
+                    Uploading...
                   </span>
-                ) : (
-                  <>
-                    <span className="text-[9px] font-mono text-emerald-400 uppercase tracking-wider font-bold">
-                      Persistent media certifier OK
-                    </span>
-                    <span className="text-[8px] font-mono text-gray-500 truncate block" title={mediaUrl}>
-                      ID: {mediaUrl}
-                    </span>
-                  </>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -263,7 +332,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           <div className="flex items-center gap-1.5 font-mono">
             <input 
               type="file" 
-              accept="image/*"
+              accept="image/*,video/*"
+              multiple
               onChange={handleMediaUpload}
               id="composer-media-file-input"
               className="hidden"
@@ -295,7 +365,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             
             <button
               type="submit"
-              disabled={isUploading || (!text.trim() && !mediaUrl)}
+              disabled={isUploading || (!text.trim() && mediaItems.length === 0)}
               className="px-5 py-2.5 rounded-cyber-md bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
             >
               {isUploading ? (
