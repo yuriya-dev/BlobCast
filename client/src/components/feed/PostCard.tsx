@@ -8,8 +8,6 @@ import {
   Coins, 
   BadgeCheck, 
   Database,
-  ExternalLink,
-  ShieldCheck,
   Bookmark,
   Share2,
   Loader2
@@ -22,6 +20,8 @@ import { mockDb } from '@/lib/db';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { PostCardVerificationPanel } from './PostCardVerificationPanel';
+import { PostCardCommentComposer } from './PostCardCommentComposer';
 
 interface PostCardProps {
   post: {
@@ -428,49 +428,14 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false }
 
           {/* Dynamic cryptographic verification dropdown info panel */}
           <AnimatePresence>
-            {showMetadataPop && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="bg-walrus-blue/70 border border-sui-cyan/15 rounded-cyber-md p-4 flex flex-col gap-2 font-mono text-[10px] text-gray-400 mt-1">
-                  <div className="flex items-center justify-between">
-                    <span>Cryptographic Status:</span>
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" /> VERIFIED SIGNATURE
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Sui Content Owner:</span>
-                    <span className="text-gray-300 truncate w-48 text-right" title={authorResolved.walletAddress}>
-                      {authorResolved.walletAddress}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Aggregator Storage URI:</span>
-                    <span className="text-sui-cyan truncate w-48 text-right">
-                      Aggregator::{post.walrusBlobId.replace('walrus://', '')}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Content Hash:</span>
-                    <span className="text-gray-300 truncate w-48 text-right" title={post.blobHash}>
-                      {post.blobHash}
-                    </span>
-                  </div>
-                  {post.suiObjectId && (
-                    <div className="flex items-center justify-between border-t border-sui-cyan/5 pt-2 mt-1">
-                      <span>Sui Object Reference ID:</span>
-                      <a href="#" className="text-sui-cyan flex items-center gap-1 hover:underline">
-                        {truncateWallet(post.suiObjectId)} <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
+            <PostCardVerificationPanel
+              showMetadataPop={showMetadataPop}
+              authorResolved={authorResolved}
+              walrusBlobId={post.walrusBlobId}
+              blobHash={post.blobHash}
+              suiObjectId={post.suiObjectId}
+              truncateWallet={truncateWallet}
+            />
           </AnimatePresence>
 
           {/* Card interaction controls footer */}
@@ -533,39 +498,14 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false }
 
           {/* Comment submit form inside PostCard */}
           <AnimatePresence>
-            {!hideCommentComposer && showComments && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden mt-4 border-t border-sui-cyan/10 pt-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <form onSubmit={handleCommentSubmit} className="flex gap-3 items-center mt-1">
-                  <input 
-                    type="text"
-                    value={newCommentText}
-                    onChange={(e) => setNewCommentText(e.target.value)}
-                    placeholder="Verify dynamic comment on Walrus nodes..."
-                    className="flex-1 bg-walrus-blue/30 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-sans"
-                    maxLength={140}
-                    required
-                    disabled={isPostingComment}
-                  />
-                  <button
-                    type="submit"
-                    disabled={isPostingComment || !newCommentText.trim()}
-                    className="px-4 py-2 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {isPostingComment ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      'Reply'
-                    )}
-                  </button>
-                </form>
-              </motion.div>
-            )}
+            <PostCardCommentComposer
+              showComments={showComments}
+              hideCommentComposer={hideCommentComposer}
+              newCommentText={newCommentText}
+              setNewCommentText={setNewCommentText}
+              isPostingComment={isPostingComment}
+              handleCommentSubmit={handleCommentSubmit}
+            />
           </AnimatePresence>
 
 

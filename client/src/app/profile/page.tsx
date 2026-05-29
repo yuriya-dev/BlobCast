@@ -303,6 +303,12 @@ export default function ProfilePage() {
         currentUser.avatarBlobId = avatarUrl;
         currentUser.bannerBlobId = bannerUrl;
         
+        // Persist avatar blob ID to localStorage so PostComposer and other components
+        // always display the correct uploaded avatar across page navigation
+        if (avatarUrl) {
+          localStorage.setItem('blobcast_my_avatar_blob_id', avatarUrl);
+        }
+        
         // Push notification of profile update
         mockDb.notifications.unshift({
           id: `notif_${Date.now()}`,

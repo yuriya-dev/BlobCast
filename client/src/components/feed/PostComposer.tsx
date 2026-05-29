@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
-import { WalrusImage } from '@/hooks/useWalrusImage';
+import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
+import { api } from '@/lib/api';
+import { mockDb } from '@/lib/db';
 
 interface PostComposerProps {
   onPostCreated: (newPost: any) => void;
@@ -18,6 +20,56 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [showMediaInput, setShowMediaInput] = useState(false);
 
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  // Read from avatarBlobId directly — no hardcoded fallback so we don't override the user's actual upload
+  const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId || null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const wallet = account?.address || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+        const res = await api.fetchUserProfile(wallet);
+        if (res && res.data && res.data.user) {
+          const userData = res.data.user;
+          // Prefer the persisted avatar blob ID from localStorage (set when user saves profile)
+          // This ensures the uploaded image is shown even before API returns
+          const persistedAvatarBlobId = localStorage.getItem('blobcast_my_avatar_blob_id');
+          if (persistedAvatarBlobId && !userData.avatarBlobId) {
+            userData.avatarBlobId = persistedAvatarBlobId;
+          } else if (userData.avatarBlobId) {
+            // Keep localStorage in sync with the DB value
+            localStorage.setItem('blobcast_my_avatar_blob_id', userData.avatarBlobId);
+          }
+          setCurrentUser(userData);
+          return;
+        }
+      } catch (err) {
+        console.warn("⚠️ API offline. Falling back to local db user profile.", err);
+      }
+      
+      // Offline fallback: use mockDb but override avatarBlobId with whatever was saved by the user
+      const user = { ...(
+        mockDb.users.find(u => u.id === 'usr-2-sademir') || {
+          displayName: 'Yuriya',
+          username: 'yuriya',
+          avatarBlobId: null as string | null
+        }
+      ) };
+      // Override with the locally persisted avatar blob ID so uploads survive page navigation
+      const persistedAvatarBlobId = localStorage.getItem('blobcast_my_avatar_blob_id');
+      if (persistedAvatarBlobId) {
+        user.avatarBlobId = persistedAvatarBlobId;
+      }
+      setCurrentUser(user);
+    };
+
+    fetchUser();
+  }, [account]);
+
+  const userInitials = (currentUser?.displayName || currentUser?.username || 'YU')
+    .substring(0, 2)
+    .toUpperCase();
 
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,8 +172,20 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         {/* Input box */}
         <div className="flex gap-4">
           <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
-            <div className="h-full w-full rounded-full bg-walrus-blue flex items-center justify-center font-mono text-xs font-bold text-sui-cyan">
-              BC
+            <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs font-bold text-sui-cyan relative">
+              {avatarUrlResolved ? (
+                <img 
+                  src={avatarUrlResolved} 
+                  alt="My avatar"
+                  className="h-full w-full object-cover z-10"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : null}
+              <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none font-mono">
+                {userInitials}
+              </span>
             </div>
           </div>
           <div className="flex-1">
