@@ -10,6 +10,8 @@ import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
+import { AutocompleteDropdown } from '@/components/feed/AutocompleteDropdown';
 
 interface PostComposerProps {
   onPostCreated: (newPost: any) => void;
@@ -23,7 +25,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     type: 'image' | 'video';
   }
 
-  const [text, setText] = useState('');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showMediaInput, setShowMediaInput] = useState(false);
@@ -37,138 +38,60 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const finalAvatar = avatarUrlResolved || (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
 
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const composerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [showMentionsDropdown, setShowMentionsDropdown] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Fetch all users list on mount for autocomplete search
+  // Fetch all users on mount for autocomplete
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const res = await api.fetchAllUsers();
-        if (active && res && res.data && Array.isArray(res.data.users)) {
+        if (active && res?.data && Array.isArray(res.data.users)) {
           setAllUsers(res.data.users);
         } else if (active) {
           setAllUsers(mockDb.users);
         }
-      } catch (err) {
-        if (active) {
-          setAllUsers(mockDb.users);
-        }
+      } catch {
+        if (active) setAllUsers(mockDb.users);
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  // Handle outside clicks to close the mentions autocomplete dropdown
+  const {
+    text,
+    setText,
+    textareaRef,
+    containerRef: composerContainerRef,
+    showDropdown,
+    dropdownType,
+    selectedIndex,
+    mentionSuggestions,
+    hashtagSuggestions,
+    tickerSuggestions,
+    handleTextChange,
+    handleKeyDown,
+    insertMention,
+    insertHashtag,
+    insertTicker,
+    closeDropdown,
+  } = useTextAutocomplete({ users: allUsers });
+
+  // Handle outside clicks to close dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (composerContainerRef.current && !composerContainerRef.current.contains(e.target as Node)) {
-        setShowMentionsDropdown(false);
+        closeDropdown();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const filteredUsers = React.useMemo(() => {
-    if (!mentionQuery) {
-      return allUsers.slice(0, 5);
-    }
-    const q = mentionQuery.toLowerCase();
-    return allUsers.filter(u => 
-      (u.username || '').toLowerCase().includes(q) ||
-      (u.displayName || '').toLowerCase().includes(q)
-    ).slice(0, 5);
-  }, [mentionQuery, allUsers]);
-
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setText(val);
-
-    const selectionStart = e.target.selectionStart;
-    const textBeforeCursor = val.substring(0, selectionStart);
-    
-    // Find the last word starting with @ before the cursor
-    const lastAtIdx = textBeforeCursor.lastIndexOf('@');
-    
-    if (lastAtIdx !== -1) {
-      const charBeforeAt = lastAtIdx > 0 ? textBeforeCursor[lastAtIdx - 1] : ' ';
-      const isWordStart = /\s/.test(charBeforeAt); // Is it preceded by whitespace?
-      
-      if (isWordStart) {
-        const textAfterAt = textBeforeCursor.substring(lastAtIdx + 1);
-        // Ensure there is no whitespace between the @ and the cursor
-        if (!/\s/.test(textAfterAt)) {
-          setMentionQuery(textAfterAt);
-          setShowMentionsDropdown(true);
-          setSelectedIndex(0);
-          return;
-        }
-      }
-    }
-    
-    setShowMentionsDropdown(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showMentionsDropdown && filteredUsers.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % filteredUsers.length);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        insertMention(filteredUsers[selectedIndex]);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowMentionsDropdown(false);
-      }
-    }
-  };
-
-  const insertMention = (user: any) => {
-    if (!textareaRef.current) return;
-    
-    const val = text;
-    const selectionStart = textareaRef.current.selectionStart;
-    const textBeforeCursor = val.substring(0, selectionStart);
-    const textAfterCursor = val.substring(selectionStart);
-    
-    const lastAtIdx = textBeforeCursor.lastIndexOf('@');
-    if (lastAtIdx !== -1) {
-      const beforeAt = val.substring(0, lastAtIdx);
-      const mentionText = `@${user.username} `;
-      const newText = beforeAt + mentionText + textAfterCursor;
-      
-      setText(newText);
-      setShowMentionsDropdown(false);
-      
-      // Reset cursor position to right after the inserted mention
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          const cursorPosition = lastAtIdx + mentionText.length;
-          textareaRef.current.setSelectionRange(cursorPosition, cursorPosition);
-        }
-      }, 0);
-    }
-  };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [closeDropdown]);
 
   const extractMentions = (str: string): string[] => {
     const matches = str.match(/@\w+/g);
-    return matches ? matches.map(mention => mention.replace('@', '').toLowerCase()) : [];
+    return matches ? matches.map(m => m.replace('@', '').toLowerCase()) : [];
   };
 
   useEffect(() => {
@@ -441,57 +364,23 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
               value={text}
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
-              placeholder="What's happening? Type posts to save permanently on Walrus... (type @ to mention)"
+              placeholder="What's happening? Type @mention, #hashtag, or $ticker..."
               className="w-full bg-transparent border-none outline-none resize-none min-h-22.5 text-soft-white placeholder-gray-500 text-sm font-sans"
               maxLength={280}
             />
 
-            {/* Mentions Autocomplete Dropdown */}
-            {showMentionsDropdown && filteredUsers.length > 0 && (
-              <div className="absolute left-0 top-full z-50 mt-1 w-72 bg-deep-space/98 border border-sui-cyan/25 rounded-cyber-lg shadow-cyber-glow overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="px-3 py-2 border-b border-sui-cyan/10">
-                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">
-                    👤 Mention someone
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  {filteredUsers.map((u, idx) => (
-                    <button
-                      key={u.id || u.walletAddress}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        insertMention(u);
-                      }}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
-                        idx === selectedIndex
-                          ? 'bg-sui-cyan/15 border-l-2 border-sui-cyan'
-                          : 'hover:bg-walrus-blue/50 border-l-2 border-transparent'
-                      }`}
-                    >
-                      <div className="h-7 w-7 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-[10px] font-bold text-sui-cyan border border-sui-cyan/15 flex-shrink-0">
-                        <img
-                          src={`https://api.dicebear.com/7.x/bottts/svg?seed=${u.username || 'YU'}`}
-                          alt={u.displayName || ''}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-sans font-semibold text-white leading-none truncate">
-                          {u.displayName}
-                        </span>
-                        <span className="text-[9px] font-mono text-sui-cyan/70 mt-0.5 truncate">
-                          @{u.username}
-                        </span>
-                      </div>
-                      {idx === selectedIndex && (
-                        <span className="ml-auto text-[8px] font-mono text-gray-500 flex-shrink-0">↵</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Unified Autocomplete Dropdown */}
+            <AutocompleteDropdown
+              show={showDropdown}
+              dropdownType={dropdownType}
+              selectedIndex={selectedIndex}
+              mentionSuggestions={mentionSuggestions}
+              hashtagSuggestions={hashtagSuggestions}
+              tickerSuggestions={tickerSuggestions}
+              onSelectMention={insertMention}
+              onSelectHashtag={insertHashtag}
+              onSelectTicker={insertTicker}
+            />
           </div>
         </div>
 

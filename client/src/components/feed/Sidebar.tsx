@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { 
   Home, 
   Terminal, 
@@ -24,6 +24,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [isComposeOpen, setIsComposeOpen] = useState(false);
 
@@ -98,15 +99,13 @@ export function Sidebar() {
       {/* Navigation items */}
       <nav className="flex-1 flex flex-col gap-1">
         {navigation.map((item) => {
-          const getWalletQuery = () => {
-            if (typeof window === 'undefined') return null;
-            return new URLSearchParams(window.location.search).get('wallet');
-          };
-          const walletQuery = getWalletQuery();
           let isActive = false;
           if (item.href === '/profile') {
             const isProfilePath = pathname === '/profile';
-            const isOwnProfile = !walletQuery || (user?.walletAddress ? walletQuery.toLowerCase() === user.walletAddress.toLowerCase() : false);
+            const walletQuery = searchParams.get('wallet');
+            const isOwnProfile = !walletQuery || (user?.walletAddress
+              ? walletQuery.toLowerCase() === user.walletAddress.toLowerCase()
+              : false);
             isActive = !!(isProfilePath && isOwnProfile);
           } else {
             isActive = pathname === item.href;
