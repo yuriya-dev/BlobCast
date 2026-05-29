@@ -1,11 +1,15 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Smile, Image } from 'lucide-react';
 import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import { walrus } from '@/lib/walrus';
+import { api } from '@/lib/api';
+import { mockDb } from '@/lib/db';
+import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
+import { AutocompleteDropdown } from '@/components/feed/AutocompleteDropdown';
 
 interface PostCardCommentComposerProps {
   showComments: boolean;
@@ -28,11 +32,80 @@ export function PostCardCommentComposer({
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [mediaItems, setMediaItems] = useState<{ blobId: string; type: 'image'|'video' }[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Fetch users for autocomplete
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.fetchAllUsers();
+        if (active && res?.data && Array.isArray(res.data.users)) {
+          setAllUsers(res.data.users);
+        } else if (active) {
+          setAllUsers(mockDb.users);
+        }
+      } catch {
+        if (active) setAllUsers(mockDb.users);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const {
+    text,
+    setText,
+    textareaRef,
+    showDropdown,
+    dropdownType,
+    selectedIndex,
+    mentionSuggestions,
+    hashtagSuggestions,
+    tickerSuggestions,
+    handleTextChange,
+    handleKeyDown,
+    insertMention,
+    insertHashtag,
+    insertTicker,
+    closeDropdown,
+  } = useTextAutocomplete({ users: allUsers });
+
+  // Sync internal text → external newCommentText prop on every keystroke
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleTextChange(e);
+    setNewCommentText(e.target.value);
+  };
+
+  // Keep internal text in sync if parent resets it
+  useEffect(() => {
+    if (newCommentText === '' && text !== '') {
+      setText('');
+    }
+  }, [newCommentText]);
+
+  // Sync text → parent whenever it changes (covers autocomplete insertions too)
+  useEffect(() => {
+    setNewCommentText(text);
+  }, [text]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        closeDropdown();
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [closeDropdown]);
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
-    setNewCommentText(`${newCommentText}${emojiData.emoji}`);
+    const newText = `${text}${emojiData.emoji}`;
+    setText(newText);
+    setNewCommentText(newText);
     setShowEmojiPicker(false);
   };
 
@@ -141,48 +214,75 @@ export function PostCardCommentComposer({
       className="mt-4 border-t border-sui-cyan/10 pt-4"
       onClick={(e) => e.stopPropagation()}
     >
-      <form onSubmit={(e) => handleCommentSubmit(e, mediaItems)} className="relative flex gap-3 items-center mt-1">
-        <input 
-          type="text"
-          value={newCommentText}
-          onChange={(e) => setNewCommentText(e.target.value)}
-          placeholder="Verify dynamic comment on Walrus nodes..."
-          className="flex-1 bg-walrus-blue/30 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-sans"
-          maxLength={140}
-          required
-          disabled={isPostingComment}
-        />
-        <button
-          ref={emojiTriggerRef}
-          type="button"
-          onClick={() => setShowEmojiPicker((prev) => !prev)}
-          className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"
-          title="Insert emoji"
-        >
-          <Smile className="h-4 w-4" />
-        </button>
-        <input
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          id="comment-media-file-input"
-          className="hidden"
-          onChange={handleMediaUpload}
-        />
-        <label htmlFor="comment-media-file-input" className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all cursor-pointer" title="Upload media">
-          <Image className="h-4 w-4" />
-        </label>
-        <button
-          type="submit"
-          disabled={isPostingComment || (!newCommentText.trim() && mediaItems.length === 0)}
-          className="px-4 py-2 rounded-cyber-sm bg-linear-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 flex items-center gap-1.5 cursor-pointer"
-        >
-          {isPostingComment ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            'Reply'
-          )}
-        </button>
+      <form onSubmit={(e) => handleCommentSubmit(e, mediaItems)} className="flex gap-3 items-start mt-1">
+        {/* Textarea with autocomplete */}
+        <div ref={containerRef} className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Reply... (@mention, #hashtag, $ticker)"
+            className="w-full bg-walrus-blue/30 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-sans resize-none min-h-[38px]"
+            maxLength={140}
+            required
+            disabled={isPostingComment}
+            rows={1}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = `${target.scrollHeight}px`;
+            }}
+          />
+
+          {/* Autocomplete Dropdown */}
+          <AutocompleteDropdown
+            show={showDropdown}
+            dropdownType={dropdownType}
+            selectedIndex={selectedIndex}
+            mentionSuggestions={mentionSuggestions}
+            hashtagSuggestions={hashtagSuggestions}
+            tickerSuggestions={tickerSuggestions}
+            onSelectMention={insertMention}
+            onSelectHashtag={insertHashtag}
+            onSelectTicker={insertTicker}
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0 pt-1">
+          <button
+            ref={emojiTriggerRef}
+            type="button"
+            onClick={() => setShowEmojiPicker((prev) => !prev)}
+            className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"
+            title="Insert emoji"
+          >
+            <Smile className="h-4 w-4" />
+          </button>
+          <input
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            id="comment-media-file-input"
+            className="hidden"
+            onChange={handleMediaUpload}
+          />
+          <label htmlFor="comment-media-file-input" className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all cursor-pointer" title="Upload media">
+            <Image className="h-4 w-4" />
+          </label>
+          <button
+            type="submit"
+            disabled={isPostingComment || (!text.trim() && mediaItems.length === 0)}
+            className="px-4 py-2 rounded-cyber-sm bg-linear-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 flex items-center gap-1.5 cursor-pointer"
+          >
+            {isPostingComment ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              'Reply'
+            )}
+          </button>
+        </div>
 
         <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-full left-[63.5%] mb-2 z-50">
           <div
@@ -205,7 +305,7 @@ export function PostCardCommentComposer({
         {showMediaInput && mediaItems.length > 0 ? (
           <div className="absolute left-0 bottom-20 z-10 w-[280px] p-2 rounded-cyber-md bg-walrus-blue/30 border border-sui-cyan/10">
             <div className="flex gap-2">
-              {mediaItems.map((m, i) => (
+              {mediaItems.map((m) => (
                 <div key={m.blobId} className="w-16 h-10 bg-black/30 rounded-cyber-sm overflow-hidden flex items-center justify-center text-[10px] font-mono">
                   {m.type === 'image' ? '🖼️' : '🎥'}
                 </div>

@@ -99,19 +99,22 @@ function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawQuery = searchParams.get('q') || '';
+  const tabParam = searchParams.get('tab') as 'top' | 'latest' | 'people' | 'media' | null;
   
   const [searchQuery, setSearchQuery] = useState(rawQuery);
-  const [activeTab, setActiveTab] = useState<'top' | 'latest' | 'people' | 'media'>('top');
+  const [activeTab, setActiveTab] = useState<'top' | 'latest' | 'people' | 'media'>(tabParam || 'top');
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y' | 'ALL'>('1D');
   const [posts, setPosts] = useState<any[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Re-sync query state when query parameters change
   useEffect(() => {
     setSearchQuery(rawQuery);
+    if (tabParam) setActiveTab(tabParam);
     setIsLoading(true);
     loadSearchPosts();
-  }, [rawQuery]);
+  }, [rawQuery, tabParam]);
 
   const loadSearchPosts = async () => {
     setIsLoading(true);
@@ -170,6 +173,16 @@ function SearchContent() {
         }));
         setPosts(mapped);
       }
+
+      try {
+        const usersResponse = await api.fetchAllUsers();
+        if (usersResponse && usersResponse.data && usersResponse.data.users) {
+          setRegisteredUsers(usersResponse.data.users);
+        }
+      } catch (usersErr) {
+        console.warn("⚠️ Failed to fetch registered users for search:", usersErr);
+        setRegisteredUsers([]);
+      }
     } catch (err) {
       console.warn("⚠️ API offline. Using mock db for search.");
       // Fallback
@@ -205,6 +218,7 @@ function SearchContent() {
         };
       });
       setPosts(mapped);
+      setRegisteredUsers(mockDb.users);
     } finally {
       setIsLoading(false);
     }
@@ -251,14 +265,15 @@ function SearchContent() {
   // Filter posts based on active tab
   const getFilteredPosts = () => {
     const q = rawQuery.toLowerCase();
+    const cleanQ = q.startsWith('@') ? q.slice(1) : q;
     
     // Filter matching criteria
     const matches = posts.filter(p => {
       if (!q) return true;
       return (
         p.text.toLowerCase().includes(q) ||
-        p.author.displayName.toLowerCase().includes(q) ||
-        p.author.username.toLowerCase().includes(q) ||
+        p.author.displayName.toLowerCase().includes(cleanQ) ||
+        p.author.username.toLowerCase().includes(cleanQ) ||
         p.hashtags.some((tag: string) => tag.toLowerCase().includes(q))
       );
     });
@@ -279,11 +294,13 @@ function SearchContent() {
   // Filter people/creators for the "People" tab
   const getFilteredPeople = () => {
     const q = rawQuery.toLowerCase();
-    if (!q) return mockDb.users;
-    return mockDb.users.filter(u => 
-      u.displayName?.toLowerCase().includes(q) || 
-      u.username?.toLowerCase().includes(q) ||
-      u.bio?.toLowerCase().includes(q)
+    const cleanQ = q.startsWith('@') ? q.slice(1) : q;
+    const sourceList = registeredUsers.length > 0 ? registeredUsers : mockDb.users;
+    if (!q) return sourceList;
+    return sourceList.filter(u => 
+      (u.displayName || '').toLowerCase().includes(cleanQ) || 
+      (u.username || '').toLowerCase().includes(cleanQ) ||
+      (u.bio || '').toLowerCase().includes(cleanQ)
     );
   };
 
@@ -528,13 +545,20 @@ function SearchContent() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {displayedPeople.map((creator) => (
+                  {displayedPeople.map((creator) => {
+                    const profileHref = creator.username
+                      ? `/profile?username=${encodeURIComponent(creator.username)}`
+                      : `/profile?wallet=${creator.walletAddress}`;
+                    return (
                     <div 
                       key={creator.id}
                       className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/5 relative group flex flex-col sm:flex-row gap-4 justify-between items-start"
                     >
                       <div className="flex gap-3">
-                        <div className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0 overflow-hidden">
+                        <Link 
+                          href={profileHref} 
+                          className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0 overflow-hidden hover:scale-105 transition-transform duration-200"
+                        >
                           <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan relative">
                             {creator.username ? (
                               <img 
@@ -547,13 +571,15 @@ function SearchContent() {
                               {(creator.displayName || creator.username || 'YU').substring(0, 2).toUpperCase()}
                             </span>
                           </div>
-                        </div>
+                        </Link>
 
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <h4 className="font-bold text-sm text-white font-sans hover:underline cursor-pointer">
-                              {creator.displayName}
-                            </h4>
+                            <Link href={profileHref}>
+                              <h4 className="font-bold text-sm text-white font-sans hover:underline cursor-pointer">
+                                {creator.displayName}
+                              </h4>
+                            </Link>
                             {creator.verified && (
                               <BadgeCheck className="h-4 w-4 text-sui-cyan fill-sui-cyan/10" />
                             )}
@@ -567,17 +593,18 @@ function SearchContent() {
 
                       <div className="flex flex-col items-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 flex-shrink-0">
                         <span className="text-[10px] font-mono text-gray-500">
-                          1,248 Followers
+                          {creator.followersCount !== undefined ? `${creator.followersCount} Followers` : (creator.id?.startsWith('usr-') ? '1,248' : '0') + ' Followers'}
                         </span>
                         <Link 
-                          href="/profile"
+                          href={profileHref}
                           className="px-4 py-1.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-[10px] uppercase flex items-center gap-1 hover:opacity-90 active:scale-[0.98] transition-all w-full sm:w-auto justify-center"
                         >
                           View Profile <ArrowRight className="h-3 w-3" />
                         </Link>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

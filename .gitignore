@@ -67,3 +67,4 @@ contract/build/
 *.db-journal
 
 docs/
+TODOS.md

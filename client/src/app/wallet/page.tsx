@@ -21,6 +21,7 @@ import {
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
+import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { 
@@ -448,6 +449,9 @@ export default function MyWalletPage() {
 
       {/* 3. Right Sidebar Trending Stats Column */}
       <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <div className="px-4 pt-4 pb-0">
+          <SearchInputWithRecommendations placeholder="Search BlobCast..." />
+        </div>
         <TrendingWidget />
       </aside>
 

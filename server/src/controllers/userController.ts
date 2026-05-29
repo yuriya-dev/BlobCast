@@ -4,17 +4,22 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 
 /**
- * Controller to fetch User Profile details by wallet address.
+ * Controller to fetch User Profile details by wallet address OR username.
  */
 export const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
     const { walletAddress } = req.params;
 
     if (!walletAddress) {
-        throw new AppError('Wallet address parameter is required', 400);
+        throw new AppError('Wallet address or username parameter is required', 400);
     }
 
+    // Determine if this is a wallet address (starts with 0x) or a username
+    const isWalletAddress = walletAddress.startsWith('0x');
+
     const user = await prisma.user.findUnique({
-        where: { walletAddress },
+        where: isWalletAddress
+            ? { walletAddress }
+            : { username: walletAddress },
         include: {
             posts: {
                 take: 10,
@@ -22,14 +27,30 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
                 include: {
                     author: true,
                     media: true,
-                    likes: true,
-                    reposts: true,
+                    likes: {
+                        include: {
+                            user: true
+                        }
+                    },
+                    reposts: {
+                        include: {
+                            author: true
+                        }
+                    },
                     repostOf: {
                         include: {
                             author: true,
                             media: true,
-                            likes: true,
-                            reposts: true
+                            likes: {
+                                include: {
+                                    user: true
+                                }
+                            },
+                            reposts: {
+                                include: {
+                                    author: true
+                                }
+                            }
                         }
                     }
                 }
@@ -38,12 +59,40 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
     });
 
     if (!user) {
-        throw new AppError('User profile not found for this wallet address', 404);
+        throw new AppError(`User profile not found for "${walletAddress}"`, 404);
+    }
+
+    const followersCount = await prisma.follow.count({
+        where: { followingId: user.id }
+    });
+
+    const followingCount = await prisma.follow.count({
+        where: { followerId: user.id }
+    });
+
+    let isFollowing = false;
+    if (req.authUser) {
+        const followRecord = await prisma.follow.findUnique({
+            where: {
+                followerId_followingId: {
+                    followerId: req.authUser.id,
+                    followingId: user.id
+                }
+            }
+        });
+        isFollowing = !!followRecord;
     }
 
     res.status(200).json({
         status: 'success',
-        data: { user }
+        data: { 
+            user: {
+                ...user,
+                followersCount,
+                followingCount,
+                isFollowing
+            }
+        }
     });
 });
 
@@ -108,5 +157,150 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
     res.status(200).json({
         status: 'success',
         data: { users }
+    });
+});
+
+/**
+ * Controller to follow a user by their wallet address.
+ */
+export const followUser = asyncHandler(async (req: Request, res: Response) => {
+    const { walletAddress } = req.params;
+    const sessionUser = req.authUser;
+
+    if (!sessionUser) {
+        throw new AppError('Authentication required to follow users', 401);
+    }
+
+    if (!walletAddress) {
+        throw new AppError('Target wallet address is required', 400);
+    }
+
+    const targetUser = await prisma.user.findUnique({
+        where: { walletAddress }
+    });
+
+    if (!targetUser) {
+        throw new AppError('Target user not found', 404);
+    }
+
+    if (targetUser.id === sessionUser.id) {
+        throw new AppError('You cannot follow yourself', 400);
+    }
+
+    await prisma.follow.upsert({
+        where: {
+            followerId_followingId: {
+                followerId: sessionUser.id,
+                followingId: targetUser.id
+            }
+        },
+        update: {},
+        create: {
+            followerId: sessionUser.id,
+            followingId: targetUser.id
+        }
+    });
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Successfully followed user'
+    });
+});
+
+/**
+ * Controller to unfollow a user by their wallet address.
+ */
+export const unfollowUser = asyncHandler(async (req: Request, res: Response) => {
+    const { walletAddress } = req.params;
+    const sessionUser = req.authUser;
+
+    if (!sessionUser) {
+        throw new AppError('Authentication required to unfollow users', 401);
+    }
+
+    if (!walletAddress) {
+        throw new AppError('Target wallet address is required', 400);
+    }
+
+    const targetUser = await prisma.user.findUnique({
+        where: { walletAddress }
+    });
+
+    if (!targetUser) {
+        throw new AppError('Target user not found', 404);
+    }
+
+    try {
+        await prisma.follow.delete({
+            where: {
+                followerId_followingId: {
+                    followerId: sessionUser.id,
+                    followingId: targetUser.id
+                }
+            }
+        });
+    } catch {
+        // Silently succeed if relationship didn't exist
+    }
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Successfully unfollowed user'
+    });
+});
+
+/**
+ * Controller to fetch all followers of a user.
+ */
+export const getUserFollowers = asyncHandler(async (req: Request, res: Response) => {
+    const { walletAddress } = req.params;
+
+    if (!walletAddress) {
+        throw new AppError('Wallet address is required', 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { walletAddress } });
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    const follows = await prisma.follow.findMany({
+        where: { followingId: user.id },
+        include: { follower: true }
+    });
+
+    const followers = follows.map(f => f.follower);
+
+    res.status(200).json({
+        status: 'success',
+        data: { followers }
+    });
+});
+
+/**
+ * Controller to fetch all users followed by a user.
+ */
+export const getUserFollowing = asyncHandler(async (req: Request, res: Response) => {
+    const { walletAddress } = req.params;
+
+    if (!walletAddress) {
+        throw new AppError('Wallet address is required', 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { walletAddress } });
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    const follows = await prisma.follow.findMany({
+        where: { followerId: user.id },
+        include: { following: true }
+    });
+
+    const following = follows.map(f => f.following);
+
+    res.status(200).json({
+        status: 'success',
+        data: { following }
     });
 });

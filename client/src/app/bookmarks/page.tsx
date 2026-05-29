@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
+import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { PostCard } from '@/components/feed/PostCard';
 import { mockDb } from '@/lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,12 +32,13 @@ export default function BookmarksPage() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [authUser?.walletAddress]);
 
   const loadBookmarks = async () => {
     if (typeof window !== 'undefined') {
       try {
-        const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
+        const walletKey = authUser?.walletAddress?.toLowerCase() || 'anon';
+        const bookmarksRaw = localStorage.getItem(`blobcast_bookmarks_${walletKey}`);
         const bookmarkIds = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
         
         if (bookmarkIds.length === 0) {
@@ -232,6 +234,9 @@ export default function BookmarksPage() {
 
       {/* 3. Right Sidebar Columns */}
       <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <div className="px-4 pt-4 pb-0">
+          <SearchInputWithRecommendations placeholder="Search BlobCast..." />
+        </div>
         <TrendingWidget />
       </aside>
 

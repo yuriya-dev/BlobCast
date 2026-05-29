@@ -20,6 +20,7 @@ import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostComposer } from '@/components/feed/PostComposer';
 import { PostCard } from '@/components/feed/PostCard';
+import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { mockDb, MockPost } from '@/lib/db';
 import { api, ApiPost } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
@@ -41,12 +42,13 @@ export default function SocialFeedPage() {
   // Handle pin: move post to the very top of the feed (only for owner)
   const handlePinPost = async (postId: string, pinned: boolean) => {
     const nextPinnedId = pinned ? postId : null;
+    const walletKey = authUser?.walletAddress?.toLowerCase();
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && walletKey) {
       if (pinned) {
-        localStorage.setItem('blobcast_pinned_post_id', postId);
+        localStorage.setItem(`blobcast_pinned_post_id_${walletKey}`, postId);
       } else {
-        localStorage.removeItem('blobcast_pinned_post_id');
+        localStorage.removeItem(`blobcast_pinned_post_id_${walletKey}`);
       }
     }
 
@@ -73,11 +75,12 @@ export default function SocialFeedPage() {
           const res = await api.fetchUserProfile(authUser.walletAddress);
           if (res && res.data && res.data.user) {
             const user = res.data.user;
+            const walletKey = authUser.walletAddress.toLowerCase();
             if (typeof window !== 'undefined') {
               if (user.pinnedPostId) {
-                localStorage.setItem('blobcast_pinned_post_id', user.pinnedPostId);
+                localStorage.setItem(`blobcast_pinned_post_id_${walletKey}`, user.pinnedPostId);
               } else {
-                localStorage.removeItem('blobcast_pinned_post_id');
+                localStorage.removeItem(`blobcast_pinned_post_id_${walletKey}`);
               }
             }
           }
@@ -415,38 +418,7 @@ export default function SocialFeedPage() {
           </div>
         </header>
 
-        {/* Search Bar Block */}
-        <div className="px-6 pt-5 pb-2">
-          <div className="relative flex items-center bg-walrus-blue/40 border border-sui-cyan/15 rounded-2xl px-4 py-3 group focus-within:border-sui-cyan/40 focus-within:shadow-cyber-glow transition-all">
-            <Search className="h-4 w-4 text-gray-500 group-focus-within:text-sui-cyan transition-colors" />
-            <input 
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search casts, tags, or creators (e.g. #sui, vitalik, yuriya)..."
-              className="bg-transparent border-none outline-none text-xs text-soft-white placeholder-gray-500 ml-3 w-full font-mono"
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="text-[10px] font-mono text-gray-500 hover:text-white transition-colors uppercase border border-sui-cyan/10 rounded px-1.5 py-0.5 bg-deep-space/50"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          {searchQuery && (
-            <div className="mt-2 flex items-center gap-2 px-1">
-              <span className="text-[10px] font-mono text-gray-500">Filtration active:</span>
-              <span className="text-[10px] font-mono text-sui-cyan bg-sui-cyan/10 px-2.5 py-0.5 rounded-full border border-sui-cyan/20">
-                &quot;{searchQuery}&quot;
-              </span>
-              <span className="text-[10px] font-mono text-gray-400">
-                ({filteredPosts.length} matches)
-              </span>
-            </div>
-          )}
-        </div>
+
 
         {/* DEMO OUTAGE BANNER */}
         <AnimatePresence>
@@ -526,6 +498,9 @@ export default function SocialFeedPage() {
 
       {/* 3. Right Sidebar Trending Column */}
       <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <div className="px-4 pt-4 pb-0">
+          <SearchInputWithRecommendations placeholder="Search BlobCast..." />
+        </div>
         <TrendingWidget />
       </aside>
 

@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
+import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { motion } from 'framer-motion';
 
 export default function ExplorePage() {
@@ -109,24 +110,9 @@ export default function ExplorePage() {
         <div className="flex-1 p-6 flex flex-col gap-6">
           
           {/* Cyber Search Bar */}
-          <div className="relative flex items-center bg-walrus-blue/40 border border-sui-cyan/15 rounded-2xl px-4 py-3 group focus-within:border-sui-cyan/40 focus-within:shadow-cyber-glow transition-all">
-            <Search className="h-4 w-4 text-gray-500 group-focus-within:text-sui-cyan transition-colors" />
-            <input 
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search trending tags, creators, schemas, or node IDs..."
-              className="bg-transparent border-none outline-none text-xs text-soft-white placeholder-gray-500 ml-3 w-full font-mono"
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="text-[10px] font-mono text-gray-500 hover:text-white transition-colors uppercase border border-sui-cyan/10 rounded px-1.5 py-0.5 bg-deep-space/50"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+          <SearchInputWithRecommendations 
+            placeholder="Search trending tags, creators, schemas, or node IDs..."
+          />
 
           {/* Navigation Category Tabs */}
           <div className="flex border-b border-sui-cyan/5 font-mono text-xs mt-2">
@@ -222,7 +208,7 @@ export default function ExplorePage() {
                         {creator.followers} Followers
                       </span>
                       <Link 
-                        href="/profile"
+                        href={`/profile?wallet=${creator.walletAddress}`}
                         className="px-4 py-1.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-[10px] uppercase flex items-center gap-1 hover:opacity-90 active:scale-[0.98] transition-all w-full sm:w-auto justify-center"
                       >
                         View Profile <ArrowRight className="h-3 w-3" />

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, 
+  ArrowRight,
   Database, 
   Link as LinkIcon, 
   Edit3, 
@@ -11,14 +12,16 @@ import {
   BadgeCheck, 
   Users, 
   ShieldCheck, 
-  Loader2,
   CheckCircle,
-  Globe
+  Globe,
+  Loader2,
+  UserPlus
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
+import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { PostCard } from '@/components/feed/PostCard';
 import { mockDb, MockUser, MockPost } from '@/lib/db';
 import { walrus } from '@/lib/walrus';
@@ -49,8 +52,9 @@ export default function ProfilePage() {
   const { user: authUser } = useAuth();
   const searchParams = useSearchParams();
   const queryWallet = searchParams?.get('wallet');
+  const queryUsername = searchParams?.get('username');
 
-  const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
   const bannerUrlResolved = useWalrusImage(currentUser?.bannerBlobId);
   const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId) || 
     (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
@@ -62,6 +66,112 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+
+  const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
+  const [isFollowingModalOpen, setIsFollowingModalOpen] = useState(false);
+  const [followersList, setFollowersList] = useState<any[]>([]);
+  const [followingList, setFollowingList] = useState<any[]>([]);
+  const [isLoadingFollowList, setIsLoadingFollowList] = useState(false);
+
+  const loadFollowersList = async () => {
+    if (!currentUser) return;
+    setIsLoadingFollowList(true);
+    setIsFollowersModalOpen(true);
+    try {
+      const res = await api.fetchFollowers(currentUser.walletAddress);
+      if (res && res.data && Array.isArray(res.data.followers)) {
+        setFollowersList(res.data.followers);
+      }
+    } catch (err) {
+      console.warn("⚠️ API offline. Resolving mock follows list.");
+      const followerRelations = mockDb.follows.filter(f => f.followingId === currentUser.id);
+      const mapped = followerRelations.map(f => {
+        const u = mockDb.users.find(userObj => userObj.id === f.followerId);
+        return u || { id: f.followerId, displayName: 'Anonymous Caster', username: 'anonymous', walletAddress: '0x000...', verified: false };
+      });
+      setFollowersList(mapped);
+    } finally {
+      setIsLoadingFollowList(false);
+    }
+  };
+
+  const loadFollowingList = async () => {
+    if (!currentUser) return;
+    setIsLoadingFollowList(true);
+    setIsFollowingModalOpen(true);
+    try {
+      const res = await api.fetchFollowing(currentUser.walletAddress);
+      if (res && res.data && Array.isArray(res.data.following)) {
+        setFollowingList(res.data.following);
+      }
+    } catch (err) {
+      console.warn("⚠️ API offline. Resolving mock following list.");
+      const followingRelations = mockDb.follows.filter(f => f.followerId === currentUser.id);
+      const mapped = followingRelations.map(f => {
+        const u = mockDb.users.find(userObj => userObj.id === f.followingId);
+        return u || { id: f.followingId, displayName: 'Anonymous Caster', username: 'anonymous', walletAddress: '0x000...', verified: false };
+      });
+      setFollowingList(mapped);
+    } finally {
+      setIsLoadingFollowList(false);
+    }
+  };
+
+  const handleFollowToggle = async () => {
+    if (!currentUser || !authUser) return;
+    setIsTogglingFollow(true);
+    try {
+      const targetWallet = currentUser.walletAddress;
+      if (currentUser.isFollowing) {
+        try {
+          await api.unfollowUser(targetWallet);
+        } catch (apiErr) {
+          console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
+          const followerId = authUser.id;
+          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: 'usr-1-vitalik' };
+          mockDb.follows = mockDb.follows.filter(f => !(f.followerId === followerId && f.followingId === followingUser.id));
+        }
+        setCurrentUser((prev: any) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            isFollowing: false,
+            followersCount: Math.max(0, (prev.followersCount || 0) - 1)
+          };
+        });
+      } else {
+        try {
+          await api.followUser(targetWallet);
+        } catch (apiErr) {
+          console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
+          const followerId = authUser.id;
+          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: 'usr-1-vitalik' };
+          const exists = mockDb.follows.some(f => f.followerId === followerId && f.followingId === followingUser.id);
+          if (!exists) {
+            mockDb.follows.push({
+              followerId,
+              followingId: followingUser.id,
+              createdAt: new Date()
+            });
+          }
+        }
+        setCurrentUser((prev: any) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            isFollowing: true,
+            followersCount: (prev.followersCount || 0) + 1
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Failed to toggle follow status:", err);
+      alert("Failed to update follow relationship. Please try again.");
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  };
 
   // Edit form states
   const [displayName, setDisplayName] = useState('');
@@ -120,12 +230,27 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
-  }, [queryWallet, authUser]);
+  }, [queryWallet, queryUsername, authUser]);
 
   const loadProfile = async () => {
+    // Support lookup by wallet address OR username
+    const lookupKey = queryWallet || queryUsername || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+    // Use as walletKey for localStorage scoping (may be username if wallet not known yet)
+    let targetWalletAddress = queryWallet || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+    let walletKey = targetWalletAddress.toLowerCase();
+
+    if (queryUsername && !queryWallet) {
+      // Try to resolve wallet from mockDb first for localStorage key
+      const mockUser = mockDb.users.find(u => (u.username || '').toLowerCase() === queryUsername.toLowerCase());
+      if (mockUser) {
+        targetWalletAddress = mockUser.walletAddress;
+        walletKey = mockUser.walletAddress.toLowerCase();
+      }
+    }
+
     if (typeof window !== 'undefined') {
-      const storedWebsite = localStorage.getItem('blobcast_my_website');
-      const storedGithub = localStorage.getItem('blobcast_my_github');
+      const storedWebsite = localStorage.getItem(`blobcast_my_website_${walletKey}`);
+      const storedGithub = localStorage.getItem(`blobcast_my_github_${walletKey}`);
       if (storedWebsite) setWebsite(storedWebsite);
       if (storedGithub) setGithub(storedGithub);
     }
@@ -133,13 +258,14 @@ export default function ProfilePage() {
     let resolvedUserId = 'usr-2-sademir';
     let databasePinnedPostId: string | null = null;
 
-    const targetWalletAddress = queryWallet || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
-
     try {
-      const response = await api.fetchUserProfile(targetWalletAddress);
+      const response = await api.fetchUserProfile(lookupKey);
       
       if (response && response.data && response.data.user) {
         const user = response.data.user;
+        // Update walletKey to the real wallet address from the DB response
+        walletKey = user.walletAddress.toLowerCase();
+        targetWalletAddress = user.walletAddress;
         resolvedUserId = user.id;
         databasePinnedPostId = user.pinnedPostId || null;
 
@@ -155,7 +281,10 @@ export default function ProfilePage() {
           github: user.github || null,
           pinnedPostId: user.pinnedPostId || null,
           verified: user.verified,
-          createdAt: new Date(user.createdAt)
+          createdAt: new Date(user.createdAt),
+          followersCount: user.followersCount ?? 0,
+          followingCount: user.followingCount ?? 0,
+          isFollowing: user.isFollowing ?? false
         });
         setDisplayName(user.displayName || '');
         setBio(user.bio || '');
@@ -167,9 +296,9 @@ export default function ProfilePage() {
         // Sync database pinnedPostId with localStorage so the PostCard can also hydrate correctly
         if (typeof window !== 'undefined') {
           if (user.pinnedPostId) {
-            localStorage.setItem('blobcast_pinned_post_id', user.pinnedPostId);
+            localStorage.setItem(`blobcast_pinned_post_id_${walletKey}`, user.pinnedPostId);
           } else {
-            localStorage.removeItem('blobcast_pinned_post_id');
+            localStorage.removeItem(`blobcast_pinned_post_id_${walletKey}`);
           }
         }
 
@@ -247,7 +376,7 @@ export default function ProfilePage() {
 
           const sortAndPinPosts = (postsList: any[], pinnedIdFromDb?: string | null) => {
             const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            const pinnedId = pinnedIdFromDb || (typeof window !== 'undefined' ? localStorage.getItem('blobcast_pinned_post_id') : null);
+            const pinnedId = pinnedIdFromDb || (typeof window !== 'undefined' ? localStorage.getItem(`blobcast_pinned_post_id_${walletKey}`) : null);
             if (pinnedId) {
               const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
               if (pinIdx !== -1) {
@@ -264,11 +393,44 @@ export default function ProfilePage() {
     } catch (err) {
       console.warn("⚠️ Failed to load profile from Express backend. Falling back to local offline mock db.", err);
       
-      // Fetch Yuriya profile from mock DB (usr-2-sademir)
-      const user = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWalletAddress.toLowerCase()) || 
-                   mockDb.users.find(u => u.id === 'usr-2-sademir') || null;
+      // Fetch user profile from mock DB or cached session
+      // Support both wallet address and username lookup
+      let user = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWalletAddress.toLowerCase());
+      
+      if (!user && queryUsername) {
+        user = mockDb.users.find(u => (u.username || '').toLowerCase() === queryUsername.toLowerCase());
+      }
+      
+      if (!user && authUser && authUser.walletAddress.toLowerCase() === targetWalletAddress.toLowerCase()) {
+        user = {
+          id: authUser.id,
+          walletAddress: authUser.walletAddress,
+          username: authUser.username || `anon_${authUser.walletAddress.substring(2, 8)}`,
+          displayName: authUser.displayName || 'Anonymous Caster',
+          avatarBlobId: authUser.avatarBlobId,
+          bannerBlobId: authUser.bannerBlobId,
+          bio: authUser.bio || 'Welcome to BlobCast!',
+          verified: authUser.verified,
+          createdAt: new Date(authUser.createdAt)
+        } as any;
+      }
+
+      if (!user) {
+        user = mockDb.users.find(u => u.id === 'usr-2-sademir');
+      }
+
       if (user) {
-        setCurrentUser(user);
+        const followerId = authUser?.id || 'usr-2-sademir';
+        const isFollowing = mockDb.follows.some(f => f.followerId === followerId && f.followingId === user.id);
+        const followersCount = mockDb.follows.filter(f => f.followingId === user.id).length;
+        const followingCount = mockDb.follows.filter(f => f.followerId === user.id).length;
+
+        setCurrentUser({
+          ...user,
+          followersCount,
+          followingCount,
+          isFollowing
+        });
         setDisplayName(user.displayName || '');
         setBio(user.bio || '');
         setAvatarUrl(user.avatarBlobId || '');
@@ -313,7 +475,7 @@ export default function ProfilePage() {
 
       const sortAndPinPosts = (postsList: any[], pinnedIdFromDb?: string | null) => {
         const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const pinnedId = pinnedIdFromDb || (typeof window !== 'undefined' ? localStorage.getItem('blobcast_pinned_post_id') : null);
+        const pinnedId = pinnedIdFromDb || (typeof window !== 'undefined' ? localStorage.getItem(`blobcast_pinned_post_id_${walletKey}`) : null);
         if (pinnedId) {
           const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
           if (pinIdx !== -1) {
@@ -470,8 +632,8 @@ export default function ProfilePage() {
       // Save profile metadata to Supabase backend API
       try {
         await api.upsertUserProfile({
-          walletAddress: currentUser?.walletAddress || authUser?.walletAddress || '',
-          username: currentUser?.username || authUser?.username || '',
+          walletAddress: authUser?.walletAddress || currentUser?.walletAddress || '',
+          username: authUser?.username || currentUser?.username || '',
           displayName: displayName,
           bio: bio,
           avatarBlobId: avatarUrl,
@@ -484,6 +646,15 @@ export default function ProfilePage() {
       }
 
       // Update mock DB
+      const targetWalletForMock = (authUser?.walletAddress || currentUser?.walletAddress || '').toLowerCase();
+      const mockUserIdx = mockDb.users.findIndex(u => u.walletAddress.toLowerCase() === targetWalletForMock);
+      if (mockUserIdx !== -1) {
+        mockDb.users[mockUserIdx].displayName = displayName;
+        mockDb.users[mockUserIdx].bio = bio;
+        mockDb.users[mockUserIdx].avatarBlobId = avatarUrl;
+        mockDb.users[mockUserIdx].bannerBlobId = bannerUrl;
+      }
+
       if (currentUser) {
         currentUser.displayName = displayName;
         currentUser.bio = bio;
@@ -492,12 +663,15 @@ export default function ProfilePage() {
         
         // Persist avatar blob ID to localStorage so PostComposer and other components
         // always display the correct uploaded avatar across page navigation
-        if (avatarUrl && authUser?.walletAddress) {
-          const key = `blobcast_my_avatar_blob_id_${authUser.walletAddress.toLowerCase()}`;
-          localStorage.setItem(key, avatarUrl);
+        if (authUser?.walletAddress) {
+          const walletKey = authUser.walletAddress.toLowerCase();
+          if (avatarUrl) {
+            const key = `blobcast_my_avatar_blob_id_${walletKey}`;
+            localStorage.setItem(key, avatarUrl);
+          }
+          localStorage.setItem(`blobcast_my_website_${walletKey}`, website);
+          localStorage.setItem(`blobcast_my_github_${walletKey}`, github);
         }
-        localStorage.setItem('blobcast_my_website', website);
-        localStorage.setItem('blobcast_my_github', github);
         
         // Push notification of profile update
         mockDb.notifications.unshift({
@@ -530,11 +704,12 @@ export default function ProfilePage() {
     const nextPinnedId = pinned ? postId : null;
 
     // 1. Sync with localStorage as fallback
-    if (typeof window !== 'undefined') {
+    const walletKey = (currentUser?.walletAddress || authUser?.walletAddress || '').toLowerCase();
+    if (typeof window !== 'undefined' && walletKey) {
       if (pinned) {
-        localStorage.setItem('blobcast_pinned_post_id', postId);
+        localStorage.setItem(`blobcast_pinned_post_id_${walletKey}`, postId);
       } else {
-        localStorage.removeItem('blobcast_pinned_post_id');
+        localStorage.removeItem(`blobcast_pinned_post_id_${walletKey}`);
       }
     }
 
@@ -660,14 +835,34 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Edit Profile Button */}
-            {(!queryWallet || queryWallet.toLowerCase() === authUser?.walletAddress?.toLowerCase()) && (
+            {/* Edit Profile or Follow/Unfollow Button */}
+            {(!queryWallet || queryWallet.toLowerCase() === authUser?.walletAddress?.toLowerCase()) ? (
               <button 
                 onClick={() => setIsEditing(true)}
                 className="px-4 py-2 rounded-cyber-md border border-sui-cyan/20 hover:border-sui-cyan/50 bg-walrus-blue/60 backdrop-filter backdrop-blur-md text-xs font-mono font-bold tracking-wide text-soft-white hover:text-sui-cyan transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Edit3 className="h-3.5 w-3.5" />
                 Edit Profile
+              </button>
+            ) : (
+              <button 
+                onClick={handleFollowToggle}
+                disabled={isTogglingFollow}
+                className={`px-5 py-2 rounded-cyber-md text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer ${
+                  currentUser?.isFollowing 
+                    ? 'border border-rose-500/30 hover:border-rose-500/60 bg-rose-500/10 text-rose-300 hover:text-rose-200'
+                    : 'bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space hover:opacity-95 shadow-cyber-glow'
+                }`}
+              >
+                {isTogglingFollow ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : currentUser?.isFollowing ? (
+                  'Unfollow'
+                ) : (
+                  <>
+                    <UserPlus className="h-3.5 w-3.5" /> Follow
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -714,13 +909,21 @@ export default function ProfilePage() {
                 <span className="text-[10px] uppercase font-mono text-gray-500 tracking-wider">Casts</span>
                 <p className="text-lg font-bold font-mono text-white mt-0.5">{profilePosts.length}</p>
               </div>
-              <div className="text-center md:text-left border-r border-sui-cyan/5">
+              <div 
+                onClick={loadFollowersList}
+                className="text-center md:text-left border-r border-sui-cyan/5 cursor-pointer hover:bg-sui-cyan/5 active:scale-[0.98] transition-all rounded-lg p-1"
+                title="View Followers"
+              >
                 <span className="text-[10px] uppercase font-mono text-gray-500 tracking-wider">Followers</span>
-                <p className="text-lg font-bold font-mono text-white mt-0.5">1,248</p>
+                <p className="text-lg font-bold font-mono text-sui-cyan mt-0.5">{currentUser?.followersCount !== undefined ? currentUser.followersCount : '0'}</p>
               </div>
-              <div className="text-center md:text-left border-r border-sui-cyan/5">
+              <div 
+                onClick={loadFollowingList}
+                className="text-center md:text-left border-r border-sui-cyan/5 cursor-pointer hover:bg-sui-cyan/5 active:scale-[0.98] transition-all rounded-lg p-1"
+                title="View Following"
+              >
                 <span className="text-[10px] uppercase font-mono text-gray-500 tracking-wider">Following</span>
-                <p className="text-lg font-bold font-mono text-white mt-0.5">384</p>
+                <p className="text-lg font-bold font-mono text-sui-cyan mt-0.5">{currentUser?.followingCount !== undefined ? currentUser.followingCount : '0'}</p>
               </div>
               <div className="text-center md:text-left">
                 <span className="text-[10px] uppercase font-mono text-amber-400 flex items-center gap-1 justify-center md:justify-start">
@@ -773,6 +976,9 @@ export default function ProfilePage() {
 
       {/* 3. Right Sidebar Trending Column */}
       <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <div className="px-4 pt-4 pb-0">
+          <SearchInputWithRecommendations placeholder="Search BlobCast..." />
+        </div>
         <TrendingWidget />
       </aside>
 
@@ -987,6 +1193,160 @@ export default function ProfilePage() {
 
               </form>
 
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 5. Followers List Modal */}
+      <AnimatePresence>
+        {isFollowersModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-deep-space/70 backdrop-filter backdrop-blur-md"
+            onClick={() => setIsFollowersModalOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="glass-panel rounded-cyber-xl p-6 border border-sui-cyan/20 w-full max-w-md shadow-cyber-glow flex flex-col gap-4 relative z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-sui-cyan/15 pb-3">
+                <h3 className="font-mono font-bold text-sm text-sui-cyan uppercase">
+                  👤 Followers List ({followersList.length})
+                </h3>
+                <button 
+                  onClick={() => setIsFollowersModalOpen(false)}
+                  className="text-gray-500 hover:text-white font-mono text-xs cursor-pointer border border-sui-cyan/10 rounded px-1.5 py-0.5"
+                >
+                  [Close]
+                </button>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto scrollbar-thin flex flex-col gap-2.5">
+                {isLoadingFollowList ? (
+                  <div className="py-10 flex flex-col items-center gap-2">
+                    <Loader2 className="h-6 w-6 text-sui-cyan animate-spin" />
+                    <span className="text-[10px] font-mono text-gray-500">Querying on-chain social graph...</span>
+                  </div>
+                ) : followersList.length === 0 ? (
+                  <div className="text-center py-10 font-mono text-xs text-gray-500">
+                    No followers found.
+                  </div>
+                ) : (
+                  followersList.map((fUser) => (
+                    <Link
+                      key={fUser.id}
+                      href={`/profile?wallet=${fUser.walletAddress}`}
+                      onClick={() => setIsFollowersModalOpen(false)}
+                      className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-full overflow-hidden bg-walrus-blue border border-sui-cyan/10 flex items-center justify-center font-mono font-bold text-xs text-sui-cyan">
+                          <img 
+                            src={fUser.avatarBlobId ? (fUser.avatarBlobId.startsWith('walrus') ? `http://localhost:8080/api/walrus/blob/${fUser.avatarBlobId.replace('walrus://', '')}` : fUser.avatarBlobId) : `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`}
+                            alt={fUser.displayName || ''}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`;
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-sans font-semibold text-white group-hover:text-sui-cyan leading-tight transition-colors">
+                            {fUser.displayName}
+                          </span>
+                          <span className="text-[9px] font-mono text-gray-500 mt-0.5">
+                            @{fUser.username}
+                          </span>
+                        </div>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-gray-600 group-hover:text-sui-cyan transition-colors" />
+                    </Link>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 6. Following List Modal */}
+      <AnimatePresence>
+        {isFollowingModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-deep-space/70 backdrop-filter backdrop-blur-md"
+            onClick={() => setIsFollowingModalOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="glass-panel rounded-cyber-xl p-6 border border-sui-cyan/20 w-full max-w-md shadow-cyber-glow flex flex-col gap-4 relative z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-sui-cyan/15 pb-3">
+                <h3 className="font-mono font-bold text-sm text-sui-cyan uppercase">
+                  👤 Following List ({followingList.length})
+                </h3>
+                <button 
+                  onClick={() => setIsFollowingModalOpen(false)}
+                  className="text-gray-500 hover:text-white font-mono text-xs cursor-pointer border border-sui-cyan/10 rounded px-1.5 py-0.5"
+                >
+                  [Close]
+                </button>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto scrollbar-thin flex flex-col gap-2.5">
+                {isLoadingFollowList ? (
+                  <div className="py-10 flex flex-col items-center gap-2">
+                    <Loader2 className="h-6 w-6 text-sui-cyan animate-spin" />
+                    <span className="text-[10px] font-mono text-gray-500">Querying on-chain social graph...</span>
+                  </div>
+                ) : followingList.length === 0 ? (
+                  <div className="text-center py-10 font-mono text-xs text-gray-500">
+                    Not following any users.
+                  </div>
+                ) : (
+                  followingList.map((fUser) => (
+                    <Link
+                      key={fUser.id}
+                      href={`/profile?wallet=${fUser.walletAddress}`}
+                      onClick={() => setIsFollowingModalOpen(false)}
+                      className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-full overflow-hidden bg-walrus-blue border border-sui-cyan/10 flex items-center justify-center font-mono font-bold text-xs text-sui-cyan">
+                          <img 
+                            src={fUser.avatarBlobId ? (fUser.avatarBlobId.startsWith('walrus') ? `http://localhost:8080/api/walrus/blob/${fUser.avatarBlobId.replace('walrus://', '')}` : fUser.avatarBlobId) : `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`}
+                            alt={fUser.displayName || ''}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`;
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-sans font-semibold text-white group-hover:text-sui-cyan leading-tight transition-colors">
+                            {fUser.displayName}
+                          </span>
+                          <span className="text-[9px] font-mono text-gray-500 mt-0.5">
+                            @{fUser.username}
+                          </span>
+                        </div>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-gray-600 group-hover:text-sui-cyan transition-colors" />
+                    </Link>
+                  ))
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}

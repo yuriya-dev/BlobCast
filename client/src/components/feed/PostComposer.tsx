@@ -10,6 +10,8 @@ import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
+import { AutocompleteDropdown } from '@/components/feed/AutocompleteDropdown';
 
 interface PostComposerProps {
   onPostCreated: (newPost: any) => void;
@@ -23,7 +25,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     type: 'image' | 'video';
   }
 
-  const [text, setText] = useState('');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showMediaInput, setShowMediaInput] = useState(false);
@@ -37,6 +38,61 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const finalAvatar = avatarUrlResolved || (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
 
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // Fetch all users on mount for autocomplete
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.fetchAllUsers();
+        if (active && res?.data && Array.isArray(res.data.users)) {
+          setAllUsers(res.data.users);
+        } else if (active) {
+          setAllUsers(mockDb.users);
+        }
+      } catch {
+        if (active) setAllUsers(mockDb.users);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const {
+    text,
+    setText,
+    textareaRef,
+    containerRef: composerContainerRef,
+    showDropdown,
+    dropdownType,
+    selectedIndex,
+    mentionSuggestions,
+    hashtagSuggestions,
+    tickerSuggestions,
+    handleTextChange,
+    handleKeyDown,
+    insertMention,
+    insertHashtag,
+    insertTicker,
+    closeDropdown,
+  } = useTextAutocomplete({ users: allUsers });
+
+  // Handle outside clicks to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (composerContainerRef.current && !composerContainerRef.current.contains(e.target as Node)) {
+        closeDropdown();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [closeDropdown]);
+
+  const extractMentions = (str: string): string[] => {
+    const matches = str.match(/@\w+/g);
+    return matches ? matches.map(m => m.replace('@', '').toLowerCase()) : [];
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -228,7 +284,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         content: {
           text: text,
           hashtags: extractHashtags(text),
-          mentions: []
+          mentions: extractMentions(text)
         },
         media: mediaItems.map(item => ({
           type: item.type,
@@ -280,7 +336,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   };
 
   return (
-    <div className="glass-panel rounded-cyber-lg shadow-cyber-glow p-5 border border-sui-cyan/10">
+    <div ref={composerContainerRef} className="glass-panel rounded-cyber-lg shadow-cyber-glow p-5 border border-sui-cyan/10">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         
         {/* Input box */}
@@ -302,13 +358,28 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
               </span>
             </div>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <textarea
+              ref={textareaRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="What's happening? Type posts to save permanently on Walrus..."
+              onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
+              placeholder="What's happening? Type @mention, #hashtag, or $ticker..."
               className="w-full bg-transparent border-none outline-none resize-none min-h-22.5 text-soft-white placeholder-gray-500 text-sm font-sans"
               maxLength={280}
+            />
+
+            {/* Unified Autocomplete Dropdown */}
+            <AutocompleteDropdown
+              show={showDropdown}
+              dropdownType={dropdownType}
+              selectedIndex={selectedIndex}
+              mentionSuggestions={mentionSuggestions}
+              hashtagSuggestions={hashtagSuggestions}
+              tickerSuggestions={tickerSuggestions}
+              onSelectMention={insertMention}
+              onSelectHashtag={insertHashtag}
+              onSelectTicker={insertTicker}
             />
           </div>
         </div>

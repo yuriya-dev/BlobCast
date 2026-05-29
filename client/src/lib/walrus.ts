@@ -221,31 +221,44 @@ export const walrus = {
    * Retrieve raw blob contents from aggregator
    */
   async getBlob<T = any>(blobId: string): Promise<T | string> {
+    const cleanId = blobId.replace('walrus://', '');
+
+    // Detect known mock/placeholder blob IDs that don't exist on Walrus
+    // These are seeded in the local mock database for development testing purposes
+    const isMockPlaceholder = cleanId.startsWith('blob-') ||
+      cleanId.startsWith('post-') ||
+      cleanId === '' ||
+      cleanId.length < 10;
+
+    if (isMockPlaceholder) {
+      throw new Error(`Mock placeholder blob ID "${cleanId}" cannot be fetched from Walrus aggregator.`);
+    }
+
     // Check if it's simulated
-    if (blobId.startsWith('walrus_sim_')) {
+    if (cleanId.startsWith('walrus_sim_')) {
       let content: string | null = null;
       if (typeof window !== 'undefined') {
-        content = localStorage.getItem(blobId) || simulatedMemoryStore.get(blobId) || null;
+        content = localStorage.getItem(cleanId) || simulatedMemoryStore.get(cleanId) || null;
         
         // If not found in localStorage or RAM (e.g. after page refresh), read asynchronously from IndexedDB!
         if (!content && idbSimulator) {
-          content = await idbSimulator.get(blobId);
+          content = await idbSimulator.get(cleanId);
           if (content) {
             // Re-cache back into RAM for instant subsequent access
-            simulatedMemoryStore.set(blobId, content);
+            simulatedMemoryStore.set(cleanId, content);
           }
         }
       } else {
         try {
           const { cache } = eval('require')('./redis');
-          content = await cache.get(blobId);
+          content = await cache.get(cleanId);
         } catch (err) {
           console.warn("⚠️ Failed to load server-side Redis cache helper:", err);
         }
       }
 
       if (!content) {
-        throw new Error(`Simulated Walrus Blob ID ${blobId} not found or expired.`);
+        throw new Error(`Simulated Walrus Blob ID ${cleanId} not found or expired.`);
       }
 
       try {
@@ -257,7 +270,7 @@ export const walrus = {
 
     try {
       // Attempt real download from Walrus Testnet aggregator
-      const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`, {
+      const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${cleanId}`, {
         signal: AbortSignal.timeout(5000), // 5 seconds timeout
       });
 
@@ -270,26 +283,27 @@ export const walrus = {
         }
       }
     } catch (e) {
-      console.warn(`⚠️ Failed to read from Walrus Testnet aggregator for ${blobId}. Fetching from simulated registry.`, e);
+      console.warn(`⚠️ Failed to read from Walrus Testnet aggregator for ${cleanId}. Fetching from simulated registry.`, e);
     }
 
-    throw new Error(`Walrus Blob ID ${blobId} could not be retrieved from aggregator.`);
+    throw new Error(`Walrus Blob ID ${cleanId} could not be retrieved from aggregator.`);
   },
 
   /**
    * Extract info & details for visualizer mapping
    */
   getBlobDetails(blobId: string, size: number = 2048): WalrusBlobInfo {
-    const isSimulated = blobId.startsWith('walrus_sim_');
+    const cleanId = blobId.replace('walrus://', '');
+    const isSimulated = cleanId.startsWith('walrus_sim_');
     return {
-      blobId,
+      blobId: cleanId,
       size,
       registeredEpoch: isSimulated ? 22 : 12,
       startEpoch: isSimulated ? 22 : 12,
       endEpoch: isSimulated ? 27 : 17,
       shardsCount: 120,
       isSimulated,
-      shardsMap: generateMockStorageNodes(blobId, size),
+      shardsMap: generateMockStorageNodes(cleanId, size),
     };
   },
 
@@ -331,6 +345,16 @@ export const walrus = {
       if (cleanId.includes('mysten-avatar')) return 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=150&q=80';
       if (cleanId.includes('mysten-banner')) return 'https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&w=1200&q=80';
       return `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanId}`;
+    }
+
+    // Detect known mock/placeholder blob IDs and skip aggregator fetch
+    const isMockPlaceholder = cleanId.startsWith('blob-') ||
+      cleanId.startsWith('post-') ||
+      cleanId === '' ||
+      cleanId.length < 10;
+
+    if (isMockPlaceholder) {
+      return '';
     }
     
     // Return standard Walrus testnet aggregator endpoint for raw binary media

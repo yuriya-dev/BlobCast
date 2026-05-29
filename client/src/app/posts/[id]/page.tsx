@@ -9,6 +9,8 @@ import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostCard } from '@/components/feed/PostCard';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
+import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
+import { AutocompleteDropdown } from '@/components/feed/AutocompleteDropdown';
 
 function CommentComposerAvatar({ authUser }: { authUser: any }) {
   const imageUrl = useWalrusImage(authUser?.avatarBlobId);
@@ -44,7 +46,61 @@ export default function PostDetailPage({ params }: PageProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [mediaItems, setMediaItems] = useState<{ blobId: string; type: 'image'|'video' }[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const composerContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const {
+    text: commentText,
+    setText: setCommentText,
+    textareaRef: commentTextareaRef,
+    showDropdown,
+    dropdownType,
+    selectedIndex,
+    mentionSuggestions,
+    hashtagSuggestions,
+    tickerSuggestions,
+    handleTextChange: handleCommentTextChange,
+    handleKeyDown: handleCommentKeyDown,
+    insertMention,
+    insertHashtag,
+    insertTicker,
+    closeDropdown,
+  } = useTextAutocomplete({ users: allUsers });
+
+  // Keep newCommentText in sync with the autocomplete hook text
+  useEffect(() => { setNewCommentText(commentText); }, [commentText]);
+  // If parent resets to empty, reset hook too
+  useEffect(() => { if (newCommentText === '' && commentText !== '') setCommentText(''); }, [newCommentText]);
+
+  // Fetch users for @mention autocomplete
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.fetchAllUsers();
+        if (active && res?.data && Array.isArray(res.data.users)) {
+          setAllUsers(res.data.users);
+        } else if (active) {
+          setAllUsers(mockDb.users);
+        }
+      } catch {
+        if (active) setAllUsers(mockDb.users);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  // Close autocomplete on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (composerContainerRef.current && !composerContainerRef.current.contains(e.target as Node)) {
+        closeDropdown();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [closeDropdown]);
 
   const loadPostAndComments = async () => {
     setIsLoading(true);
@@ -216,7 +272,7 @@ export default function PostDetailPage({ params }: PageProps) {
 
   const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
     e.preventDefault();
-    if (!newCommentText.trim() && commentMediaItems.length === 0) return;
+    if (!commentText.trim() && commentMediaItems.length === 0) return;
     if (!authUser) {
       alert('Please login first.');
       return;
@@ -231,7 +287,7 @@ export default function PostDetailPage({ params }: PageProps) {
         author_wallet: authUser.walletAddress,
         created_at: Math.floor(Date.now() / 1000),
         content: {
-          text: newCommentText
+          text: commentText
         }
       };
 
@@ -252,7 +308,7 @@ export default function PostDetailPage({ params }: PageProps) {
         const response = await api.createComment(id, authorId, walrusUploadInfo.blobId);
         if (response && response.data && response.data.comment) {
           await loadPostAndComments();
-          setNewCommentText('');
+          setCommentText('');
           return;
         }
       } catch (apiErr) {
@@ -269,7 +325,7 @@ export default function PostDetailPage({ params }: PageProps) {
       });
 
       await loadPostAndComments();
-      setNewCommentText('');
+      setCommentText('');
 
     } catch (err) {
       console.error("❌ Failed to upload comment to Walrus:", err);
@@ -280,7 +336,7 @@ export default function PostDetailPage({ params }: PageProps) {
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
-    setNewCommentText((prev) => `${prev}${emojiData.emoji}`);
+    setCommentText((prev) => `${prev}${emojiData.emoji}`);
     setShowEmojiPicker(false);
   };
 
@@ -446,20 +502,35 @@ export default function PostDetailPage({ params }: PageProps) {
 
                     {/* Composer Input Area */}
                     <form onSubmit={handleCommentSubmit} className="flex-1 flex flex-col gap-3">
-                      <div className="relative">
+                      <div ref={composerContainerRef} className="relative">
                         <textarea
                           id="detail-comment-textarea"
-                          value={newCommentText}
-                          onChange={(e) => setNewCommentText(e.target.value)}
-                          placeholder="Publish dynamic commentary permanently to Walrus shards..."
+                          ref={commentTextareaRef}
+                          value={commentText}
+                          onChange={handleCommentTextChange}
+                          onKeyDown={handleCommentKeyDown}
+                          placeholder="Reply... (@mention, #hashtag, $ticker)"
                           className="w-full bg-deep-space/40 border border-sui-cyan/15 rounded-cyber-md px-4 py-3 text-xs text-soft-white outline-none focus:border-sui-cyan/50 focus:ring-1 focus:ring-sui-cyan/30 font-sans resize-none min-h-[70px] placeholder-gray-500 transition-all duration-300"
                           maxLength={280}
                           required
                           disabled={isPostingComment}
                         />
                         <div className="absolute bottom-2.5 right-3 text-[9px] font-mono text-gray-500">
-                          {newCommentText.length}/280
+                          {commentText.length}/280
                         </div>
+
+                        {/* Autocomplete Dropdown */}
+                        <AutocompleteDropdown
+                          show={showDropdown}
+                          dropdownType={dropdownType}
+                          selectedIndex={selectedIndex}
+                          mentionSuggestions={mentionSuggestions}
+                          hashtagSuggestions={hashtagSuggestions}
+                          tickerSuggestions={tickerSuggestions}
+                          onSelectMention={insertMention}
+                          onSelectHashtag={insertHashtag}
+                          onSelectTicker={insertTicker}
+                        />
                       </div>
 
                       <div className="flex items-center justify-between">
@@ -512,7 +583,7 @@ export default function PostDetailPage({ params }: PageProps) {
 
                             <button
                               type="submit"
-                              disabled={isPostingComment || (!newCommentText.trim() && mediaItems.length === 0)}
+                              disabled={isPostingComment || (!commentText.trim() && mediaItems.length === 0)}
                               className="px-5 py-2.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-extrabold font-mono text-xs hover:opacity-95 hover:shadow-cyber-glow active:scale-[0.97] transition-all disabled:opacity-30 flex items-center gap-2 cursor-pointer"
                             >
                               {isPostingComment ? (
