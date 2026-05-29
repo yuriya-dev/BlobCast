@@ -14,7 +14,9 @@ import {
   ArrowRight,
   TrendingUp,
   Cpu,
-  BadgeCheck
+  BadgeCheck,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Sidebar } from '@/components/feed/Sidebar';
@@ -39,6 +41,10 @@ export default function MyWalletPage() {
   const [walrusShardsCount, setWalrusShardsCount] = useState(120);
   const [showNotification, setShowNotification] = useState(false);
   const [simulatedTipAmount, setSimulatedTipAmount] = useState(0);
+
+  // Pagination state for Audit Logs
+  const ITEMS_PER_PAGE = 5;
+  const [auditPage, setAuditPage] = useState(1);
 
   // Hardcoded gorgeous analytics data for Sui tipping growth
   const tippingAnalytics = [
@@ -123,6 +129,7 @@ export default function MyWalletPage() {
     };
 
     setTipTransactions(prev => [newTx, ...prev]);
+    setAuditPage(1); // Reset to first page so new entry is immediately visible
 
     setTimeout(() => {
       setShowNotification(false);
@@ -326,8 +333,11 @@ export default function MyWalletPage() {
               <span className="text-[8px] font-mono text-gray-500 uppercase tracking-wider">Relational Postgres Indexes</span>
             </div>
 
+            {/* Paginated list */}
             <div className="flex flex-col gap-3">
-              {tipTransactions.map((tx) => (
+              {tipTransactions
+                .slice((auditPage - 1) * ITEMS_PER_PAGE, auditPage * ITEMS_PER_PAGE)
+                .map((tx) => (
                 <div 
                   key={tx.id} 
                   className="bg-walrus-blue/20 border border-sui-cyan/5 hover:border-sui-cyan/15 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
@@ -342,7 +352,7 @@ export default function MyWalletPage() {
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          'YU'
+                          (tx.sender || 'AN').substring(0, 2).toUpperCase()
                         )}
                       </div>
                     </div>
@@ -374,6 +384,54 @@ export default function MyWalletPage() {
                 </div>
               ))}
             </div>
+
+            {/* Pagination Controls */}
+            {tipTransactions.length > ITEMS_PER_PAGE && (
+              <div className="flex items-center justify-between pt-3 border-t border-sui-cyan/5 mt-1">
+                {/* Left: entry count info */}
+                <span className="text-[9px] font-mono text-gray-500">
+                  Showing {Math.min((auditPage - 1) * ITEMS_PER_PAGE + 1, tipTransactions.length)}–{Math.min(auditPage * ITEMS_PER_PAGE, tipTransactions.length)} of {tipTransactions.length} logs
+                </span>
+
+                {/* Right: page controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                    disabled={auditPage === 1}
+                    className="h-7 w-7 flex items-center justify-center rounded-cyber-sm border border-sui-cyan/20 hover:border-sui-cyan/50 hover:bg-sui-cyan/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sui-cyan cursor-pointer"
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+
+                  {/* Page number pills */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.ceil(tipTransactions.length / ITEMS_PER_PAGE) }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setAuditPage(i + 1)}
+                        className={`h-6 min-w-[1.5rem] px-1.5 rounded-cyber-sm text-[9px] font-mono font-bold transition-all cursor-pointer ${
+                          auditPage === i + 1
+                            ? 'bg-sui-cyan/20 border border-sui-cyan/50 text-sui-cyan'
+                            : 'border border-sui-cyan/10 text-gray-500 hover:border-sui-cyan/30 hover:text-gray-300'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setAuditPage(p => Math.min(Math.ceil(tipTransactions.length / ITEMS_PER_PAGE), p + 1))}
+                    disabled={auditPage >= Math.ceil(tipTransactions.length / ITEMS_PER_PAGE)}
+                    className="h-7 w-7 flex items-center justify-center rounded-cyber-sm border border-sui-cyan/20 hover:border-sui-cyan/50 hover:bg-sui-cyan/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sui-cyan cursor-pointer"
+                    title="Next page"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="bg-sui-cyan/5 border border-sui-cyan/15 rounded-cyber-sm p-4 text-[9px] font-mono text-gray-400 flex items-start gap-2 leading-relaxed">
               <ShieldCheck className="h-4 w-4 text-sui-cyan flex-shrink-0" />

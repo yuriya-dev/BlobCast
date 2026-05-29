@@ -36,6 +36,23 @@ export default function SocialFeedPage() {
     { id: 'n3', type: 'system', text: 'Yuriya updated profile metadata JSON schema in Walrus publisher node', time: '1h ago' }
   ]);
 
+  // Handle pin: move post to the very top of the feed (only for owner)
+  const handlePinPost = (postId: string, pinned: boolean) => {
+    setPosts(prev => {
+      const idx = prev.findIndex(p => (p.repostOf ? p.repostOf.id : p.id) === postId || p.id === postId);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      const [pinnedPost] = updated.splice(idx, 1);
+      if (pinned) {
+        return [pinnedPost, ...updated];
+      } else {
+        // Move back to original position (after current pinned items at top) — just append after index 0
+        updated.splice(Math.min(1, updated.length), 0, pinnedPost);
+        return updated;
+      }
+    });
+  };
+
   // Load feed on mount
   useEffect(() => {
     loadFeed();
@@ -428,7 +445,7 @@ export default function SocialFeedPage() {
                         <Database className="h-2 w-2" /> Resolved via Walrus Aggregator
                       </div>
                     )}
-                    <PostCard post={post} />
+                    <PostCard post={post} onPin={handlePinPost} />
                   </div>
                 ))
               )}

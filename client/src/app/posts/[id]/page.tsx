@@ -238,21 +238,17 @@ export default function PostDetailPage({ params }: PageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-deep-space text-soft-white font-sans selection:bg-sui-cyan/30 selection:text-white relative overflow-hidden">
+    <div className="flex-1 flex w-full max-w-7xl mx-auto min-h-screen">
       
-      {/* Visual cyber background gradients */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-sui-cyan/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-tatum-purple/5 rounded-full blur-3xl" />
-
-      <div className="max-w-7xl mx-auto h-screen flex">
-        
-        {/* Left Sidebar navigation column */}
-        <div className="w-64 hidden md:block flex-shrink-0 h-full">
+      {/* Left Sidebar navigation column */}
+      <aside className="w-64 flex-shrink-0 hidden md:block">
+        <div className="sticky top-0 h-screen">
           <Sidebar />
         </div>
+      </aside>
 
-        {/* Center detailed feed timeline layout */}
-        <main className="flex-1 flex flex-col border-r border-sui-cyan/5 overflow-y-auto h-full scrollbar-cyber">
+      {/* Center detailed feed timeline layout */}
+      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col min-h-screen">
           
           {/* Header navigation bar */}
           <header className="sticky top-0 z-30 glass-panel border-b border-sui-cyan/5 px-6 py-4 flex items-center gap-4">
@@ -426,12 +422,12 @@ export default function PostDetailPage({ params }: PageProps) {
 
         </main>
 
-        {/* Right Trending column */}
-        <div className="w-80 hidden lg:block flex-shrink-0 h-full p-6 border-l border-sui-cyan/5">
+      {/* Right Trending column */}
+      <aside className="w-80 flex-shrink-0 hidden lg:block">
+        <div className="sticky top-0 h-screen">
           <TrendingWidget />
         </div>
-
-      </div>
+      </aside>
 
     </div>
   );

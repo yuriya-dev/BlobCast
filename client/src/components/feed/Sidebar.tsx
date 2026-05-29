@@ -12,7 +12,8 @@ import {
   Zap, 
   MessageSquareShare,
   Bookmark,
-  Wallet
+  Wallet,
+  MessageCircle
 } from 'lucide-react';
 import { ConnectButton } from '@mysten/dapp-kit';
 import { PostComposer } from './PostComposer';
@@ -25,6 +26,7 @@ export function Sidebar() {
   const navigation = [
     { name: 'Home', href: '/feed', icon: Home },
     { name: 'Explore', href: '/explore', icon: Compass },
+    { name: 'Messages', href: '/messages', icon: MessageCircle, badge: 3 },
     { name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
     { name: 'Profile', href: '/profile', icon: User },
     { name: 'Wallet', href: '/wallet', icon: Wallet },
@@ -66,7 +68,12 @@ export function Sidebar() {
               }`}
             >
               <item.icon className="h-4 w-4" />
-              <span>{item.name}</span>
+              <span className="flex-1">{item.name}</span>
+              {'badge' in item && item.badge && item.badge > 0 && (
+                <span className="h-4.5 min-w-[1.125rem] px-1 bg-sui-cyan rounded-full text-[9px] font-bold text-deep-space flex items-center justify-center">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           );
         })}
