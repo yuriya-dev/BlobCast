@@ -99,9 +99,10 @@ function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawQuery = searchParams.get('q') || '';
+  const tabParam = searchParams.get('tab') as 'top' | 'latest' | 'people' | 'media' | null;
   
   const [searchQuery, setSearchQuery] = useState(rawQuery);
-  const [activeTab, setActiveTab] = useState<'top' | 'latest' | 'people' | 'media'>('top');
+  const [activeTab, setActiveTab] = useState<'top' | 'latest' | 'people' | 'media'>(tabParam || 'top');
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y' | 'ALL'>('1D');
   const [posts, setPosts] = useState<any[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
@@ -110,9 +111,10 @@ function SearchContent() {
   // Re-sync query state when query parameters change
   useEffect(() => {
     setSearchQuery(rawQuery);
+    if (tabParam) setActiveTab(tabParam);
     setIsLoading(true);
     loadSearchPosts();
-  }, [rawQuery]);
+  }, [rawQuery, tabParam]);
 
   const loadSearchPosts = async () => {
     setIsLoading(true);

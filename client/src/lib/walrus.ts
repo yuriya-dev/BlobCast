@@ -222,6 +222,18 @@ export const walrus = {
    */
   async getBlob<T = any>(blobId: string): Promise<T | string> {
     const cleanId = blobId.replace('walrus://', '');
+
+    // Detect known mock/placeholder blob IDs that don't exist on Walrus
+    // These are seeded in the local mock database for development testing purposes
+    const isMockPlaceholder = cleanId.startsWith('blob-') ||
+      cleanId.startsWith('post-') ||
+      cleanId === '' ||
+      cleanId.length < 10;
+
+    if (isMockPlaceholder) {
+      throw new Error(`Mock placeholder blob ID "${cleanId}" cannot be fetched from Walrus aggregator.`);
+    }
+
     // Check if it's simulated
     if (cleanId.startsWith('walrus_sim_')) {
       let content: string | null = null;
@@ -333,6 +345,16 @@ export const walrus = {
       if (cleanId.includes('mysten-avatar')) return 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=150&q=80';
       if (cleanId.includes('mysten-banner')) return 'https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&w=1200&q=80';
       return `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanId}`;
+    }
+
+    // Detect known mock/placeholder blob IDs and skip aggregator fetch
+    const isMockPlaceholder = cleanId.startsWith('blob-') ||
+      cleanId.startsWith('post-') ||
+      cleanId === '' ||
+      cleanId.length < 10;
+
+    if (isMockPlaceholder) {
+      return '';
     }
     
     // Return standard Walrus testnet aggregator endpoint for raw binary media

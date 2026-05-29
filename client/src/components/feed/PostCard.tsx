@@ -157,6 +157,21 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
           </span>
         );
       }
+      if (part.startsWith('@') && part.length > 1) {
+        const username = part.substring(1).replace(/[^a-zA-Z0-9_]/g, '');
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/search?q=${encodeURIComponent('@' + username)}&tab=people`);
+            }}
+            className="text-tatum-purple hover:underline cursor-pointer font-mono font-semibold no-navigate"
+          >
+            {part}
+          </span>
+        );
+      }
       if (part.startsWith('$') && part.length > 1) {
         const ticker = part.substring(1).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         return (

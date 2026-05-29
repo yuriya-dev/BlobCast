@@ -361,7 +361,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         content: {
           text: text,
           hashtags: extractHashtags(text),
-          mentions: []
+          mentions: extractMentions(text)
         },
         media: mediaItems.map(item => ({
           type: item.type,
@@ -413,7 +413,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   };
 
   return (
-    <div className="glass-panel rounded-cyber-lg shadow-cyber-glow p-5 border border-sui-cyan/10">
+    <div ref={composerContainerRef} className="glass-panel rounded-cyber-lg shadow-cyber-glow p-5 border border-sui-cyan/10">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         
         {/* Input box */}
@@ -435,14 +435,63 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
               </span>
             </div>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <textarea
+              ref={textareaRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="What's happening? Type posts to save permanently on Walrus..."
+              onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
+              placeholder="What's happening? Type posts to save permanently on Walrus... (type @ to mention)"
               className="w-full bg-transparent border-none outline-none resize-none min-h-22.5 text-soft-white placeholder-gray-500 text-sm font-sans"
               maxLength={280}
             />
+
+            {/* Mentions Autocomplete Dropdown */}
+            {showMentionsDropdown && filteredUsers.length > 0 && (
+              <div className="absolute left-0 top-full z-50 mt-1 w-72 bg-deep-space/98 border border-sui-cyan/25 rounded-cyber-lg shadow-cyber-glow overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-3 py-2 border-b border-sui-cyan/10">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">
+                    👤 Mention someone
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  {filteredUsers.map((u, idx) => (
+                    <button
+                      key={u.id || u.walletAddress}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        insertMention(u);
+                      }}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                        idx === selectedIndex
+                          ? 'bg-sui-cyan/15 border-l-2 border-sui-cyan'
+                          : 'hover:bg-walrus-blue/50 border-l-2 border-transparent'
+                      }`}
+                    >
+                      <div className="h-7 w-7 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-[10px] font-bold text-sui-cyan border border-sui-cyan/15 flex-shrink-0">
+                        <img
+                          src={`https://api.dicebear.com/7.x/bottts/svg?seed=${u.username || 'YU'}`}
+                          alt={u.displayName || ''}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-sans font-semibold text-white leading-none truncate">
+                          {u.displayName}
+                        </span>
+                        <span className="text-[9px] font-mono text-sui-cyan/70 mt-0.5 truncate">
+                          @{u.username}
+                        </span>
+                      </div>
+                      {idx === selectedIndex && (
+                        <span className="ml-auto text-[8px] font-mono text-gray-500 flex-shrink-0">↵</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
