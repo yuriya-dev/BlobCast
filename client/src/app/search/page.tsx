@@ -263,14 +263,15 @@ function SearchContent() {
   // Filter posts based on active tab
   const getFilteredPosts = () => {
     const q = rawQuery.toLowerCase();
+    const cleanQ = q.startsWith('@') ? q.slice(1) : q;
     
     // Filter matching criteria
     const matches = posts.filter(p => {
       if (!q) return true;
       return (
         p.text.toLowerCase().includes(q) ||
-        p.author.displayName.toLowerCase().includes(q) ||
-        p.author.username.toLowerCase().includes(q) ||
+        p.author.displayName.toLowerCase().includes(cleanQ) ||
+        p.author.username.toLowerCase().includes(cleanQ) ||
         p.hashtags.some((tag: string) => tag.toLowerCase().includes(q))
       );
     });
@@ -291,12 +292,13 @@ function SearchContent() {
   // Filter people/creators for the "People" tab
   const getFilteredPeople = () => {
     const q = rawQuery.toLowerCase();
+    const cleanQ = q.startsWith('@') ? q.slice(1) : q;
     const sourceList = registeredUsers.length > 0 ? registeredUsers : mockDb.users;
     if (!q) return sourceList;
     return sourceList.filter(u => 
-      (u.displayName || '').toLowerCase().includes(q) || 
-      (u.username || '').toLowerCase().includes(q) ||
-      (u.bio || '').toLowerCase().includes(q)
+      (u.displayName || '').toLowerCase().includes(cleanQ) || 
+      (u.username || '').toLowerCase().includes(cleanQ) ||
+      (u.bio || '').toLowerCase().includes(cleanQ)
     );
   };
 

@@ -202,9 +202,11 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const isPinned = React.useMemo(() => {
     if (typeof window === 'undefined') return false;
-    const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
+    const authorWallet = post.author.walletAddress?.toLowerCase();
+    if (!authorWallet) return false;
+    const pinnedId = localStorage.getItem(`blobcast_pinned_post_id_${authorWallet}`);
     return pinnedId === targetPostId;
-  }, [targetPostId]);
+  }, [targetPostId, post.author.walletAddress]);
   const [isDeleted, setIsDeleted] = useState(false);
 
 
@@ -257,14 +259,15 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
+        const walletKey = authUser?.walletAddress?.toLowerCase() || 'anon';
+        const bookmarksRaw = localStorage.getItem(`blobcast_bookmarks_${walletKey}`);
         const bookmarks = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
         setIsBookmarked(bookmarks.includes(targetPostId));
       } catch (e) {
         console.warn("Failed to load bookmarks from localStorage:", e);
       }
     }
-  }, [targetPostId]);
+  }, [targetPostId, authUser?.walletAddress]);
 
 
 
@@ -330,7 +333,9 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     e.stopPropagation();
     if (typeof window !== 'undefined') {
       try {
-        const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
+        const walletKey = authUser?.walletAddress?.toLowerCase() || 'anon';
+        const bookmarksKey = `blobcast_bookmarks_${walletKey}`;
+        const bookmarksRaw = localStorage.getItem(bookmarksKey);
         let bookmarks = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
         if (isBookmarked) {
           bookmarks = bookmarks.filter((id: string) => id !== targetPostId);
@@ -345,7 +350,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             colors: ['#6FE7FF', '#ffffff'],
           });
         }
-        localStorage.setItem('blobcast_bookmarks', JSON.stringify(bookmarks));
+        localStorage.setItem(bookmarksKey, JSON.stringify(bookmarks));
         setIsBookmarked(!isBookmarked);
       } catch (err) {
         console.error("Failed to update bookmarks:", err);

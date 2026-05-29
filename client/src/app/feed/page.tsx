@@ -42,12 +42,13 @@ export default function SocialFeedPage() {
   // Handle pin: move post to the very top of the feed (only for owner)
   const handlePinPost = async (postId: string, pinned: boolean) => {
     const nextPinnedId = pinned ? postId : null;
+    const walletKey = authUser?.walletAddress?.toLowerCase();
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && walletKey) {
       if (pinned) {
-        localStorage.setItem('blobcast_pinned_post_id', postId);
+        localStorage.setItem(`blobcast_pinned_post_id_${walletKey}`, postId);
       } else {
-        localStorage.removeItem('blobcast_pinned_post_id');
+        localStorage.removeItem(`blobcast_pinned_post_id_${walletKey}`);
       }
     }
 
@@ -74,11 +75,12 @@ export default function SocialFeedPage() {
           const res = await api.fetchUserProfile(authUser.walletAddress);
           if (res && res.data && res.data.user) {
             const user = res.data.user;
+            const walletKey = authUser.walletAddress.toLowerCase();
             if (typeof window !== 'undefined') {
               if (user.pinnedPostId) {
-                localStorage.setItem('blobcast_pinned_post_id', user.pinnedPostId);
+                localStorage.setItem(`blobcast_pinned_post_id_${walletKey}`, user.pinnedPostId);
               } else {
-                localStorage.removeItem('blobcast_pinned_post_id');
+                localStorage.removeItem(`blobcast_pinned_post_id_${walletKey}`);
               }
             }
           }

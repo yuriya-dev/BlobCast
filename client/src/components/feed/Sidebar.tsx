@@ -20,9 +20,11 @@ import { PostComposer } from './PostComposer';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { mockDb, type MockPost } from '@/lib/db';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [isComposeOpen, setIsComposeOpen] = useState(false);
 
   const handleComposerPost = async (newPost: any) => {
@@ -96,7 +98,19 @@ export function Sidebar() {
       {/* Navigation items */}
       <nav className="flex-1 flex flex-col gap-1">
         {navigation.map((item) => {
-          const isActive = pathname === item.href;
+          const getWalletQuery = () => {
+            if (typeof window === 'undefined') return null;
+            return new URLSearchParams(window.location.search).get('wallet');
+          };
+          const walletQuery = getWalletQuery();
+          let isActive = false;
+          if (item.href === '/profile') {
+            const isProfilePath = pathname === '/profile';
+            const isOwnProfile = !walletQuery || (user?.walletAddress ? walletQuery.toLowerCase() === user.walletAddress.toLowerCase() : false);
+            isActive = !!(isProfilePath && isOwnProfile);
+          } else {
+            isActive = pathname === item.href;
+          }
           return (
             <Link
               key={item.name}

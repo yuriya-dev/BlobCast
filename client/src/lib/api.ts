@@ -105,6 +105,26 @@ export const api = {
   },
 
   /**
+   * Fetch list of followers for a user.
+   */
+  async fetchFollowers(walletAddress: string): Promise<{ status: string; data: { followers: ApiUser[] } }> {
+    const res = await fetch(`${BASE_URL}/users/${walletAddress}/followers`, requestInit({
+      cache: 'no-store'
+    }));
+    return parseJsonResponse(res, 'Failed to fetch followers');
+  },
+
+  /**
+   * Fetch list of users a user is following.
+   */
+  async fetchFollowing(walletAddress: string): Promise<{ status: string; data: { following: ApiUser[] } }> {
+    const res = await fetch(`${BASE_URL}/users/${walletAddress}/following`, requestInit({
+      cache: 'no-store'
+    }));
+    return parseJsonResponse(res, 'Failed to fetch following');
+  },
+
+  /**
    * Fetch all registered users in the database.
    */
   async fetchAllUsers(): Promise<{ status: string; data: { users: ApiUser[] } }> {

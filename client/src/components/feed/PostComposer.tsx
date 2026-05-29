@@ -37,6 +37,139 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const finalAvatar = avatarUrlResolved || (currentUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}` : '');
 
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showMentionsDropdown, setShowMentionsDropdown] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Fetch all users list on mount for autocomplete search
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.fetchAllUsers();
+        if (active && res && res.data && Array.isArray(res.data.users)) {
+          setAllUsers(res.data.users);
+        } else if (active) {
+          setAllUsers(mockDb.users);
+        }
+      } catch (err) {
+        if (active) {
+          setAllUsers(mockDb.users);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Handle outside clicks to close the mentions autocomplete dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (composerContainerRef.current && !composerContainerRef.current.contains(e.target as Node)) {
+        setShowMentionsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const filteredUsers = React.useMemo(() => {
+    if (!mentionQuery) {
+      return allUsers.slice(0, 5);
+    }
+    const q = mentionQuery.toLowerCase();
+    return allUsers.filter(u => 
+      (u.username || '').toLowerCase().includes(q) ||
+      (u.displayName || '').toLowerCase().includes(q)
+    ).slice(0, 5);
+  }, [mentionQuery, allUsers]);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setText(val);
+
+    const selectionStart = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, selectionStart);
+    
+    // Find the last word starting with @ before the cursor
+    const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIdx !== -1) {
+      const charBeforeAt = lastAtIdx > 0 ? textBeforeCursor[lastAtIdx - 1] : ' ';
+      const isWordStart = /\s/.test(charBeforeAt); // Is it preceded by whitespace?
+      
+      if (isWordStart) {
+        const textAfterAt = textBeforeCursor.substring(lastAtIdx + 1);
+        // Ensure there is no whitespace between the @ and the cursor
+        if (!/\s/.test(textAfterAt)) {
+          setMentionQuery(textAfterAt);
+          setShowMentionsDropdown(true);
+          setSelectedIndex(0);
+          return;
+        }
+      }
+    }
+    
+    setShowMentionsDropdown(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showMentionsDropdown && filteredUsers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev + 1) % filteredUsers.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        insertMention(filteredUsers[selectedIndex]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionsDropdown(false);
+      }
+    }
+  };
+
+  const insertMention = (user: any) => {
+    if (!textareaRef.current) return;
+    
+    const val = text;
+    const selectionStart = textareaRef.current.selectionStart;
+    const textBeforeCursor = val.substring(0, selectionStart);
+    const textAfterCursor = val.substring(selectionStart);
+    
+    const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+    if (lastAtIdx !== -1) {
+      const beforeAt = val.substring(0, lastAtIdx);
+      const mentionText = `@${user.username} `;
+      const newText = beforeAt + mentionText + textAfterCursor;
+      
+      setText(newText);
+      setShowMentionsDropdown(false);
+      
+      // Reset cursor position to right after the inserted mention
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const cursorPosition = lastAtIdx + mentionText.length;
+          textareaRef.current.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      }, 0);
+    }
+  };
+
+  const extractMentions = (str: string): string[] => {
+    const matches = str.match(/@\w+/g);
+    return matches ? matches.map(mention => mention.replace('@', '').toLowerCase()) : [];
+  };
 
   useEffect(() => {
     const fetchUser = async () => {

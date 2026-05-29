@@ -243,3 +243,59 @@ export const unfollowUser = asyncHandler(async (req: Request, res: Response) => 
         message: 'Successfully unfollowed user'
     });
 });
+
+/**
+ * Controller to fetch all followers of a user.
+ */
+export const getUserFollowers = asyncHandler(async (req: Request, res: Response) => {
+    const { walletAddress } = req.params;
+
+    if (!walletAddress) {
+        throw new AppError('Wallet address is required', 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { walletAddress } });
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    const follows = await prisma.follow.findMany({
+        where: { followingId: user.id },
+        include: { follower: true }
+    });
+
+    const followers = follows.map(f => f.follower);
+
+    res.status(200).json({
+        status: 'success',
+        data: { followers }
+    });
+});
+
+/**
+ * Controller to fetch all users followed by a user.
+ */
+export const getUserFollowing = asyncHandler(async (req: Request, res: Response) => {
+    const { walletAddress } = req.params;
+
+    if (!walletAddress) {
+        throw new AppError('Wallet address is required', 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { walletAddress } });
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    const follows = await prisma.follow.findMany({
+        where: { followerId: user.id },
+        include: { following: true }
+    });
+
+    const following = follows.map(f => f.following);
+
+    res.status(200).json({
+        status: 'success',
+        data: { following }
+    });
+});
