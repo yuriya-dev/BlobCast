@@ -174,7 +174,7 @@ export default function ExplorePage() {
                         {tag.trend}
                       </span>
                       <Link 
-                        href={`/feed?search=${tag.name}`}
+                        href={`/search?q=${encodeURIComponent('#' + tag.name)}`}
                         className="text-[10px] font-mono text-gray-500 hover:text-sui-cyan flex items-center gap-1 mt-2 justify-end transition-colors"
                       >
                         Explore Feed <ArrowRight className="h-3 w-3" />

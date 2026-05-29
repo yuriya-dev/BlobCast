@@ -101,7 +101,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             key={idx}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/feed?search=${encodeURIComponent('#' + tag)}`);
+              router.push(`/search?q=${encodeURIComponent('#' + tag)}`);
             }}
             className="text-sui-cyan hover:underline cursor-pointer font-mono font-semibold no-navigate"
           >
@@ -116,7 +116,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             key={idx}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/feed?search=${encodeURIComponent('$' + ticker)}`);
+              router.push(`/search?q=${encodeURIComponent('$' + ticker)}`);
             }}
             className="text-amber-400 hover:underline cursor-pointer font-mono font-semibold text-neon-glow no-navigate"
           >
@@ -568,7 +568,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
                   key={tag}
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push(`/feed?search=${encodeURIComponent('#' + tag)}`);
+                    router.push(`/search?q=${encodeURIComponent('#' + tag)}`);
                   }}
                   className="text-xs font-mono text-sui-cyan hover:underline cursor-pointer bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10 no-navigate"
                 >
