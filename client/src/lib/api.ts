@@ -10,6 +10,7 @@ export interface ApiUser {
   bio: string | null;
   website?: string | null;
   github?: string | null;
+  pinnedPostId?: string | null;
   verified: boolean;
   createdAt: string;
 }
@@ -98,6 +99,7 @@ export const api = {
     bio?: string | null;
     website?: string | null;
     github?: string | null;
+    pinnedPostId?: string | null;
   }): Promise<{ status: string; data: { user: ApiUser } }> {
     const res = await fetch(`${BASE_URL}/users`, {
       method: 'POST',

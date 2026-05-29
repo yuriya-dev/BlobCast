@@ -19,6 +19,7 @@ model User {
   bio             String?
   website         String?
   github          String?
+  pinnedPostId    String?        @map("pinned_post_id")
   verified        Boolean        @default(false)
   createdAt       DateTime       @default(now()) @map("created_at")
 

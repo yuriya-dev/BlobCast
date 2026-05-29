@@ -37,7 +37,9 @@ export default function SocialFeedPage() {
   ]);
 
   // Handle pin: move post to the very top of the feed (only for owner)
-  const handlePinPost = (postId: string, pinned: boolean) => {
+  const handlePinPost = async (postId: string, pinned: boolean) => {
+    const nextPinnedId = pinned ? postId : null;
+
     if (typeof window !== 'undefined') {
       if (pinned) {
         localStorage.setItem('blobcast_pinned_post_id', postId);
@@ -45,6 +47,16 @@ export default function SocialFeedPage() {
         localStorage.removeItem('blobcast_pinned_post_id');
       }
     }
+
+    try {
+      await api.upsertUserProfile({
+        walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        pinnedPostId: nextPinnedId
+      });
+    } catch (err) {
+      console.warn("⚠️ Failed to synchronize pinned post in PostgreSQL:", err);
+    }
+
     setPosts(prev => {
       const idx = prev.findIndex(p => (p.repostOf ? p.repostOf.id : p.id) === postId || p.id === postId);
       if (idx === -1) return prev;
@@ -63,6 +75,29 @@ export default function SocialFeedPage() {
   // Load feed on mount
   useEffect(() => {
     loadFeed();
+
+    // Sync latest pinned post from DB to localStorage on feed mount
+    if (!isBackendDown) {
+      (async () => {
+        try {
+          const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+          const res = await api.fetchUserProfile(walletAddress);
+          if (res && res.data && res.data.user) {
+            const user = res.data.user;
+            if (typeof window !== 'undefined') {
+              if (user.pinnedPostId) {
+                localStorage.setItem('blobcast_pinned_post_id', user.pinnedPostId);
+              } else {
+                localStorage.removeItem('blobcast_pinned_post_id');
+              }
+            }
+          }
+        } catch (err) {
+          // Silently ignore if backend offline
+        }
+      })();
+    }
+
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const search = params.get('search');

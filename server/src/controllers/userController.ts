@@ -21,11 +21,13 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
                 orderBy: { createdAt: 'desc' },
                 include: {
                     author: true,
+                    media: true,
                     likes: true,
                     reposts: true,
                     repostOf: {
                         include: {
                             author: true,
+                            media: true,
                             likes: true,
                             reposts: true
                         }
@@ -49,7 +51,7 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
  * Controller to register or update user identity schemas directly in Supabase.
  */
 export const upsertUserProfile = asyncHandler(async (req: Request, res: Response) => {
-    const { walletAddress, username, displayName, avatarBlobId, bannerBlobId, bio, website, github } = req.body;
+    const { walletAddress, username, displayName, avatarBlobId, bannerBlobId, bio, website, github, pinnedPostId } = req.body;
 
     if (!walletAddress) {
         throw new AppError('Wallet address is required to register identity', 400);
@@ -64,7 +66,8 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
             bannerBlobId: bannerBlobId || undefined,
             bio: bio || undefined,
             website: website || undefined,
-            github: github || undefined
+            github: github || undefined,
+            pinnedPostId: pinnedPostId === undefined ? undefined : pinnedPostId
         },
         create: {
             walletAddress,
@@ -75,6 +78,7 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
             bio: bio || null,
             website: website || null,
             github: github || null,
+            pinnedPostId: pinnedPostId || null,
             verified: false
         }
     });

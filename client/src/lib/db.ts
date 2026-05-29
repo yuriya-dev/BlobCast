@@ -11,6 +11,7 @@ export interface MockUser {
   bio: string | null;
   website?: string | null;
   github?: string | null;
+  pinnedPostId?: string | null;
   verified: boolean;
   createdAt: Date;
 }

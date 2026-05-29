@@ -123,135 +123,8 @@ export default function ProfilePage() {
       if (storedGithub) setGithub(storedGithub);
     }
 
-    const sortAndPinPosts = (postsList: any[]) => {
-      const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      if (typeof window !== 'undefined') {
-        const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
-        if (pinnedId) {
-          const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
-          if (pinIdx !== -1) {
-            const [pinnedPost] = sorted.splice(pinIdx, 1);
-            sorted.unshift(pinnedPost);
-          }
-        }
-      }
-      return sorted;
-    };
-
-    // Load liked posts in parallel
-    (async () => {
-      let likedMapped: any[] = [];
-      try {
-        const allPostsRes = await api.fetchPosts(1, 100);
-        if (allPostsRes && allPostsRes.data && allPostsRes.data.posts) {
-          const apiAllPosts = allPostsRes.data.posts;
-          likedMapped = await Promise.all(apiAllPosts.map(async (p: any) => {
-            let text = 'Immutable social post stored on Walrus.';
-            let hashtags: string[] = [];
-            let mediaUrl: string | undefined = undefined;
-
-            if (p.walrusBlobId) {
-              try {
-                const walrusContent = await walrus.getBlob(p.walrusBlobId);
-                if (walrusContent && typeof walrusContent === 'object') {
-                  const contentObj = walrusContent as any;
-                  if (contentObj.content?.text) text = contentObj.content.text;
-                  if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
-                  if (contentObj.media && contentObj.media.length > 0) mediaUrl = contentObj.media[0].blob_id;
-                }
-              } catch (err) {
-                if (p.id === 'post-1') {
-                  text = 'Welcome to BlobCast! Own your social posts forever.';
-                  hashtags = ['blobcast', 'sui'];
-                } else if (p.id === 'post-2') {
-                  text = 'Excited about decentralized social layers!';
-                  hashtags = ['decentralized', 'walrus'];
-                  mediaUrl = 'walrus://blob-post-2-image';
-                }
-              }
-            }
-
-            return {
-              id: p.id,
-              author: {
-                displayName: p.author?.displayName || 'Anonymous Caster',
-                username: p.author?.username || 'anonymous',
-                walletAddress: p.author?.walletAddress || '0x0000...',
-                avatarBlobId: p.author?.avatarBlobId || '',
-                verified: p.author?.verified || false
-              },
-              walrusBlobId: p.walrusBlobId,
-              blobHash: p.blobHash,
-              contentType: p.contentType,
-              text,
-              hashtags,
-              mediaUrl,
-              likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
-              commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
-              repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
-              suiObjectId: p.suiObjectId || undefined,
-              createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
-              likes: p.repostOf ? (p.repostOf.likes || []) : (p.likes || []),
-              reposts: p.repostOf ? (p.repostOf.reposts || []) : (p.reposts || []),
-              repostOf: p.repostOf ? {
-                id: p.repostOf.id,
-                author: {
-                  displayName: p.repostOf.author?.displayName || 'Anonymous Caster',
-                  username: p.repostOf.author?.username || 'anonymous',
-                  walletAddress: p.repostOf.author?.walletAddress || '0x0000...',
-                  avatarBlobId: p.repostOf.author?.avatarBlobId || '',
-                  verified: p.repostOf.author?.verified || false
-                }
-              } : null
-            };
-          }));
-        }
-      } catch (err) {
-        // failed
-      }
-
-      if (likedMapped.length === 0) {
-        likedMapped = mockDb.posts.map(p => {
-          const authorUser = mockDb.users.find(u => u.id === p.authorId) || mockDb.users[0];
-          let text = 'Immutable social post stored on Walrus.';
-          if (p.walrusContent) {
-            text = (p.walrusContent as any).content?.text || text;
-          }
-          return {
-            id: p.id,
-            author: {
-              displayName: authorUser.displayName || 'Anonymous Caster',
-              username: authorUser.username || 'anonymous',
-              walletAddress: authorUser.walletAddress,
-              avatarBlobId: authorUser.avatarBlobId || '',
-              verified: authorUser.verified,
-            },
-            walrusBlobId: p.walrusBlobId,
-            blobHash: p.blobHash,
-            contentType: p.contentType,
-            text,
-            hashtags: (p.walrusContent as any)?.content?.hashtags || ['blobcast', 'sui'],
-            mediaUrl: p.walrusContent?.media?.[0]?.blob_id || undefined,
-            likeCount: p.likeCount,
-            commentCount: p.commentCount,
-            repostCount: p.repostCount,
-            suiObjectId: p.suiObjectId || undefined,
-            createdAt: p.createdAt,
-            likes: mockDb.likes.filter(l => l.postId === p.id) || [],
-            reposts: []
-          };
-        });
-      }
-
-      const yuriyaLikes = likedMapped.filter(p => 
-        p.likes.some((l: any) => 
-          l.userId === 'usr-2-sademir' || 
-          l.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase() ||
-          l.user?.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase()
-        )
-      );
-      setLikedPosts(yuriyaLikes);
-    })();
+    let resolvedUserId = 'usr-2-sademir';
+    let databasePinnedPostId: string | null = null;
 
     try {
       const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
@@ -259,6 +132,9 @@ export default function ProfilePage() {
       
       if (response && response.data && response.data.user) {
         const user = response.data.user;
+        resolvedUserId = user.id;
+        databasePinnedPostId = user.pinnedPostId || null;
+
         setCurrentUser({
           id: user.id,
           walletAddress: user.walletAddress,
@@ -269,6 +145,7 @@ export default function ProfilePage() {
           bio: user.bio,
           website: user.website || null,
           github: user.github || null,
+          pinnedPostId: user.pinnedPostId || null,
           verified: user.verified,
           createdAt: new Date(user.createdAt)
         });
@@ -278,6 +155,15 @@ export default function ProfilePage() {
         setBannerUrl(user.bannerBlobId || '');
         if (user.website) setWebsite(user.website);
         if (user.github) setGithub(user.github);
+
+        // Sync database pinnedPostId with localStorage so the PostCard can also hydrate correctly
+        if (typeof window !== 'undefined') {
+          if (user.pinnedPostId) {
+            localStorage.setItem('blobcast_pinned_post_id', user.pinnedPostId);
+          } else {
+            localStorage.removeItem('blobcast_pinned_post_id');
+          }
+        }
 
         if (user.posts) {
           const mapped = await Promise.all(user.posts.map(async (p: any) => {
@@ -329,7 +215,8 @@ export default function ProfilePage() {
               contentType: p.contentType,
               text,
               hashtags,
-              mediaUrl,
+              // Robust media resolution matching feed page layout
+              mediaUrl: mediaUrl || (p.media && p.media.length > 0 ? p.media[0].walrusBlobId : undefined) || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
               likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
               commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
               repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
@@ -350,57 +237,199 @@ export default function ProfilePage() {
             };
           }));
 
-          setProfilePosts(sortAndPinPosts(mapped));
-          return;
+          const sortAndPinPosts = (postsList: any[], pinnedIdFromDb?: string | null) => {
+            const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            const pinnedId = pinnedIdFromDb || (typeof window !== 'undefined' ? localStorage.getItem('blobcast_pinned_post_id') : null);
+            if (pinnedId) {
+              const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
+              if (pinIdx !== -1) {
+                const [pinnedPost] = sorted.splice(pinIdx, 1);
+                sorted.unshift(pinnedPost);
+              }
+            }
+            return sorted;
+          };
+
+          setProfilePosts(sortAndPinPosts(mapped, user.pinnedPostId));
         }
       }
     } catch (err) {
-      console.warn("⚠️ Failed to load profile from Express backend. Falling back to local offline mock db.");
-    }
-
-    // Fetch Yuriya profile from mock DB (usr-2-sademir)
-    const user = mockDb.users.find(u => u.id === 'usr-2-sademir') || null;
-    if (user) {
-      setCurrentUser(user);
-      setDisplayName(user.displayName || '');
-      setBio(user.bio || '');
-      setAvatarUrl(user.avatarBlobId || '');
-      setBannerUrl(user.bannerBlobId || '');
-    }
-
-    // Filter Yuriya posts
-    const userPosts = mockDb.posts.filter(p => p.authorId === 'usr-2-sademir');
-    
-    // Map to feed structure
-    const mapped = userPosts.map(p => {
-      let text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
-      if (p.walrusContent) {
-        text = (p.walrusContent as any).content?.text || text;
+      console.warn("⚠️ Failed to load profile from Express backend. Falling back to local offline mock db.", err);
+      
+      // Fetch Yuriya profile from mock DB (usr-2-sademir)
+      const user = mockDb.users.find(u => u.id === 'usr-2-sademir') || null;
+      if (user) {
+        setCurrentUser(user);
+        setDisplayName(user.displayName || '');
+        setBio(user.bio || '');
+        setAvatarUrl(user.avatarBlobId || '');
+        setBannerUrl(user.bannerBlobId || '');
+        if (user.website) setWebsite(user.website);
+        if (user.github) setGithub(user.github);
       }
-      return {
-        id: p.id,
-        author: {
-          displayName: user?.displayName || 'Yuriya',
-          username: user?.username || 'yuriya',
-          walletAddress: user?.walletAddress || '0x91abc6f3e1b...',
-          avatarBlobId: user?.avatarBlobId || '',
-          verified: user?.verified || false,
-        },
-        walrusBlobId: p.walrusBlobId,
-        blobHash: p.blobHash,
-        contentType: p.contentType,
-        text,
-        hashtags: (p.walrusContent as any)?.content?.hashtags || ['blobcast', 'sui'],
-        mediaUrl: p.walrusContent?.media?.[0]?.blob_id || undefined,
-        likeCount: p.likeCount,
-        commentCount: p.commentCount,
-        repostCount: p.repostCount,
-        suiObjectId: p.suiObjectId || undefined,
-        createdAt: p.createdAt,
-      };
-    });
 
-    setProfilePosts(sortAndPinPosts(mapped));
+      // Filter Yuriya posts
+      const userPosts = mockDb.posts.filter(p => p.authorId === 'usr-2-sademir');
+      
+      // Map to feed structure
+      const mapped = userPosts.map(p => {
+        let text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
+        if (p.walrusContent) {
+          text = (p.walrusContent as any).content?.text || text;
+        }
+        return {
+          id: p.id,
+          author: {
+            displayName: user?.displayName || 'Yuriya',
+            username: user?.username || 'yuriya',
+            walletAddress: user?.walletAddress || '0x91abc6f3e1b...',
+            avatarBlobId: user?.avatarBlobId || '',
+            verified: user?.verified || false,
+          },
+          walrusBlobId: p.walrusBlobId,
+          blobHash: p.blobHash,
+          contentType: p.contentType,
+          text,
+          hashtags: (p.walrusContent as any)?.content?.hashtags || ['blobcast', 'sui'],
+          mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+          likeCount: p.likeCount,
+          commentCount: p.commentCount,
+          repostCount: p.repostCount,
+          suiObjectId: p.suiObjectId || undefined,
+          createdAt: p.createdAt,
+        };
+      });
+
+      const sortAndPinPosts = (postsList: any[], pinnedIdFromDb?: string | null) => {
+        const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const pinnedId = pinnedIdFromDb || (typeof window !== 'undefined' ? localStorage.getItem('blobcast_pinned_post_id') : null);
+        if (pinnedId) {
+          const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
+          if (pinIdx !== -1) {
+            const [pinnedPost] = sorted.splice(pinIdx, 1);
+            sorted.unshift(pinnedPost);
+          }
+        }
+        return sorted;
+      };
+
+      setProfilePosts(sortAndPinPosts(mapped, user?.pinnedPostId));
+    }
+
+    // Now load liked posts, using the resolved user ID (or falling back to usr-2-sademir)
+    let likedMapped: any[] = [];
+    try {
+      const allPostsRes = await api.fetchPosts(1, 100);
+      if (allPostsRes && allPostsRes.data && allPostsRes.data.posts) {
+        const apiAllPosts = allPostsRes.data.posts;
+        likedMapped = await Promise.all(apiAllPosts.map(async (p: any) => {
+          let text = 'Immutable social post stored on Walrus.';
+          let hashtags: string[] = [];
+          let mediaUrl: string | undefined = undefined;
+
+          if (p.walrusBlobId) {
+            try {
+              const walrusContent = await walrus.getBlob(p.walrusBlobId);
+              if (walrusContent && typeof walrusContent === 'object') {
+                const contentObj = walrusContent as any;
+                if (contentObj.content?.text) text = contentObj.content.text;
+                if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
+                if (contentObj.media && contentObj.media.length > 0) mediaUrl = contentObj.media[0].blob_id;
+              }
+            } catch (err) {
+              if (p.id === 'post-1') {
+                text = 'Welcome to BlobCast! Own your social posts forever.';
+                hashtags = ['blobcast', 'sui'];
+              } else if (p.id === 'post-2') {
+                text = 'Excited about decentralized social layers!';
+                hashtags = ['decentralized', 'walrus'];
+                mediaUrl = 'walrus://blob-post-2-image';
+              }
+            }
+          }
+
+          return {
+            id: p.id,
+            author: {
+              displayName: p.author?.displayName || 'Anonymous Caster',
+              username: p.author?.username || 'anonymous',
+              walletAddress: p.author?.walletAddress || '0x0000...',
+              avatarBlobId: p.author?.avatarBlobId || '',
+              verified: p.author?.verified || false
+            },
+            walrusBlobId: p.walrusBlobId,
+            blobHash: p.blobHash,
+            contentType: p.contentType,
+            text,
+            hashtags,
+            mediaUrl: mediaUrl || (p.media && p.media.length > 0 ? p.media[0].walrusBlobId : undefined) || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+            likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
+            commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
+            repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
+            suiObjectId: p.suiObjectId || undefined,
+            createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+            likes: p.repostOf ? (p.repostOf.likes || []) : (p.likes || []),
+            reposts: p.repostOf ? (p.repostOf.reposts || []) : (p.reposts || []),
+            repostOf: p.repostOf ? {
+              id: p.repostOf.id,
+              author: {
+                displayName: p.repostOf.author?.displayName || 'Anonymous Caster',
+                username: p.repostOf.author?.username || 'anonymous',
+                walletAddress: p.repostOf.author?.walletAddress || '0x0000...',
+                avatarBlobId: p.repostOf.author?.avatarBlobId || '',
+                verified: p.repostOf.author?.verified || false
+              }
+            } : null
+          };
+        }));
+      }
+    } catch (err) {
+      // failed
+    }
+
+    if (likedMapped.length === 0) {
+      likedMapped = mockDb.posts.map(p => {
+        const authorUser = mockDb.users.find(u => u.id === p.authorId) || mockDb.users[0];
+        let text = 'Immutable social post stored on Walrus.';
+        if (p.walrusContent) {
+          text = (p.walrusContent as any).content?.text || text;
+        }
+        return {
+          id: p.id,
+          author: {
+            displayName: authorUser.displayName || 'Anonymous Caster',
+            username: authorUser.username || 'anonymous',
+            walletAddress: authorUser.walletAddress,
+            avatarBlobId: authorUser.avatarBlobId || '',
+            verified: authorUser.verified,
+          },
+          walrusBlobId: p.walrusBlobId,
+          blobHash: p.blobHash,
+          contentType: p.contentType,
+          text,
+          hashtags: (p.walrusContent as any)?.content?.hashtags || ['blobcast', 'sui'],
+          mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+          likeCount: p.likeCount,
+          commentCount: p.commentCount,
+          repostCount: p.repostCount,
+          suiObjectId: p.suiObjectId || undefined,
+          createdAt: p.createdAt,
+          likes: mockDb.likes.filter(l => l.postId === p.id) || [],
+          reposts: []
+        };
+      });
+    }
+
+    // Filter likes by the resolved database userId OR walletAddress matching
+    const yuriyaLikes = likedMapped.filter(p => 
+      p.likes.some((l: any) => 
+        l.userId === resolvedUserId || 
+        l.userId === 'usr-2-sademir' ||
+        l.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase() ||
+        l.user?.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase()
+      )
+    );
+    setLikedPosts(yuriyaLikes);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -481,6 +510,46 @@ export default function ProfilePage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handlePinPost = async (postId: string, pinned: boolean) => {
+    const nextPinnedId = pinned ? postId : null;
+
+    // 1. Sync with localStorage as fallback
+    if (typeof window !== 'undefined') {
+      if (pinned) {
+        localStorage.setItem('blobcast_pinned_post_id', postId);
+      } else {
+        localStorage.removeItem('blobcast_pinned_post_id');
+      }
+    }
+
+    // 2. Sync with database via API
+    try {
+      await api.upsertUserProfile({
+        walletAddress: currentUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+        pinnedPostId: nextPinnedId
+      });
+    } catch (err) {
+      console.warn("⚠️ Failed to synchronize pinned post in Supabase/PostgreSQL:", err);
+    }
+
+    // 3. Immediately reorder posts state to push the pinned post to top
+    setProfilePosts(prev => {
+      const idx = prev.findIndex(p => p.id === postId || (p.repostOf && p.repostOf.id === postId));
+      if (idx === -1) return prev;
+      
+      const updated = [...prev];
+      const [pinnedPost] = updated.splice(idx, 1);
+      
+      // Re-sort the rest of the posts by date to be clean
+      const reSorted = [...updated].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      if (pinned) {
+        return [pinnedPost, ...reSorted];
+      } else {
+        return [pinnedPost, ...reSorted].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+    });
   };
 
   const getFilteredPosts = () => {
@@ -679,7 +748,7 @@ export default function ProfilePage() {
             </div>
           ) : (
             displayedPosts.map(post => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} onPin={handlePinPost} />
             ))
           )}
         </div>
