@@ -772,12 +772,14 @@ export default function ProfilePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-deep-space/70 backdrop-filter backdrop-blur-md"
+            onClick={() => setIsEditing(false)}
           >
             <motion.div 
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
               className="glass-panel rounded-cyber-xl p-6 border border-sui-cyan/20 w-full max-w-lg shadow-cyber-glow flex flex-col gap-4 relative z-10"
+              onClick={(e) => e.stopPropagation()}
             >
               
               <div className="flex items-center justify-between border-b border-sui-cyan/10 pb-3">

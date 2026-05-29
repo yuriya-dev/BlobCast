@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Heart, 
   MessageSquare, 
@@ -31,48 +31,61 @@ import { api } from '@/lib/api';
 import { PostCardVerificationPanel } from './PostCardVerificationPanel';
 import { PostCardCommentComposer } from './PostCardCommentComposer';
 
+type PostAuthor = {
+  displayName: string;
+  username: string;
+  walletAddress: string;
+  avatarBlobId: string;
+  verified: boolean;
+};
+
+type PostMediaItem = {
+  type: string;
+  blob_id: string;
+  mime?: string;
+  width?: number;
+  height?: number;
+};
+
+type WalrusContent = {
+  content?: {
+    text?: string;
+    hashtags?: string[];
+  };
+  media?: PostMediaItem[];
+};
+
+type PostActivityItem = {
+  type: 'like' | 'repost' | 'quote';
+  user: (typeof mockDb.users)[number] | undefined;
+  createdAt: Date;
+};
+
 interface PostCardProps {
   post: {
     id: string;
-    author: {
-      displayName: string;
-      username: string;
-      walletAddress: string;
-      avatarBlobId: string;
-      verified: boolean;
-    };
+    author: PostAuthor;
     walrusBlobId: string;
     blobHash: string;
     contentType: number;
     text: string;
     hashtags: string[];
     mediaUrl?: string;
-    media?: Array<{
-      type: string;
-      blob_id: string;
-      mime?: string;
-      width?: number;
-      height?: number;
-    }>;
+    media?: PostMediaItem[];
+    walrusContent?: WalrusContent;
     likeCount: number;
     commentCount: number;
     repostCount: number;
     suiObjectId?: string;
     createdAt: Date;
-    likes?: any[];
-    reposts?: any[];
+    likes?: Array<{ userId: string }>;
+    reposts?: Array<{ authorId: string }>;
     repostOf?: {
       id: string;
-      author: {
-        displayName: string;
-        username: string;
-        walletAddress: string;
-        avatarBlobId: string;
-        verified: boolean;
-      };
+      author: PostAuthor;
     } | null;
   };
-  onCommentCreated?: (comment: any) => void;
+  onCommentCreated?: (comment: unknown) => void;
   hideCommentComposer?: boolean;
   onPin?: (postId: string, pinned: boolean) => void;
 }
@@ -80,7 +93,6 @@ interface PostCardProps {
 export function PostCard({ post, onCommentCreated, hideCommentComposer = false, onPin }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const CURRENT_USER_ID = 'usr-2-sademir';
   const CURRENT_USER_WALLET = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
 
   // Resolve original author and post ID if this post is a repost
@@ -91,7 +103,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     if (post.media && post.media.length > 0) {
       return post.media;
     }
-    const walrusMedia = (post as any).walrusContent?.media;
+    const walrusMedia = post.walrusContent?.media;
     if (walrusMedia && Array.isArray(walrusMedia) && walrusMedia.length > 0) {
       return walrusMedia;
     }
@@ -109,10 +121,12 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const isOwnPost = authorResolved.walletAddress.toLowerCase() === CURRENT_USER_WALLET.toLowerCase();
   
   const avatarUrlResolved = useWalrusImage(authorResolved.avatarBlobId);
-  const mediaUrlResolved = useWalrusImage(post.mediaUrl);
 
   const [likes, setLikes] = useState(post.likeCount);
-  const [hasLiked, setHasLiked] = useState(false);
+  const [hasLiked, setHasLiked] = useState(() => {
+    const currentUserId = 'usr-2-sademir';
+    return post.likes?.some((like) => like.userId === currentUserId) ?? false;
+  });
   const [tipsCount, setTipsCount] = useState(0);
 
   const [showComments, setShowComments] = useState(false);
@@ -171,20 +185,38 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const [showMetadataPop, setShowMetadataPop] = useState(false);
 
   const [reposts, setReposts] = useState(post.repostCount);
-  const [hasReposted, setHasReposted] = useState(false);
+  const [hasReposted, setHasReposted] = useState(() => {
+    const currentUserId = 'usr-2-sademir';
+    return post.reposts?.some((repost) => repost.authorId === currentUserId) ?? false;
+  });
   const [isBookmarked, setIsBookmarked] = useState(false);
 
   // 3-dot menu state
   const [showMenu, setShowMenu] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const isPinned = React.useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
+    return pinnedId === targetPostId;
+  }, [targetPostId]);
   const [isDeleted, setIsDeleted] = useState(false);
 
+
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
-      setIsPinned(pinnedId === targetPostId);
-    }
-  }, [targetPostId]);
+    if (!showMenu) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showMenu]);
 
   // View count — derived from likes + reposts + a base offset
   const [viewCount] = useState(() => {
@@ -196,34 +228,22 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const [showActivityModal, setShowActivityModal] = useState(false);
 
   // Collect activity data directly from mockDb (quotes = reposts with text, reposts, likes)
-  const getPostActivity = () => {
-    const postLikes = mockDb.likes.filter(l => l.postId === targetPostId).map(l => {
-      const user = mockDb.users.find(u => u.id === l.userId);
-      return { type: 'like' as const, user, createdAt: l.createdAt };
-    });
-    const postReposts = mockDb.posts.filter(p => p.repostOfId === targetPostId).map(p => {
-      const user = mockDb.users.find(u => u.id === p.authorId);
-      return { type: 'repost' as const, user, createdAt: p.createdAt };
-    });
-    // Quotes = reposts that have walrus content (simulated: all reposts are treated as potential quotes)
-    const postQuotes = postReposts.slice(0, 1).map(r => ({ ...r, type: 'quote' as const }));
+  const getPostActivity = (): { likes: PostActivityItem[]; reposts: PostActivityItem[]; quotes: PostActivityItem[] } => {
+    const postLikes = mockDb.likes
+      .filter((like) => like.postId === targetPostId)
+      .map((like) => {
+        const user = mockDb.users.find((u) => u.id === like.userId);
+        return { type: 'like' as const, user, createdAt: like.createdAt };
+      });
+    const postReposts = mockDb.posts
+      .filter((postItem) => postItem.repostOfId === targetPostId)
+      .map((postItem) => {
+        const user = mockDb.users.find((u) => u.id === postItem.authorId);
+        return { type: 'repost' as const, user, createdAt: postItem.createdAt };
+      });
+    const postQuotes = postReposts.slice(0, 1).map((repost) => ({ ...repost, type: 'quote' as const }));
     return { likes: postLikes, reposts: postReposts, quotes: postQuotes };
   };
-
-  // Hydrate likes & reposts persistence states on mount
-  useEffect(() => {
-    const currentUserId = 'usr-2-sademir'; // Default Caster
-    
-    if (post.likes && Array.isArray(post.likes)) {
-      const likedByMe = post.likes.some((l: any) => l.userId === currentUserId);
-      setHasLiked(likedByMe);
-    }
-    
-    if (post.reposts && Array.isArray(post.reposts)) {
-      const repostedByMe = post.reposts.some((r: any) => r.authorId === currentUserId);
-      setHasReposted(repostedByMe);
-    }
-  }, [post.likes, post.reposts]);
   
 
 
@@ -319,13 +339,13 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     }
   };
 
-  const handleCommentSubmit = async (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
     e.preventDefault();
-    if (!newCommentText.trim()) return;
+    if (!newCommentText.trim() && commentMediaItems.length === 0) return;
 
     setIsPostingComment(true);
     try {
-      const commentBlob = {
+      const commentBlob: any = {
         version: 1,
         type: 'comment',
         post_id: targetPostId,
@@ -335,6 +355,16 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
           text: newCommentText
         }
       };
+
+      if (commentMediaItems.length > 0) {
+        commentBlob.media = commentMediaItems.map(item => ({
+          type: item.type,
+          blob_id: item.blobId.startsWith('walrus') ? item.blobId : `walrus://${item.blobId}`,
+          mime: item.type === 'video' ? 'video/mp4' : 'image/png',
+          width: 800,
+          height: 600
+        }));
+      }
 
       const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
       const authorId = 'usr-2-sademir';
@@ -463,7 +493,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     >
       
       {/* Dynamic Glow Overlay behind Card */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-sui-cyan/2 to-tatum-purple/2 rounded-cyber-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="absolute inset-0 bg-linear-to-tr from-sui-cyan/2 to-tatum-purple/2 rounded-cyber-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
       {/* Repost Indicator Header */}
       {post.repostOf && (
@@ -477,7 +507,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
       <div className="flex gap-4 relative z-10">
         
         {/* Avatar */}
-        <div className="h-11 w-11 rounded-full bg-gradient-to-br from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
+        <div className="h-11 w-11 rounded-full bg-linear-to-br from-sui-cyan to-tatum-purple p-0.5 shrink-0">
           <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan relative">
             {avatarUrlResolved ? (
               <img 
@@ -521,13 +551,13 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             </div>
 
             {/* Right side: timestamp + 3-dot menu */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <span className="text-[10px] font-mono text-gray-500">
                 {formatRelativeTime(post.createdAt)}
               </span>
 
               {/* 3-dot menu */}
-              <div className="relative no-navigate">
+              <div className="relative no-navigate" ref={menuRef}>
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowMenu(prev => !prev); }}
                   className="h-6 w-6 flex items-center justify-center rounded-full text-gray-500 hover:text-white hover:bg-sui-cyan/10 transition-all"
@@ -552,7 +582,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
                           onClick={handleDelete}
                           className="w-full flex items-center gap-3 px-4 py-3 text-xs font-sans text-rose-400 hover:bg-rose-500/10 transition-colors text-left"
                         >
-                          <Trash2 className="h-3.5 w-3.5 flex-shrink-0" />
+                          <Trash2 className="h-3.5 w-3.5 shrink-0" />
                           Delete Cast
                         </button>
                       )}
@@ -563,7 +593,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
                           onClick={handlePin}
                           className="w-full flex items-center gap-3 px-4 py-3 text-xs font-sans text-amber-400 hover:bg-amber-500/10 transition-colors text-left border-t border-white/5"
                         >
-                          <Pin className="h-3.5 w-3.5 flex-shrink-0" />
+                          <Pin className="h-3.5 w-3.5 shrink-0" />
                           {isPinned ? 'Unpin from Profile' : 'Pin to Your Profile'}
                         </button>
                       )}
@@ -573,7 +603,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
                         onClick={handleViewActivity}
                         className="w-full flex items-center gap-3 px-4 py-3 text-xs font-sans text-sui-cyan hover:bg-sui-cyan/10 transition-colors text-left border-t border-white/5"
                       >
-                        <Eye className="h-3.5 w-3.5 flex-shrink-0" />
+                        <Eye className="h-3.5 w-3.5 shrink-0" />
                         View Post Activity
                       </button>
                     </motion.div>
@@ -765,7 +795,7 @@ function ActivityModal({
   postId,
   viewCount,
 }: {
-  tabs: ReadonlyArray<{ key: string; label: string; icon: any; data: any[]; color: string }>;
+  tabs: ReadonlyArray<{ key: 'likes' | 'reposts' | 'quotes'; label: string; icon: React.ElementType; data: PostActivityItem[]; color: string }>;
   onClose: () => void;
   postId: string;
   viewCount: number;
@@ -835,7 +865,7 @@ function ActivityModal({
           {activeTabData && activeTabData.data.length > 0 ? (
             activeTabData.data.map((item: any, idx: number) => (
               <div key={idx} className="flex items-center gap-3 bg-walrus-blue/30 border border-sui-cyan/5 rounded-cyber-md p-3">
-                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-sui-cyan flex-shrink-0">
+                <div className="h-9 w-9 rounded-full bg-linear-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-sui-cyan shrink-0">
                   {item.user ? (item.user.displayName || item.user.username || '??').substring(0, 2).toUpperCase() : '??'}
                 </div>
                 <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
@@ -846,7 +876,7 @@ function ActivityModal({
                     @{item.user?.username || 'unknown'}
                   </span>
                 </div>
-                <span className="text-[9px] font-mono text-gray-600 flex-shrink-0">
+                <span className="text-[9px] font-mono text-gray-600 shrink-0">
                   {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
                 </span>
               </div>
@@ -864,18 +894,52 @@ function ActivityModal({
 
 function VideoPlayer({ blobId }: { blobId: string }) {
   const videoUrl = useWalrusImage(blobId);
-  if (!videoUrl) {
+  const [resolvedUrl, setResolvedUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!videoUrl) {
+      setResolvedUrl('');
+      return;
+    }
+
+    if (videoUrl.startsWith('data:')) {
+      try {
+        const parts = videoUrl.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([uInt8Array], { type: contentType });
+        const objUrl = URL.createObjectURL(blob);
+        setResolvedUrl(objUrl);
+
+        return () => {
+          URL.revokeObjectURL(objUrl);
+        };
+      } catch (e) {
+        console.warn("Failed to convert base64 video to Object URL:", e);
+        setResolvedUrl(videoUrl);
+      }
+    } else {
+      setResolvedUrl(videoUrl);
+    }
+  }, [videoUrl]);
+
+  if (!resolvedUrl) {
     return (
-      <div className="w-full h-[250px] flex items-center justify-center bg-walrus-blue/20">
+      <div className="w-full h-62.5 flex items-center justify-center bg-walrus-blue/20">
         <Loader2 className="h-5 w-5 text-sui-cyan animate-spin" />
       </div>
     );
   }
   return (
     <video 
-      src={videoUrl} 
+      src={resolvedUrl} 
       controls 
-      className="w-full h-auto max-h-[450px] rounded-cyber-md bg-black" 
+      className="w-full h-auto max-h-112.5 rounded-cyber-md bg-black"
       playsInline
     />
   );
@@ -908,12 +972,6 @@ function PostMediaGallery({ items }: { items: any[] }) {
   if (items[0].type === 'video') {
     return (
       <div className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/15 relative bg-black flex items-center justify-center no-navigate">
-        <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20 animate-fade-in pointer-events-none">
-          <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
-          <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
-            Walrus Immutable Video
-          </span>
-        </div>
         <VideoPlayer blobId={items[0].blob_id} />
       </div>
     );
@@ -924,18 +982,12 @@ function PostMediaGallery({ items }: { items: any[] }) {
       <>
         <div 
           onClick={(e) => { e.stopPropagation(); setSelectedIdx(0); }}
-          className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-[450px] bg-[#080e18]/80 flex items-center justify-center no-navigate hover:opacity-95 transition-opacity"
+          className="mt-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 relative max-h-112.5 bg-[#080e18]/80 flex items-center justify-center no-navigate hover:opacity-95 transition-opacity"
         >
-          <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20 pointer-events-none">
-            <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
-            <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
-              Walrus Immutable Media
-            </span>
-          </div>
           <WalrusImage 
             blobId={items[0].blob_id} 
             alt="Post media attachment" 
-            className="w-full h-auto max-h-[450px] object-contain hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
+            className="w-full h-auto max-h-112.5 object-contain hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
           />
         </div>
 
@@ -946,7 +998,7 @@ function PostMediaGallery({ items }: { items: any[] }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={(e) => { e.stopPropagation(); setSelectedIdx(null); }}
-              className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 no-navigate"
+              className="fixed inset-0 z-100 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 no-navigate"
             >
               <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
                 <span className="text-[9px] font-mono text-sui-cyan bg-walrus-blue/80 px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg select-none max-w-[80%] truncate">
@@ -981,13 +1033,6 @@ function PostMediaGallery({ items }: { items: any[] }) {
   return (
     <>
       <div className={`mt-2 grid gap-2 rounded-cyber-md overflow-hidden border border-sui-cyan/10 bg-[#080e18]/40 relative ${getGridClass(items.length)}`}>
-        <div className="absolute top-3 left-3 bg-walrus-blue/80 backdrop-filter backdrop-blur-md px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg z-20 pointer-events-none">
-          <Database className="h-3 w-3 text-sui-cyan animate-pulse" />
-          <span className="text-[9px] font-mono text-sui-cyan font-bold tracking-wider uppercase">
-            Walrus Gallery ({items.length})
-          </span>
-        </div>
-
         {items.slice(0, 4).map((item, idx) => {
           let itemClass = "h-full w-full object-cover hover:scale-[1.02] transition-transform duration-500 cursor-pointer";
           let wrapperClass = "relative overflow-hidden w-full h-full bg-deep-space hover:opacity-95 transition-all";
@@ -1019,7 +1064,7 @@ function PostMediaGallery({ items }: { items: any[] }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={(e) => { e.stopPropagation(); setSelectedIdx(null); }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 no-navigate"
+            className="fixed inset-0 z-100 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 no-navigate"
           >
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <span className="text-[9px] font-mono text-sui-cyan bg-walrus-blue/80 px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/20 flex items-center gap-1.5 shadow-lg select-none max-w-[80%] truncate">

@@ -93,6 +93,19 @@ export default function SocialFeedPage() {
     }
   }, [isBackendDown]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleNewPost = () => {
+      loadFeed();
+    };
+
+    window.addEventListener('blobcast:new-post', handleNewPost);
+    return () => {
+      window.removeEventListener('blobcast:new-post', handleNewPost);
+    };
+  }, [isBackendDown]);
+
   // Load notifications from indexer telemetry REST API periodically
   useEffect(() => {
     const fetchNotifs = async () => {

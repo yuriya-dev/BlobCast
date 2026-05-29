@@ -18,10 +18,50 @@ import {
 import { ConnectButton } from '@mysten/dapp-kit';
 import { PostComposer } from './PostComposer';
 import { createPortal } from 'react-dom';
+import { api } from '@/lib/api';
+import { mockDb, type MockPost } from '@/lib/db';
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+
+  const handleComposerPost = async (newPost: any) => {
+    const mockPostObj: MockPost = {
+      id: newPost.id,
+      authorId: newPost.authorId,
+      suiObjectId: newPost.suiObjectId,
+      walrusBlobId: newPost.walrusBlobId,
+      blobHash: newPost.blobHash,
+      contentType: newPost.contentType,
+      visibility: newPost.visibility,
+      replyToId: newPost.replyToId,
+      repostOfId: newPost.repostOfId,
+      likeCount: newPost.likeCount,
+      commentCount: newPost.commentCount,
+      repostCount: newPost.repostCount,
+      score: newPost.score,
+      createdAt: newPost.createdAt,
+      walrusContent: newPost.walrusContent,
+    };
+
+    try {
+      await api.createPost({
+        authorId: newPost.authorId,
+        suiObjectId: newPost.suiObjectId || null,
+        walrusBlobId: newPost.walrusBlobId,
+        blobHash: newPost.blobHash,
+        contentType: newPost.contentType,
+        visibility: newPost.visibility,
+      });
+    } catch (err) {
+      console.warn('⚠️ Failed to post via API. Storing in local session cache.', err);
+      mockDb.posts.unshift(mockPostObj);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('blobcast:new-post'));
+    }
+  };
 
   const navigation = [
     { name: 'Home', href: '/feed', icon: Home },
@@ -34,11 +74,11 @@ export function Sidebar() {
   ];
 
   return (
-    <div className={`flex flex-col gap-6 h-full p-4 border-r border-sui-cyan/5 ${isComposeOpen ? 'relative z-[9999]' : ''}`}>
+    <div className={`flex flex-col gap-6 h-full p-4 border-r border-sui-cyan/5 ${isComposeOpen ? 'relative z-9999' : ''}`}>
       
       {/* Dynamic Cyber Logo */}
       <Link href="/" className="flex items-center gap-2 px-3 py-1 group mb-4">
-        <div className="h-9 w-9 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0 group-hover:rotate-6 transition-all duration-300">
+        <div className="h-9 w-9 rounded-cyber-md bg-linear-to-tr from-sui-cyan to-tatum-purple p-0.5 shrink-0 group-hover:rotate-6 transition-all duration-300">
           <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-bold text-sui-cyan">
             BC
           </div>
@@ -70,7 +110,7 @@ export function Sidebar() {
               <item.icon className="h-4 w-4" />
               <span className="flex-1">{item.name}</span>
               {'badge' in item && item.badge && item.badge > 0 && (
-                <span className="h-4.5 min-w-[1.125rem] px-1 bg-sui-cyan rounded-full text-[9px] font-bold text-deep-space flex items-center justify-center">
+                <span className="h-4.5 min-w-4.5 px-1 bg-sui-cyan rounded-full text-[9px] font-bold text-deep-space flex items-center justify-center">
                   {item.badge}
                 </span>
               )}
@@ -95,7 +135,7 @@ export function Sidebar() {
         <div className="custom-wallet-connect-wrapper">
           <ConnectButton 
             connectText="Connect Wallet"
-            className="w-full !rounded-cyber-md !bg-gradient-to-r !from-sui-cyan !to-tatum-purple !text-deep-space !font-mono !text-xs !font-bold !py-3 !px-4 !shadow-md !hover:opacity-90 !transition-all !cursor-pointer"
+            className="w-full rounded-cyber-md! bg-linear-to-r! from-sui-cyan! to-tatum-purple! text-deep-space! font-mono! text-xs! font-bold! py-3! px-4! shadow-md! hover:opacity-90! transition-all! cursor-pointer!"
           />
         </div>
 
@@ -112,8 +152,14 @@ export function Sidebar() {
 
       {/* Compose Modal Overlay */}
       {isComposeOpen && typeof window !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-deep-space/80 backdrop-filter backdrop-blur-md p-4">
-          <div className="glass-panel bg-walrus-blue rounded-cyber-lg shadow-cyber-glow max-w-lg w-full max-h-[90vh] overflow-y-auto border border-sui-cyan/25 relative flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-deep-space/80 backdrop-filter backdrop-blur-md p-4"
+          onClick={() => setIsComposeOpen(false)}
+        >
+          <div
+            className="glass-panel bg-walrus-blue rounded-cyber-lg shadow-cyber-glow max-w-lg w-full max-h-[90vh] overflow-y-auto border border-sui-cyan/25 relative flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button 
               onClick={() => setIsComposeOpen(false)}
               className="absolute top-4 right-4 text-gray-500 hover:text-white font-mono text-xs hover:underline cursor-pointer"
@@ -130,10 +176,7 @@ export function Sidebar() {
             </div>
             <PostComposer onPostCreated={(newPost) => {
               setIsComposeOpen(false);
-              // Optionally reload the feed if on the feed page
-              if (typeof window !== 'undefined') {
-                window.location.reload();
-              }
+              handleComposerPost(newPost);
             }} />
           </div>
         </div>,

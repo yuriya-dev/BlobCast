@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
-import { ArrowLeft, Loader2, Terminal, ShieldCheck, Database, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useRef, use } from 'react';
+import { ArrowLeft, Loader2, Terminal, ShieldCheck, Database, MessageSquare, Image, Smile } from 'lucide-react';
+import EmojiPicker, { Theme, type EmojiClickData } from 'emoji-picker-react';
+import EmojiModal from '@/components/common/EmojiModal';
 import Link from 'next/link';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
@@ -23,10 +25,10 @@ export default function PostDetailPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
-
-  useEffect(() => {
-    loadPostAndComments();
-  }, [id]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [mediaItems, setMediaItems] = useState<{ blobId: string; type: 'image'|'video' }[]>([]);
+  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const loadPostAndComments = async () => {
     setIsLoading(true);
@@ -191,13 +193,18 @@ export default function PostDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleCommentSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    loadPostAndComments();
+  }, [id]);
+  
+
+  const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
     e.preventDefault();
-    if (!newCommentText.trim()) return;
+    if (!newCommentText.trim() && commentMediaItems.length === 0) return;
 
     setIsPostingComment(true);
     try {
-      const commentBlob = {
+      const commentBlob: any = {
         version: 1,
         type: 'comment',
         post_id: id,
@@ -207,6 +214,16 @@ export default function PostDetailPage({ params }: PageProps) {
           text: newCommentText
         }
       };
+
+      if (commentMediaItems.length > 0) {
+        commentBlob.media = commentMediaItems.map(item => ({
+          type: item.type,
+          blob_id: item.blobId.startsWith('walrus') ? item.blobId : `walrus://${item.blobId}`,
+          mime: item.type === 'video' ? 'video/mp4' : 'image/png',
+          width: 800,
+          height: 600
+        }));
+      }
 
       const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
       const authorId = 'usr-2-sademir'; // Default Caster (Yuriya)
@@ -240,6 +257,104 @@ export default function PostDetailPage({ params }: PageProps) {
     } finally {
       setIsPostingComment(false);
     }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setNewCommentText((prev) => `${prev}${emojiData.emoji}`);
+    setShowEmojiPicker(false);
+  };
+
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.onerror = () => resolve(0);
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newItems = [...mediaItems];
+
+    for (const file of files) {
+      const isImg = file.type.startsWith('image/');
+      const isVid = file.type.startsWith('video/');
+
+      if (!isImg && !isVid) {
+        alert('Hanya file gambar atau video yang didukung.');
+        continue;
+      }
+
+      if (isVid) {
+        if (newItems.length > 0) {
+          alert('Cannot combine photos and videos in one comment!');
+          break;
+        }
+
+        const duration = await getVideoDuration(file);
+        if (duration > 30) {
+          alert('Durasi video melebihi batas maksimal 30 detik!');
+          break;
+        }
+
+        setIsUploadingMedia(true);
+        try {
+          const base64data = await readFileAsDataURL(file);
+          const blobInfo = await walrus.uploadBlob(base64data);
+          newItems.push({ blobId: blobInfo.blobId, type: 'video' });
+          setMediaItems([...newItems]);
+        } catch (err) {
+          console.error('Failed uploading video:', err);
+          alert('Error: Gagal mengunggah video ke Walrus.');
+        } finally {
+          setIsUploadingMedia(false);
+        }
+        break;
+      }
+
+      if (isImg) {
+        if (newItems.some(i => i.type === 'video')) {
+          alert('Tidak dapat menggabungkan foto dan video dalam satu comment!');
+          break;
+        }
+        const imageCount = newItems.filter(i => i.type === 'image').length;
+        if (imageCount >= 4) {
+          alert('Maximum 4 photos per comment!');
+          break;
+        }
+
+        setIsUploadingMedia(true);
+        try {
+          const base64data = await readFileAsDataURL(file);
+          const blobInfo = await walrus.uploadBlob(base64data);
+          newItems.push({ blobId: blobInfo.blobId, type: 'image' });
+          setMediaItems([...newItems]);
+        } catch (err) {
+          console.error('Failed uploading image:', err);
+          alert('Error: Failed uploading image to Walrus.');
+        } finally {
+          setIsUploadingMedia(false);
+        }
+      }
+    }
+
+    e.target.value = '';
   };
 
   return (
@@ -296,7 +411,7 @@ export default function PostDetailPage({ params }: PageProps) {
                 )}
 
                 {/* Premium Cyberpunk Comment Composer */}
-                <div className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/10 bg-walrus-blue/10 relative overflow-hidden group">
+                <div className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/10 bg-walrus-blue/10 relative group">
                   <div className="absolute inset-0 bg-gradient-to-r from-sui-cyan/2 to-tatum-purple/2 pointer-events-none" />
                   <div className="flex gap-4 relative z-10">
                     {/* User Avatar */}
@@ -329,26 +444,68 @@ export default function PostDetailPage({ params }: PageProps) {
                       <div className="flex items-center justify-between">
                         {/* Shard verification status indicator */}
                         <div className="flex items-center gap-1.5 font-mono text-[9px] text-gray-400">
-                          <Database className="h-3.5 w-3.5 text-sui-cyan" />
-                          <span>Walrus JSON-LD commentary schema</span>
-                        </div>
+                            <Database className="h-3.5 w-3.5 text-sui-cyan" />
+                            <span>Walrus JSON-LD commentary schema</span>
+                          </div>
 
-                        <button
-                          type="submit"
-                          disabled={isPostingComment || !newCommentText.trim()}
-                          className="px-5 py-2.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-extrabold font-mono text-xs hover:opacity-95 hover:shadow-cyber-glow active:scale-[0.97] transition-all disabled:opacity-30 flex items-center gap-2 cursor-pointer"
-                        >
-                          {isPostingComment ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              <span>Casting...</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>Verify & Cast</span>
-                            </>
-                          )}
-                        </button>
+                          <div className="flex items-center gap-2 relative">
+                            <input
+                              type="file"
+                              accept="image/*,video/*"
+                              multiple
+                              id="detail-comment-media-input"
+                              className="hidden"
+                              onChange={handleMediaUpload}
+                            />
+                            <label htmlFor="detail-comment-media-input" className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all cursor-pointer" title="Upload media">
+                              <Image className="h-4 w-4" />
+                            </label>
+
+                            <button
+                              ref={emojiTriggerRef}
+                              type="button"
+                              onClick={() => setShowEmojiPicker((p) => !p)}
+                              className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"
+                              title="Insert emoji"
+                            >
+                              <Smile className="h-4 w-4" />
+                            </button>
+
+                            <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef} className="bottom-full mb-2 z-50">
+                              <div
+                                className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
+                                style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
+                              >
+                                <EmojiPicker
+                                  onEmojiClick={handleEmojiClick}
+                                  theme={Theme.DARK}
+                                  emojiStyle="twitter"
+                                  width="320px"
+                                  height="360px"
+                                  searchPlaceHolder="Search emoji"
+                                  previewConfig={{ showPreview: false }}
+                                  style={{ transform: 'scale(0.7)', transformOrigin: 'top left' }}
+                                />
+                              </div>
+                            </EmojiModal>
+
+                            <button
+                              type="submit"
+                              disabled={isPostingComment || (!newCommentText.trim() && mediaItems.length === 0)}
+                              className="px-5 py-2.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-extrabold font-mono text-xs hover:opacity-95 hover:shadow-cyber-glow active:scale-[0.97] transition-all disabled:opacity-30 flex items-center gap-2 cursor-pointer"
+                            >
+                              {isPostingComment ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <span>Casting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>Verify & Cast</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                       </div>
                     </form>
                   </div>

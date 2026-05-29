@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database, X } from 'lucide-react';
+import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
+import EmojiModal from '@/components/common/EmojiModal';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
@@ -23,12 +25,15 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showMediaInput, setShowMediaInput] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   // Read from avatarBlobId directly — no hardcoded fallback so we don't override the user's actual upload
   const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId || null);
+
+  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -76,12 +81,32 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     .substring(0, 2)
     .toUpperCase();
 
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setText((prev) => `${prev}${emojiData.emoji}`);
+    setShowEmojiPicker(false);
+  };
+
   const readFileAsDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(file);
+    });
+  };
+
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        resolve(0);
+      };
+      video.src = URL.createObjectURL(file);
     });
   };
 
@@ -102,7 +127,13 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
       if (isVid) {
         if (newItems.length > 0) {
-          alert("Tidak dapat menggabungkan foto dan video dalam satu post! Maksimal 1 video.");
+          alert("Cannot combine photos and videos in one post! Maximum 1 video.");
+          break;
+        }
+
+        const duration = await getVideoDuration(file);
+        if (duration > 30) {
+          alert("Durasi video melebihi batas maksimal 30 detik!");
           break;
         }
         
@@ -132,7 +163,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         }
         const imageCount = newItems.filter(i => i.type === 'image').length;
         if (imageCount >= 4) {
-          alert("Maksimal 4 foto untuk sekali post!");
+          alert("Maximum 4 photos per post!");
           break;
         }
 
@@ -148,7 +179,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           setMediaItems([...newItems]);
         } catch (err) {
           console.error("Failed uploading image:", err);
-          alert("Error: Gagal mengunggah foto ke Walrus.");
+          alert("Error: Failed uploading image to Walrus.");
         } finally {
           setIsUploadingMedia(false);
         }
@@ -229,7 +260,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         
         {/* Input box */}
         <div className="flex gap-4">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
+          <div className="h-10 w-10 rounded-full bg-linear-to-tr from-sui-cyan to-tatum-purple p-0.5 shrink-0">
             <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs font-bold text-sui-cyan relative">
               {avatarUrlResolved ? (
                 <img 
@@ -251,7 +282,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="What's happening? Type posts to save permanently on Walrus..."
-              className="w-full bg-transparent border-none outline-none resize-none min-h-[90px] text-soft-white placeholder-gray-500 text-sm font-sans"
+              className="w-full bg-transparent border-none outline-none resize-none min-h-22.5 text-soft-white placeholder-gray-500 text-sm font-sans"
               maxLength={280}
             />
           </div>
@@ -329,7 +360,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
         {/* Footer controls */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-mono">
+            <div className="relative flex items-center gap-1.5 font-mono">
             <input 
               type="file" 
               accept="image/*,video/*"
@@ -345,15 +376,36 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             >
               <Image className="h-4 w-4" />
             </label>
-            <button 
+            <button
+              ref={emojiTriggerRef as any}
               type="button"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
               className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"
+              title="Insert emoji"
             >
               <Smile className="h-4 w-4" />
             </button>
             <span className="text-[10px] font-mono text-gray-600 flex items-center gap-1 ml-2">
               <Globe className="h-3 w-3" /> Publicly Verifiable
             </span>
+
+            {/** Emoji modal positioned above the trigger; use single component to handle outside clicks */}
+            <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="top-full left-0 mt-2 z-50 w-[320px]">
+              <div className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
+              style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
+              >
+                <EmojiPicker
+                  onEmojiClick={handleEmojiClick}
+                  theme={Theme.DARK}
+                  emojiStyle="twitter"
+                  width="320px"
+                  height="360px"
+                  searchPlaceHolder="Search emoji"
+                  previewConfig={{ showPreview: false }}
+                  style={{ transform: 'scale(0.7)', transformOrigin: 'top left' }}
+                />
+              </div>
+            </EmojiModal>
           </div>
 
           <div className="flex items-center gap-3">
@@ -366,7 +418,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             <button
               type="submit"
               disabled={isUploading || (!text.trim() && mediaItems.length === 0)}
-              className="px-5 py-2.5 rounded-cyber-md bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+              className="px-5 py-2.5 rounded-cyber-md bg-linear-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
             >
               {isUploading ? (
                 <>
