@@ -27,6 +27,9 @@ export interface ApiPost {
   createdAt: string;
   author?: ApiUser;
   media?: any[];
+  likes?: any[];
+  reposts?: any[];
+  repostOf?: ApiPost | null;
 }
 
 export const api = {
@@ -115,6 +118,73 @@ export const api = {
     });
     if (!res.ok) {
       throw new Error(`Failed to fetch notifications: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  /**
+   * Fetch a single post detailed registry (including relational comment thread).
+   */
+  async fetchPostById(id: string): Promise<{ status: string; data: { post: ApiPost & { comments: any[] } } }> {
+    const res = await fetch(`${BASE_URL}/posts/${id}`, {
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch post: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  /**
+   * Toggle like relationship on the PostgreSQL DB index.
+   */
+  async likePost(id: string, userId: string): Promise<{ status: string; liked: boolean; data: { likeCount: number } }> {
+    const res = await fetch(`${BASE_URL}/posts/${id}/like`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to toggle like');
+    }
+    return res.json();
+  },
+
+  /**
+   * Register a permanent Walrus comment blob reference on the post thread.
+   */
+  async createComment(id: string, authorId: string, walrusBlobId: string): Promise<{ status: string; data: { comment: any } }> {
+    const res = await fetch(`${BASE_URL}/posts/${id}/comments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ authorId, walrusBlobId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to submit comment');
+    }
+    return res.json();
+  },
+
+  /**
+   * Repost an existing post permanently.
+   */
+  async repostPost(id: string, authorId: string): Promise<{ status: string; reposted: boolean; data: { repostCount: number } }> {
+    const res = await fetch(`${BASE_URL}/posts/${id}/repost`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ authorId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to repost');
     }
     return res.json();
   },

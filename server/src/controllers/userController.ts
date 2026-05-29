@@ -18,7 +18,19 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
         include: {
             posts: {
                 take: 10,
-                orderBy: { createdAt: 'desc' }
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    author: true,
+                    likes: true,
+                    reposts: true,
+                    repostOf: {
+                        include: {
+                            author: true,
+                            likes: true,
+                            reposts: true
+                        }
+                    }
+                }
             }
         }
     });

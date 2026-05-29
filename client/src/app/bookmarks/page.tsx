@@ -11,6 +11,8 @@ import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { PostCard } from '@/components/feed/PostCard';
 import { mockDb } from '@/lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '@/lib/api';
+import { walrus } from '@/lib/walrus';
 
 export default function BookmarksPage() {
   const [bookmarkedCasts, setBookmarkedCasts] = useState<any[]>([]);
@@ -29,88 +31,117 @@ export default function BookmarksPage() {
     };
   }, []);
 
-  const loadBookmarks = () => {
+  const loadBookmarks = async () => {
     if (typeof window !== 'undefined') {
       try {
         const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
         const bookmarkIds = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
         
-        // Map users
-        const usersMap: Record<string, any> = {};
-        mockDb.users.forEach(u => {
-          usersMap[u.id] = u;
-        });
-
-        // Filter mock DB posts
-        const sourcePosts = mockDb.posts.filter(p => bookmarkIds.includes(p.id));
-        
-        const mapped = sourcePosts.map(p => {
-          const user = usersMap[p.authorId] || {
-            displayName: 'Anonymous Caster',
-            username: 'anonymous',
-            walletAddress: '0x0000000000000000000000000000000000000000000000000000000000000000',
-            avatarBlobId: '',
-            verified: false
-          };
-
-          let text = 'Immutable social post stored on Walrus.';
-          if (p.id === 'post-1') {
-            text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
-          } else if (p.id === 'post-2') {
-            text = 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!';
-          } else if (p.walrusContent) {
-            text = (p.walrusContent as any).content?.text || text;
-          }
-
-          return {
-            id: p.id,
-            author: {
-              displayName: user.displayName || 'Yuriya',
-              username: user.username || 'yuriya',
-              walletAddress: user.walletAddress || '0x91abc6f3e1b7...',
-              avatarBlobId: user.avatarBlobId || '',
-              verified: user.verified || false
-            },
-            walrusBlobId: p.walrusBlobId,
-            blobHash: p.blobHash,
-            contentType: p.contentType,
-            text,
-            hashtags: p.id === 'post-1' ? ['blobcast', 'sui'] : p.id === 'post-2' ? ['decentralized', 'walrus'] : (p.walrusContent as any)?.content?.hashtags || [],
-            mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
-            likeCount: p.likeCount,
-            commentCount: p.commentCount,
-            repostCount: p.repostCount,
-            suiObjectId: p.suiObjectId || undefined,
-            createdAt: p.createdAt,
-          };
-        });
-
-        // Seed with a default mock bookmark if no user bookmarks exist yet
-        if (mapped.length === 0 && bookmarkIds.length === 0) {
-          setBookmarkedCasts([
-            {
-              id: 'post-1',
-              author: {
-                displayName: 'Vitalik Buterin',
-                username: 'vitalik',
-                walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
-                avatarBlobId: 'walrus://vitalik-avatar',
-                verified: true
-              },
-              text: 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!',
-              walrusBlobId: 'walrus://vitalik-post-1-schema',
-              blobHash: 'sha256-07a82fb91ac48f32da6e5f1a3a41cd8d9e2b10aef73145610b',
-              contentType: 0,
-              hashtags: ['blobcast', 'sui'],
-              likeCount: 142,
-              commentCount: 38,
-              repostCount: 12,
-              createdAt: new Date(Date.now() - 7200000)
-            }
-          ]);
-        } else {
-          setBookmarkedCasts(mapped);
+        if (bookmarkIds.length === 0) {
+          setBookmarkedCasts([]);
+          setIsLoading(false);
+          return;
         }
+
+        // Fetch each bookmark by ID in parallel
+        const fetchedPosts = await Promise.all(
+          bookmarkIds.map(async (id: string) => {
+            try {
+              const res = await api.fetchPostById(id);
+              if (res && res.data && res.data.post) {
+                const p = res.data.post;
+
+                let text = 'Immutable social post stored on Walrus.';
+                let hashtags: string[] = [];
+                let mediaUrl: string | undefined = undefined;
+
+                if (p.walrusBlobId) {
+                  try {
+                    const content = await walrus.getBlob(p.walrusBlobId);
+                    if (content && typeof content === 'object') {
+                      const contentObj = content as any;
+                      if (contentObj.content?.text) text = contentObj.content.text;
+                      if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
+                      if (contentObj.media && contentObj.media.length > 0) {
+                        mediaUrl = contentObj.media[0].blob_id;
+                      }
+                    }
+                  } catch (err) {
+                    console.warn(`Failed to resolve Walrus content for bookmarked post ${id}:`, err);
+                  }
+                }
+
+                return {
+                  id: p.id,
+                  author: {
+                    displayName: p.author?.displayName || 'Anonymous Caster',
+                    username: p.author?.username || 'anonymous',
+                    walletAddress: p.author?.walletAddress || '0x000000...',
+                    avatarBlobId: p.author?.avatarBlobId || '',
+                    verified: p.author?.verified || false
+                  },
+                  walrusBlobId: p.walrusBlobId,
+                  blobHash: p.blobHash,
+                  contentType: p.contentType,
+                  text: text,
+                  hashtags: hashtags,
+                  mediaUrl: mediaUrl,
+                  likeCount: p.likeCount,
+                  commentCount: p.commentCount,
+                  repostCount: p.repostCount,
+                  suiObjectId: p.suiObjectId || undefined,
+                  createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+                  likes: (p as any).likes || [],
+                  reposts: (p as any).reposts || [],
+                  repostOf: (p as any).repostOf ? {
+                    id: (p as any).repostOf.id,
+                    author: {
+                      displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
+                      username: (p as any).repostOf.author?.username || 'anonymous',
+                      walletAddress: (p as any).repostOf.author?.walletAddress || '0x000000...',
+                      avatarBlobId: (p as any).repostOf.author?.avatarBlobId || '',
+                      verified: (p as any).repostOf.author?.verified || false
+                    }
+                  } : null
+                };
+              }
+              return null;
+            } catch (err) {
+              console.warn(`Failed to fetch bookmarked post ${id} from live server, checking mockDb:`, err);
+              // Fallback to offline mock DB
+              const mockP = mockDb.posts.find(p => p.id === id);
+              if (mockP) {
+                const u = mockDb.users.find(user => user.id === mockP.authorId) || {
+                  displayName: 'Yuriya',
+                  username: 'yuriya',
+                  walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+                  avatarBlobId: 'walrus://yuriya-avatar',
+                  verified: true
+                };
+                return {
+                  id: mockP.id,
+                  author: u,
+                  walrusBlobId: mockP.walrusBlobId,
+                  blobHash: mockP.blobHash,
+                  contentType: mockP.contentType,
+                  text: mockP.id === 'post-1'
+                    ? 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!'
+                    : 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!',
+                  hashtags: ['decentralized', 'walrus'],
+                  mediaUrl: mockP.id === 'post-2' ? 'walrus://blob-post-2-image' : undefined,
+                  likeCount: mockP.likeCount,
+                  commentCount: mockP.commentCount,
+                  repostCount: mockP.repostCount,
+                  createdAt: mockP.createdAt
+                };
+              }
+              return null;
+            }
+          })
+        );
+
+        const filteredPosts = fetchedPosts.filter(p => p !== null);
+        setBookmarkedCasts(filteredPosts);
       } catch (e) {
         console.warn("Failed to load bookmarks:", e);
       } finally {

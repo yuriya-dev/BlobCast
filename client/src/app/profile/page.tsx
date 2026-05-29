@@ -187,11 +187,23 @@ export default function ProfilePage() {
               text,
               hashtags,
               mediaUrl,
-              likeCount: p.likeCount,
-              commentCount: p.commentCount,
-              repostCount: p.repostCount,
+              likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
+              commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
+              repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
               suiObjectId: p.suiObjectId || undefined,
               createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+              likes: (p as any).repostOf ? ((p as any).repostOf.likes || []) : ((p as any).likes || []),
+              reposts: (p as any).repostOf ? ((p as any).repostOf.reposts || []) : ((p as any).reposts || []),
+              repostOf: (p as any).repostOf ? {
+                id: (p as any).repostOf.id,
+                author: {
+                  displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
+                  username: (p as any).repostOf.author?.username || 'anonymous',
+                  walletAddress: (p as any).repostOf.author?.walletAddress || '0x000000...',
+                  avatarBlobId: (p as any).repostOf.author?.avatarBlobId || '',
+                  verified: (p as any).repostOf.author?.verified || false
+                }
+              } : null
             };
           }));
 

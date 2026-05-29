@@ -20,6 +20,8 @@ import Link from 'next/link';
 import { walrus } from '@/lib/walrus';
 import { mockDb } from '@/lib/db';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
 
 interface PostCardProps {
   post: {
@@ -42,21 +44,68 @@ interface PostCardProps {
     repostCount: number;
     suiObjectId?: string;
     createdAt: Date;
+    likes?: any[];
+    reposts?: any[];
+    repostOf?: {
+      id: string;
+      author: {
+        displayName: string;
+        username: string;
+        walletAddress: string;
+        avatarBlobId: string;
+        verified: boolean;
+      };
+    } | null;
   };
+  onCommentCreated?: (comment: any) => void;
 }
 
-export function PostCard({ post }: PostCardProps) {
-  const avatarUrlResolved = useWalrusImage(post.author.avatarBlobId);
+export function PostCard({ post, onCommentCreated }: PostCardProps) {
+  const router = useRouter();
+  
+  // Resolve original author and post ID if this post is a repost
+  const authorResolved = post.repostOf ? post.repostOf.author : post.author;
+  const targetPostId = post.repostOf ? post.repostOf.id : post.id;
+  
+  const avatarUrlResolved = useWalrusImage(authorResolved.avatarBlobId);
   const mediaUrlResolved = useWalrusImage(post.mediaUrl);
 
   const [likes, setLikes] = useState(post.likeCount);
   const [hasLiked, setHasLiked] = useState(false);
   const [tipsCount, setTipsCount] = useState(0);
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('button') || 
+      target.closest('a') || 
+      target.closest('input') || 
+      target.closest('.no-navigate')
+    ) {
+      return;
+    }
+    router.push(`/posts/${targetPostId}`);
+  };
   const [showMetadataPop, setShowMetadataPop] = useState(false);
 
   const [reposts, setReposts] = useState(post.repostCount);
   const [hasReposted, setHasReposted] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Hydrate likes & reposts persistence states on mount
+  useEffect(() => {
+    const currentUserId = 'usr-2-sademir'; // Default Caster
+    
+    if (post.likes && Array.isArray(post.likes)) {
+      const likedByMe = post.likes.some((l: any) => l.userId === currentUserId);
+      setHasLiked(likedByMe);
+    }
+    
+    if (post.reposts && Array.isArray(post.reposts)) {
+      const repostedByMe = post.reposts.some((r: any) => r.authorId === currentUserId);
+      setHasReposted(repostedByMe);
+    }
+  }, [post.likes, post.reposts]);
   
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
@@ -69,17 +118,17 @@ export function PostCard({ post }: PostCardProps) {
       try {
         const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
         const bookmarks = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
-        setIsBookmarked(bookmarks.includes(post.id));
+        setIsBookmarked(bookmarks.includes(targetPostId));
       } catch (e) {
         console.warn("Failed to load bookmarks from localStorage:", e);
       }
     }
-  }, [post.id]);
+  }, [targetPostId]);
 
   // Load mock or real comments when thread is opened
   useEffect(() => {
     if (showComments && comments.length === 0) {
-      const existingComments = mockDb.comments.filter(c => c.postId === post.id);
+      const existingComments = mockDb.comments.filter(c => c.postId === targetPostId);
       if (existingComments.length > 0) {
         const mapped = existingComments.map(c => {
           const user = mockDb.users.find(u => u.id === c.authorId) || {
@@ -104,7 +153,7 @@ export function PostCard({ post }: PostCardProps) {
       } else if (post.commentCount > 0) {
         setComments([
           {
-            id: `comment_seed_${post.id}`,
+            id: `comment_seed_${targetPostId}`,
             author: {
               displayName: 'Vitalik Buterin',
               username: 'vitalik',
@@ -116,23 +165,35 @@ export function PostCard({ post }: PostCardProps) {
         ]);
       }
     }
-  }, [showComments, post.id, post.commentCount, comments.length]);
+  }, [showComments, targetPostId, post.commentCount, comments.length]);
 
-  const handleLike = () => {
-    if (hasLiked) {
-      setLikes(prev => prev - 1);
-    } else {
-      setLikes(prev => prev + 1);
+  const handleLike = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextLiked = !hasLiked;
+    setHasLiked(nextLiked);
+    setLikes(prev => nextLiked ? prev + 1 : prev - 1);
+
+    try {
+      const userId = 'usr-2-sademir';
+      const res = await api.likePost(targetPostId, userId);
+      if (res && res.data) {
+        setLikes(res.data.likeCount);
+        if (res.status === 'success' && typeof res.liked === 'boolean') {
+          setHasLiked(res.liked);
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ API offline. Retaining local mock like state.");
     }
-    setHasLiked(!hasLiked);
   };
 
-  const handleRepost = () => {
-    if (hasReposted) {
-      setReposts(prev => prev - 1);
-    } else {
-      setReposts(prev => prev + 1);
-      
+  const handleRepost = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextReposted = !hasReposted;
+    setHasReposted(nextReposted);
+    setReposts(prev => nextReposted ? prev + 1 : prev - 1);
+
+    if (!hasReposted) {
       confetti({
         particleCount: 30,
         angle: 60,
@@ -141,18 +202,31 @@ export function PostCard({ post }: PostCardProps) {
         colors: ['#00F2FE', '#4FACFE', '#ffffff'],
       });
     }
-    setHasReposted(!hasReposted);
+
+    try {
+      const authorId = 'usr-2-sademir';
+      const res = await api.repostPost(targetPostId, authorId);
+      if (res && res.data) {
+        setReposts(res.data.repostCount);
+        if (res.status === 'success' && typeof res.reposted === 'boolean') {
+          setHasReposted(res.reposted);
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ API offline. Retaining local mock repost state.");
+    }
   };
 
-  const handleBookmarkToggle = () => {
+  const handleBookmarkToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (typeof window !== 'undefined') {
       try {
         const bookmarksRaw = localStorage.getItem('blobcast_bookmarks');
         let bookmarks = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
         if (isBookmarked) {
-          bookmarks = bookmarks.filter((id: string) => id !== post.id);
+          bookmarks = bookmarks.filter((id: string) => id !== targetPostId);
         } else {
-          bookmarks.push(post.id);
+          bookmarks.push(targetPostId);
           
           confetti({
             particleCount: 20,
@@ -164,8 +238,8 @@ export function PostCard({ post }: PostCardProps) {
         }
         localStorage.setItem('blobcast_bookmarks', JSON.stringify(bookmarks));
         setIsBookmarked(!isBookmarked);
-      } catch (e) {
-        console.error("Failed to update bookmarks:", e);
+      } catch (err) {
+        console.error("Failed to update bookmarks:", err);
       }
     }
   };
@@ -179,7 +253,7 @@ export function PostCard({ post }: PostCardProps) {
       const commentBlob = {
         version: 1,
         type: 'comment',
-        post_id: post.id,
+        post_id: targetPostId,
         author_wallet: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
         created_at: Math.floor(Date.now() / 1000),
         content: {
@@ -189,9 +263,39 @@ export function PostCard({ post }: PostCardProps) {
 
       const walrusUploadInfo = await walrus.uploadBlob(commentBlob);
 
+      const authorId = 'usr-2-sademir';
+      try {
+        const response = await api.createComment(targetPostId, authorId, walrusUploadInfo.blobId);
+        if (response && response.data && response.data.comment) {
+          const com = response.data.comment;
+          setComments(prev => [
+            ...prev,
+            {
+              id: com.id,
+              author: {
+                displayName: com.author?.displayName || 'Yuriya',
+                username: com.author?.username || 'yuriya',
+                avatarBlobId: com.author?.avatarBlobId || 'walrus://yuriya-avatar'
+              },
+              text: newCommentText,
+              createdAt: new Date(com.createdAt)
+            }
+          ]);
+          setNewCommentText('');
+          post.commentCount += 1;
+          
+          if (onCommentCreated) {
+            onCommentCreated(com);
+          }
+          return;
+        }
+      } catch (apiErr) {
+        console.warn("⚠️ API offline. Comment falling back to local cache.");
+      }
+
       mockDb.comments.push({
         id: `comment_${Date.now()}`,
-        postId: post.id,
+        postId: targetPostId,
         authorId: 'usr-2-sademir',
         walrusBlobId: walrusUploadInfo.blobId,
         createdAt: new Date()
@@ -212,11 +316,6 @@ export function PostCard({ post }: PostCardProps) {
       ]);
 
       setNewCommentText('');
-      
-      const originalPost = mockDb.posts.find(p => p.id === post.id);
-      if (originalPost) {
-        originalPost.commentCount += 1;
-      }
       post.commentCount += 1;
 
     } catch (err) {
@@ -259,11 +358,20 @@ export function PostCard({ post }: PostCardProps) {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
-      className="glass-panel glass-panel-hover rounded-cyber-lg shadow-cyber-glow p-5 border border-sui-cyan/5 transition-all duration-300 relative group"
+      onClick={handleCardClick}
+      className="glass-panel glass-panel-hover rounded-cyber-lg shadow-cyber-glow p-5 border border-sui-cyan/5 hover:border-sui-cyan/20 cursor-pointer transition-all duration-300 relative group"
     >
       
       {/* Dynamic Glow Overlay behind Card */}
       <div className="absolute inset-0 bg-gradient-to-tr from-sui-cyan/2 to-tatum-purple/2 rounded-cyber-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+      {/* Repost Indicator Header */}
+      {post.repostOf && (
+        <div className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 mb-3 relative z-10 pl-1 border-b border-sui-cyan/5 pb-2">
+          <Repeat2 className="h-3.5 w-3.5" />
+          <span>{post.author.displayName} reposted</span>
+        </div>
+      )}
 
       {/* Main post layout */}
       <div className="flex gap-4 relative z-10">
@@ -274,7 +382,7 @@ export function PostCard({ post }: PostCardProps) {
             {avatarUrlResolved ? (
               <img 
                 src={avatarUrlResolved} 
-                alt={`${post.author.displayName}'s avatar`}
+                alt={`${authorResolved.displayName}'s avatar`}
                 className="h-full w-full object-cover z-10"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
@@ -282,7 +390,7 @@ export function PostCard({ post }: PostCardProps) {
               />
             ) : null}
             <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none">
-              {(post.author.displayName || post.author.username || 'US').substring(0, 2).toUpperCase()}
+              {(authorResolved.displayName || authorResolved.username || 'US').substring(0, 2).toUpperCase()}
             </span>
           </div>
         </div>
@@ -294,16 +402,16 @@ export function PostCard({ post }: PostCardProps) {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <Link href="/profile" className="font-bold text-sm text-soft-white font-sans hover:underline cursor-pointer">
-                {post.author.displayName}
+                {authorResolved.displayName}
               </Link>
-              {post.author.verified && (
+              {authorResolved.verified && (
                 <BadgeCheck className="h-4 w-4 text-sui-cyan fill-sui-cyan/10" />
               )}
               <span className="text-xs text-gray-500 font-mono">
-                @{post.author.username}
+                @{authorResolved.username}
               </span>
-              <span className="text-[10px] text-gray-600 font-mono bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10" title={post.author.walletAddress}>
-                {truncateWallet(post.author.walletAddress)}
+              <span className="text-[10px] text-gray-600 font-mono bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10" title={authorResolved.walletAddress}>
+                {truncateWallet(authorResolved.walletAddress)}
               </span>
             </div>
 
@@ -388,8 +496,8 @@ export function PostCard({ post }: PostCardProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Sui Content Owner:</span>
-                    <span className="text-gray-300 truncate w-48 text-right" title={post.author.walletAddress}>
-                      {post.author.walletAddress}
+                    <span className="text-gray-300 truncate w-48 text-right" title={authorResolved.walletAddress}>
+                      {authorResolved.walletAddress}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -445,7 +553,7 @@ export function PostCard({ post }: PostCardProps) {
 
             {/* Creator Tipping interaction */}
             <button 
-              onClick={handleTip}
+              onClick={(e) => { e.stopPropagation(); handleTip(); }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/10 bg-sui-cyan/5 hover:bg-sui-cyan/15 hover:border-sui-cyan/40 hover:text-sui-cyan transition-all group/tip"
               title="Tip Creator 1.5 SUI"
             >

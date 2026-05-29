@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { getAllPosts, getPostById, createPost, getNotifications } from '../controllers/postController';
+import { 
+    getAllPosts, 
+    getPostById, 
+    createPost, 
+    getNotifications, 
+    likePost, 
+    createComment, 
+    repostPost 
+} from '../controllers/postController';
 
 const router = Router();
 
@@ -14,5 +22,14 @@ router.get('/:id', getPostById);
 
 // POST /api/posts - Register new permanent post reference metadata
 router.post('/', createPost);
+
+// POST /api/posts/:id/like - Toggle post liking in the indexer DB
+router.post('/:id/like', likePost);
+
+// POST /api/posts/:id/comments - Register a permanent sub-blob comment relationship
+router.post('/:id/comments', createComment);
+
+// POST /api/posts/:id/repost - Repost an existing post reference
+router.post('/:id/repost', repostPost);
 
 export default router;
