@@ -114,6 +114,12 @@ export default function ProfilePage() {
   }, []);
 
   const loadProfile = async () => {
+    if (typeof window !== 'undefined') {
+      const storedWebsite = localStorage.getItem('blobcast_my_website');
+      const storedGithub = localStorage.getItem('blobcast_my_github');
+      if (storedWebsite) setWebsite(storedWebsite);
+      if (storedGithub) setGithub(storedGithub);
+    }
     try {
       const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
       const response = await api.fetchUserProfile(walletAddress);
@@ -308,6 +314,8 @@ export default function ProfilePage() {
         if (avatarUrl) {
           localStorage.setItem('blobcast_my_avatar_blob_id', avatarUrl);
         }
+        localStorage.setItem('blobcast_my_website', website);
+        localStorage.setItem('blobcast_my_github', github);
         
         // Push notification of profile update
         mockDb.notifications.unshift({
@@ -337,17 +345,15 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="flex-1 flex w-full max-w-7xl mx-auto min-h-screen">
+    <div className="flex-1 flex w-full max-w-7xl mx-auto h-screen overflow-hidden">
       
       {/* 1. Left Sidebar Navigation Column */}
-      <aside className="w-64 flex-shrink-0 hidden md:block">
-        <div className="sticky top-0 h-screen">
-          <Sidebar />
-        </div>
+      <aside className="w-64 flex-shrink-0 hidden md:block h-screen">
+        <Sidebar />
       </aside>
 
       {/* 2. Middle Profile Column */}
-      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col min-h-screen">
+      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col h-screen overflow-y-auto scrollbar-cyber">
         
         {/* Header toolbar */}
         <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 sticky top-0 z-40 flex items-center gap-4">
@@ -448,14 +454,14 @@ export default function ProfilePage() {
             <div className="flex flex-wrap gap-4 text-xs font-mono text-gray-500 mt-1">
               <div className="flex items-center gap-1.5">
                 <Globe className="h-3.5 w-3.5 text-sui-cyan" />
-                <a href={website} target="_blank" className="hover:underline text-gray-400 hover:text-white">
-                  {website.replace('https://', '')}
+                <a href={website.startsWith('http') ? website : `https://${website}`} target="_blank" className="hover:underline text-gray-400 hover:text-white no-navigate">
+                  {website.replace('https://', '').replace('http://', '')}
                 </a>
               </div>
               <div className="flex items-center gap-1.5">
                 <GithubIcon className="h-3.5 w-3.5 text-tatum-purple" />
-                <a href={github} target="_blank" className="hover:underline text-gray-400 hover:text-white">
-                  github/blobcast
+                <a href={github.startsWith('http') ? github : `https://github.com/${github}`} target="_blank" className="hover:underline text-gray-400 hover:text-white no-navigate">
+                  {github.replace('https://github.com/', '').replace('github.com/', '').replace('http://github.com/', '')}
                 </a>
               </div>
               <div className="flex items-center gap-1 bg-sui-cyan/5 px-2.5 py-0.5 rounded-full border border-sui-cyan/10 text-[10px] text-sui-cyan">
@@ -518,10 +524,8 @@ export default function ProfilePage() {
       </main>
 
       {/* 3. Right Sidebar Trending Column */}
-      <aside className="w-80 flex-shrink-0 hidden lg:block">
-        <div className="sticky top-0 h-screen">
-          <TrendingWidget />
-        </div>
+      <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <TrendingWidget />
       </aside>
 
       {/* 4. Edit Profile Glassmorphic Modal */}

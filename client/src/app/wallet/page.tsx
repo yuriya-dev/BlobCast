@@ -137,17 +137,15 @@ export default function MyWalletPage() {
   };
 
   return (
-    <div className="flex-1 flex w-full max-w-7xl mx-auto min-h-screen relative">
+    <div className="flex-1 flex w-full max-w-7xl mx-auto h-screen overflow-hidden relative">
       
       {/* 1. Left Sidebar Navigation Column */}
-      <aside className="w-64 flex-shrink-0 hidden md:block">
-        <div className="sticky top-0 h-screen">
-          <Sidebar />
-        </div>
+      <aside className="w-64 flex-shrink-0 hidden md:block h-screen">
+        <Sidebar />
       </aside>
 
       {/* 2. Middle Wallet Dashboard Column */}
-      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col min-h-screen">
+      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col h-screen overflow-y-auto scrollbar-cyber">
         
         {/* Top Header navbar */}
         <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 sticky top-0 z-40 flex items-center justify-between">
@@ -447,10 +445,8 @@ export default function MyWalletPage() {
       </main>
 
       {/* 3. Right Sidebar Trending Stats Column */}
-      <aside className="w-80 flex-shrink-0 hidden lg:block">
-        <div className="sticky top-0 h-screen">
-          <TrendingWidget />
-        </div>
+      <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <TrendingWidget />
       </aside>
 
       {/* 4. Live Simulated Tipping Toast Alert Drawer */}

@@ -238,17 +238,15 @@ export default function PostDetailPage({ params }: PageProps) {
   };
 
   return (
-    <div className="flex-1 flex w-full max-w-7xl mx-auto min-h-screen">
+    <div className="flex-1 flex w-full max-w-7xl mx-auto h-screen overflow-hidden">
       
       {/* Left Sidebar navigation column */}
-      <aside className="w-64 flex-shrink-0 hidden md:block">
-        <div className="sticky top-0 h-screen">
-          <Sidebar />
-        </div>
+      <aside className="w-64 flex-shrink-0 hidden md:block h-screen">
+        <Sidebar />
       </aside>
 
       {/* Center detailed feed timeline layout */}
-      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col min-h-screen">
+      <main className="flex-1 border-r border-sui-cyan/5 flex flex-col h-screen overflow-y-auto scrollbar-cyber">
           
           {/* Header navigation bar */}
           <header className="sticky top-0 z-30 glass-panel border-b border-sui-cyan/5 px-6 py-4 flex items-center gap-4">
@@ -423,10 +421,8 @@ export default function PostDetailPage({ params }: PageProps) {
         </main>
 
       {/* Right Trending column */}
-      <aside className="w-80 flex-shrink-0 hidden lg:block">
-        <div className="sticky top-0 h-screen">
-          <TrendingWidget />
-        </div>
+      <aside className="w-80 flex-shrink-0 hidden lg:block h-screen overflow-y-auto scrollbar-cyber">
+        <TrendingWidget />
       </aside>
 
     </div>

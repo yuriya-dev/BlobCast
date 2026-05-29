@@ -91,6 +91,43 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const [newCommentText, setNewCommentText] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
 
+  const renderFormattedText = (text: string) => {
+    const parts = text.split(/(\s+)/);
+    return parts.map((part, idx) => {
+      if (part.startsWith('#') && part.length > 1) {
+        const tag = part.substring(1).replace(/[^a-zA-Z0-9_]/g, '');
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/feed?search=${encodeURIComponent('#' + tag)}`);
+            }}
+            className="text-sui-cyan hover:underline cursor-pointer font-mono font-semibold no-navigate"
+          >
+            {part}
+          </span>
+        );
+      }
+      if (part.startsWith('$') && part.length > 1) {
+        const ticker = part.substring(1).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/feed?search=${encodeURIComponent('$' + ticker)}`);
+            }}
+            className="text-amber-400 hover:underline cursor-pointer font-mono font-semibold text-neon-glow no-navigate"
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (
@@ -513,14 +550,21 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
 
           {/* Text Content */}
           <p className="text-sm leading-relaxed text-gray-200 whitespace-pre-wrap font-sans">
-            {post.text}
+            {renderFormattedText(post.text)}
           </p>
 
           {/* Hashtags */}
           {post.hashtags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-0.5">
               {post.hashtags.map(tag => (
-                <span key={tag} className="text-xs font-mono text-sui-cyan hover:underline cursor-pointer bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10">
+                <span
+                  key={tag}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/feed?search=${encodeURIComponent('#' + tag)}`);
+                  }}
+                  className="text-xs font-mono text-sui-cyan hover:underline cursor-pointer bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10 no-navigate"
+                >
                   #{tag}
                 </span>
               ))}
