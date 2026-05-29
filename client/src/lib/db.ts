@@ -9,6 +9,8 @@ export interface MockUser {
   avatarBlobId: string | null;
   bannerBlobId: string | null;
   bio: string | null;
+  website?: string | null;
+  github?: string | null;
   verified: boolean;
   createdAt: Date;
 }

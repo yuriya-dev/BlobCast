@@ -151,6 +151,13 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const [isPinned, setIsPinned] = useState(false);
   const [isDeleted, setIsDeleted] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
+      setIsPinned(pinnedId === targetPostId);
+    }
+  }, [targetPostId]);
+
   // View count — derived from likes + reposts + a base offset
   const [viewCount] = useState(() => {
     const base = (post.likeCount * 4) + (post.repostCount * 8) + Math.floor(Math.random() * 200 + 50);

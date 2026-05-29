@@ -49,7 +49,7 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
  * Controller to register or update user identity schemas directly in Supabase.
  */
 export const upsertUserProfile = asyncHandler(async (req: Request, res: Response) => {
-    const { walletAddress, username, displayName, avatarBlobId, bannerBlobId, bio } = req.body;
+    const { walletAddress, username, displayName, avatarBlobId, bannerBlobId, bio, website, github } = req.body;
 
     if (!walletAddress) {
         throw new AppError('Wallet address is required to register identity', 400);
@@ -62,7 +62,9 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
             displayName: displayName || undefined,
             avatarBlobId: avatarBlobId || undefined,
             bannerBlobId: bannerBlobId || undefined,
-            bio: bio || undefined
+            bio: bio || undefined,
+            website: website || undefined,
+            github: github || undefined
         },
         create: {
             walletAddress,
@@ -71,6 +73,8 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
             avatarBlobId: avatarBlobId || null,
             bannerBlobId: bannerBlobId || null,
             bio: bio || null,
+            website: website || null,
+            github: github || null,
             verified: false
         }
     });

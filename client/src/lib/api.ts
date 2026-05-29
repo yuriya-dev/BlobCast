@@ -8,6 +8,8 @@ export interface ApiUser {
   avatarBlobId: string | null;
   bannerBlobId: string | null;
   bio: string | null;
+  website?: string | null;
+  github?: string | null;
   verified: boolean;
   createdAt: string;
 }
@@ -94,6 +96,8 @@ export const api = {
     avatarBlobId?: string | null;
     bannerBlobId?: string | null;
     bio?: string | null;
+    website?: string | null;
+    github?: string | null;
   }): Promise<{ status: string; data: { user: ApiUser } }> {
     const res = await fetch(`${BASE_URL}/users`, {
       method: 'POST',

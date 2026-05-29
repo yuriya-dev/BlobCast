@@ -17,6 +17,8 @@ model User {
   avatarBlobId    String?        @map("avatar_blob_id")
   bannerBlobId    String?        @map("banner_blob_id")
   bio             String?
+  website         String?
+  github          String?
   verified        Boolean        @default(false)
   createdAt       DateTime       @default(now()) @map("created_at")
 

@@ -49,6 +49,8 @@ export default function ProfilePage() {
   const avatarUrlResolved = useWalrusImage(currentUser?.avatarBlobId);
 
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
+  const [likedPosts, setLikedPosts] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'casts' | 'media' | 'likes'>('casts');
   const [totalTips, setTotalTips] = useState(148.5);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -120,6 +122,137 @@ export default function ProfilePage() {
       if (storedWebsite) setWebsite(storedWebsite);
       if (storedGithub) setGithub(storedGithub);
     }
+
+    const sortAndPinPosts = (postsList: any[]) => {
+      const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      if (typeof window !== 'undefined') {
+        const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
+        if (pinnedId) {
+          const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
+          if (pinIdx !== -1) {
+            const [pinnedPost] = sorted.splice(pinIdx, 1);
+            sorted.unshift(pinnedPost);
+          }
+        }
+      }
+      return sorted;
+    };
+
+    // Load liked posts in parallel
+    (async () => {
+      let likedMapped: any[] = [];
+      try {
+        const allPostsRes = await api.fetchPosts(1, 100);
+        if (allPostsRes && allPostsRes.data && allPostsRes.data.posts) {
+          const apiAllPosts = allPostsRes.data.posts;
+          likedMapped = await Promise.all(apiAllPosts.map(async (p: any) => {
+            let text = 'Immutable social post stored on Walrus.';
+            let hashtags: string[] = [];
+            let mediaUrl: string | undefined = undefined;
+
+            if (p.walrusBlobId) {
+              try {
+                const walrusContent = await walrus.getBlob(p.walrusBlobId);
+                if (walrusContent && typeof walrusContent === 'object') {
+                  const contentObj = walrusContent as any;
+                  if (contentObj.content?.text) text = contentObj.content.text;
+                  if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
+                  if (contentObj.media && contentObj.media.length > 0) mediaUrl = contentObj.media[0].blob_id;
+                }
+              } catch (err) {
+                if (p.id === 'post-1') {
+                  text = 'Welcome to BlobCast! Own your social posts forever.';
+                  hashtags = ['blobcast', 'sui'];
+                } else if (p.id === 'post-2') {
+                  text = 'Excited about decentralized social layers!';
+                  hashtags = ['decentralized', 'walrus'];
+                  mediaUrl = 'walrus://blob-post-2-image';
+                }
+              }
+            }
+
+            return {
+              id: p.id,
+              author: {
+                displayName: p.author?.displayName || 'Anonymous Caster',
+                username: p.author?.username || 'anonymous',
+                walletAddress: p.author?.walletAddress || '0x0000...',
+                avatarBlobId: p.author?.avatarBlobId || '',
+                verified: p.author?.verified || false
+              },
+              walrusBlobId: p.walrusBlobId,
+              blobHash: p.blobHash,
+              contentType: p.contentType,
+              text,
+              hashtags,
+              mediaUrl,
+              likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
+              commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
+              repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
+              suiObjectId: p.suiObjectId || undefined,
+              createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+              likes: p.repostOf ? (p.repostOf.likes || []) : (p.likes || []),
+              reposts: p.repostOf ? (p.repostOf.reposts || []) : (p.reposts || []),
+              repostOf: p.repostOf ? {
+                id: p.repostOf.id,
+                author: {
+                  displayName: p.repostOf.author?.displayName || 'Anonymous Caster',
+                  username: p.repostOf.author?.username || 'anonymous',
+                  walletAddress: p.repostOf.author?.walletAddress || '0x0000...',
+                  avatarBlobId: p.repostOf.author?.avatarBlobId || '',
+                  verified: p.repostOf.author?.verified || false
+                }
+              } : null
+            };
+          }));
+        }
+      } catch (err) {
+        // failed
+      }
+
+      if (likedMapped.length === 0) {
+        likedMapped = mockDb.posts.map(p => {
+          const authorUser = mockDb.users.find(u => u.id === p.authorId) || mockDb.users[0];
+          let text = 'Immutable social post stored on Walrus.';
+          if (p.walrusContent) {
+            text = (p.walrusContent as any).content?.text || text;
+          }
+          return {
+            id: p.id,
+            author: {
+              displayName: authorUser.displayName || 'Anonymous Caster',
+              username: authorUser.username || 'anonymous',
+              walletAddress: authorUser.walletAddress,
+              avatarBlobId: authorUser.avatarBlobId || '',
+              verified: authorUser.verified,
+            },
+            walrusBlobId: p.walrusBlobId,
+            blobHash: p.blobHash,
+            contentType: p.contentType,
+            text,
+            hashtags: (p.walrusContent as any)?.content?.hashtags || ['blobcast', 'sui'],
+            mediaUrl: p.walrusContent?.media?.[0]?.blob_id || undefined,
+            likeCount: p.likeCount,
+            commentCount: p.commentCount,
+            repostCount: p.repostCount,
+            suiObjectId: p.suiObjectId || undefined,
+            createdAt: p.createdAt,
+            likes: mockDb.likes.filter(l => l.postId === p.id) || [],
+            reposts: []
+          };
+        });
+      }
+
+      const yuriyaLikes = likedMapped.filter(p => 
+        p.likes.some((l: any) => 
+          l.userId === 'usr-2-sademir' || 
+          l.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase() ||
+          l.user?.walletAddress?.toLowerCase() === '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'.toLowerCase()
+        )
+      );
+      setLikedPosts(yuriyaLikes);
+    })();
+
     try {
       const walletAddress = '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
       const response = await api.fetchUserProfile(walletAddress);
@@ -134,6 +267,8 @@ export default function ProfilePage() {
           avatarBlobId: user.avatarBlobId,
           bannerBlobId: user.bannerBlobId,
           bio: user.bio,
+          website: user.website || null,
+          github: user.github || null,
           verified: user.verified,
           createdAt: new Date(user.createdAt)
         });
@@ -141,6 +276,8 @@ export default function ProfilePage() {
         setBio(user.bio || '');
         setAvatarUrl(user.avatarBlobId || '');
         setBannerUrl(user.bannerBlobId || '');
+        if (user.website) setWebsite(user.website);
+        if (user.github) setGithub(user.github);
 
         if (user.posts) {
           const mapped = await Promise.all(user.posts.map(async (p: any) => {
@@ -213,7 +350,7 @@ export default function ProfilePage() {
             };
           }));
 
-          setProfilePosts(mapped);
+          setProfilePosts(sortAndPinPosts(mapped));
           return;
         }
       }
@@ -263,7 +400,7 @@ export default function ProfilePage() {
       };
     });
 
-    setProfilePosts(mapped);
+    setProfilePosts(sortAndPinPosts(mapped));
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -296,7 +433,9 @@ export default function ProfilePage() {
           displayName: displayName,
           bio: bio,
           avatarBlobId: avatarUrl,
-          bannerBlobId: bannerUrl
+          bannerBlobId: bannerUrl,
+          website: website,
+          github: github
         });
       } catch (backendErr) {
         console.warn("⚠️ Failed to synchronize updated profile metadata with REST API server.");
@@ -343,6 +482,21 @@ export default function ProfilePage() {
       setIsSaving(false);
     }
   };
+
+  const getFilteredPosts = () => {
+    if (activeTab === 'casts') {
+      return profilePosts;
+    }
+    if (activeTab === 'media') {
+      return profilePosts.filter(post => post.mediaUrl);
+    }
+    if (activeTab === 'likes') {
+      return likedPosts;
+    }
+    return profilePosts;
+  };
+
+  const displayedPosts = getFilteredPosts();
 
   return (
     <div className="flex-1 flex w-full max-w-7xl mx-auto h-screen overflow-hidden">
@@ -497,25 +651,34 @@ export default function ProfilePage() {
 
         {/* Tab Selection */}
         <div className="flex border-b border-sui-cyan/5 mt-8 px-6 font-mono text-xs">
-          <button className="px-4 py-3 border-b-2 border-sui-cyan text-sui-cyan font-bold">
+          <button 
+            onClick={() => setActiveTab('casts')}
+            className={`px-4 py-3 border-b-2 transition-all font-bold ${activeTab === 'casts' ? 'border-sui-cyan text-sui-cyan' : 'border-transparent text-gray-500 hover:text-white'}`}
+          >
             CASTS
           </button>
-          <button className="px-4 py-3 text-gray-500 hover:text-white transition-colors">
+          <button 
+            onClick={() => setActiveTab('media')}
+            className={`px-4 py-3 border-b-2 transition-all font-bold ${activeTab === 'media' ? 'border-sui-cyan text-sui-cyan' : 'border-transparent text-gray-500 hover:text-white'}`}
+          >
             MEDIA
           </button>
-          <button className="px-4 py-3 text-gray-500 hover:text-white transition-colors">
+          <button 
+            onClick={() => setActiveTab('likes')}
+            className={`px-4 py-3 border-b-2 transition-all font-bold ${activeTab === 'likes' ? 'border-sui-cyan text-sui-cyan' : 'border-transparent text-gray-500 hover:text-white'}`}
+          >
             LIKES
           </button>
         </div>
 
         {/* Posts feed */}
         <div className="p-6 flex flex-col gap-6 flex-1">
-          {profilePosts.length === 0 ? (
+          {displayedPosts.length === 0 ? (
             <div className="py-20 text-center text-gray-500 font-mono text-xs">
               No casts found. Write posts in feed!
             </div>
           ) : (
-            profilePosts.map(post => (
+            displayedPosts.map(post => (
               <PostCard key={post.id} post={post} />
             ))
           )}

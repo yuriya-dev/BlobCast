@@ -38,6 +38,13 @@ export default function SocialFeedPage() {
 
   // Handle pin: move post to the very top of the feed (only for owner)
   const handlePinPost = (postId: string, pinned: boolean) => {
+    if (typeof window !== 'undefined') {
+      if (pinned) {
+        localStorage.setItem('blobcast_pinned_post_id', postId);
+      } else {
+        localStorage.removeItem('blobcast_pinned_post_id');
+      }
+    }
     setPosts(prev => {
       const idx = prev.findIndex(p => (p.repostOf ? p.repostOf.id : p.id) === postId || p.id === postId);
       if (idx === -1) return prev;
@@ -94,6 +101,21 @@ export default function SocialFeedPage() {
 
   const loadFeed = async () => {
     setIsLoading(true);
+
+    const sortAndPinPosts = (postsList: any[]) => {
+      const sorted = [...postsList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      if (typeof window !== 'undefined') {
+        const pinnedId = localStorage.getItem('blobcast_pinned_post_id');
+        if (pinnedId) {
+          const pinIdx = sorted.findIndex(p => p.id === pinnedId || (p.repostOf && p.repostOf.id === pinnedId));
+          if (pinIdx !== -1) {
+            const [pinnedPost] = sorted.splice(pinIdx, 1);
+            sorted.unshift(pinnedPost);
+          }
+        }
+      }
+      return sorted;
+    };
 
     if (!isBackendDown) {
       try {
@@ -176,7 +198,7 @@ export default function SocialFeedPage() {
             };
           }));
 
-          setPosts(mapped);
+          setPosts(sortAndPinPosts(mapped));
           setIsLoading(false);
           return;
         }
@@ -247,7 +269,7 @@ export default function SocialFeedPage() {
         };
       });
 
-      setPosts(mapped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setPosts(sortAndPinPosts(mapped));
       setIsLoading(false);
     }, 450);
   };
@@ -318,7 +340,7 @@ export default function SocialFeedPage() {
         <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 sticky top-0 z-40 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Tv className="h-5 w-5 text-sui-cyan" />
-            <h2 className="font-mono font-bold text-sm tracking-wider uppercase text-white">Social Feed Feed</h2>
+            <h2 className="font-mono font-bold text-sm tracking-wider uppercase text-white">Social Feed</h2>
           </div>
 
           <div className="flex items-center gap-3">
