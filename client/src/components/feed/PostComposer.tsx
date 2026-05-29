@@ -41,7 +41,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   useEffect(() => {
     const fetchUser = async () => {
       if (authUser) {
-        const persistedAvatarBlobId = typeof window !== 'undefined' ? localStorage.getItem('blobcast_my_avatar_blob_id') : null;
+        const key = `blobcast_my_avatar_blob_id_${authUser.walletAddress.toLowerCase()}`;
+        const persistedAvatarBlobId = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
         setCurrentUser({
           ...authUser,
           avatarBlobId: authUser.avatarBlobId || persistedAvatarBlobId || null,
@@ -49,22 +50,25 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         return;
       }
 
+      const wallet = account?.address;
+      if (!wallet) {
+        return;
+      }
+
+      const key = `blobcast_my_avatar_blob_id_${wallet.toLowerCase()}`;
+
       try {
-        const wallet = account?.address;
-        if (!wallet) {
-          return;
-        }
         const res = await api.fetchUserProfile(wallet);
         if (res && res.data && res.data.user) {
           const userData = res.data.user;
           // Prefer the persisted avatar blob ID from localStorage (set when user saves profile)
           // This ensures the uploaded image is shown even before API returns
-          const persistedAvatarBlobId = localStorage.getItem('blobcast_my_avatar_blob_id');
+          const persistedAvatarBlobId = localStorage.getItem(key);
           if (persistedAvatarBlobId && !userData.avatarBlobId) {
             userData.avatarBlobId = persistedAvatarBlobId;
           } else if (userData.avatarBlobId) {
             // Keep localStorage in sync with the DB value
-            localStorage.setItem('blobcast_my_avatar_blob_id', userData.avatarBlobId);
+            localStorage.setItem(key, userData.avatarBlobId);
           }
           setCurrentUser(userData);
           return;
@@ -75,14 +79,14 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       
       // Offline fallback: use mockDb but override avatarBlobId with whatever was saved by the user
       const user = { ...(
-        mockDb.users.find(u => u.walletAddress === account?.address) || {
+        mockDb.users.find(u => u.walletAddress === wallet) || {
           displayName: 'Yuriya',
           username: 'yuriya',
           avatarBlobId: null as string | null
         }
       ) };
       // Override with the locally persisted avatar blob ID so uploads survive page navigation
-      const persistedAvatarBlobId = localStorage.getItem('blobcast_my_avatar_blob_id');
+      const persistedAvatarBlobId = localStorage.getItem(key);
       if (persistedAvatarBlobId) {
         user.avatarBlobId = persistedAvatarBlobId;
       }

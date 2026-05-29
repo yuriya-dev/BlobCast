@@ -423,23 +423,25 @@ export default function MessagesPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </button>
 
-                <div className="relative flex-shrink-0">
+                <Link 
+                  href={`/profile?wallet=${activeConv.user.walletAddress || ''}`}
+                  className="relative flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity block"
+                >
                   <MessageUserAvatar user={activeConv.user} className="h-9 w-9" />
                   {activeConv.user.online && (
                     <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-deep-space z-20" />
                   )}
-                </div>
+                </Link>
 
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-white font-sans">{activeConv.user.displayName}</span>
-                    {activeConv.user.verified && <BadgeCheck className="h-3.5 w-3.5 text-sui-cyan" />}
                     <Link 
                       href={`/profile?wallet=${activeConv.user.walletAddress || ''}`}
-                      className="ml-2 text-[9px] font-mono font-bold uppercase text-sui-cyan hover:text-white border border-sui-cyan/20 hover:border-sui-cyan/60 px-2.5 py-0.5 rounded-full bg-sui-cyan/5 transition-all cursor-pointer"
+                      className="text-sm font-bold text-white font-sans hover:underline hover:text-sui-cyan cursor-pointer transition-colors"
                     >
-                      View Profile
+                      {activeConv.user.displayName}
                     </Link>
+                    {activeConv.user.verified && <BadgeCheck className="h-3.5 w-3.5 text-sui-cyan" />}
                   </div>
                   <span className="text-[10px] font-mono text-gray-500 block mt-0.5">
                     @{activeConv.user.username} · {activeConv.user.online

@@ -492,8 +492,9 @@ export default function ProfilePage() {
         
         // Persist avatar blob ID to localStorage so PostComposer and other components
         // always display the correct uploaded avatar across page navigation
-        if (avatarUrl) {
-          localStorage.setItem('blobcast_my_avatar_blob_id', avatarUrl);
+        if (avatarUrl && authUser?.walletAddress) {
+          const key = `blobcast_my_avatar_blob_id_${authUser.walletAddress.toLowerCase()}`;
+          localStorage.setItem(key, avatarUrl);
         }
         localStorage.setItem('blobcast_my_website', website);
         localStorage.setItem('blobcast_my_github', github);
