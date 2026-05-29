@@ -164,7 +164,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             key={idx}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/search?q=${encodeURIComponent('@' + username)}&tab=people`);
+              router.push(`/profile?username=${encodeURIComponent(username)}`);
             }}
             className="text-tatum-purple hover:underline cursor-pointer font-mono font-semibold no-navigate"
           >

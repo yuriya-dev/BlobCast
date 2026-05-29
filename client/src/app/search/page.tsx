@@ -545,14 +545,18 @@ function SearchContent() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {displayedPeople.map((creator) => (
+                  {displayedPeople.map((creator) => {
+                    const profileHref = creator.username
+                      ? `/profile?username=${encodeURIComponent(creator.username)}`
+                      : `/profile?wallet=${creator.walletAddress}`;
+                    return (
                     <div 
                       key={creator.id}
                       className="glass-panel rounded-cyber-lg p-5 border border-sui-cyan/5 relative group flex flex-col sm:flex-row gap-4 justify-between items-start"
                     >
                       <div className="flex gap-3">
                         <Link 
-                          href={`/profile?wallet=${creator.walletAddress}`} 
+                          href={profileHref} 
                           className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0 overflow-hidden hover:scale-105 transition-transform duration-200"
                         >
                           <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan relative">
@@ -571,7 +575,7 @@ function SearchContent() {
 
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <Link href={`/profile?wallet=${creator.walletAddress}`}>
+                            <Link href={profileHref}>
                               <h4 className="font-bold text-sm text-white font-sans hover:underline cursor-pointer">
                                 {creator.displayName}
                               </h4>
@@ -592,14 +596,15 @@ function SearchContent() {
                           {creator.followersCount !== undefined ? `${creator.followersCount} Followers` : (creator.id?.startsWith('usr-') ? '1,248' : '0') + ' Followers'}
                         </span>
                         <Link 
-                          href={`/profile?wallet=${creator.walletAddress}`}
+                          href={profileHref}
                           className="px-4 py-1.5 rounded-cyber-sm bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-[10px] uppercase flex items-center gap-1 hover:opacity-90 active:scale-[0.98] transition-all w-full sm:w-auto justify-center"
                         >
                           View Profile <ArrowRight className="h-3 w-3" />
                         </Link>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

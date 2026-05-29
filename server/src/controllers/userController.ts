@@ -4,17 +4,22 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 
 /**
- * Controller to fetch User Profile details by wallet address.
+ * Controller to fetch User Profile details by wallet address OR username.
  */
 export const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
     const { walletAddress } = req.params;
 
     if (!walletAddress) {
-        throw new AppError('Wallet address parameter is required', 400);
+        throw new AppError('Wallet address or username parameter is required', 400);
     }
 
+    // Determine if this is a wallet address (starts with 0x) or a username
+    const isWalletAddress = walletAddress.startsWith('0x');
+
     const user = await prisma.user.findUnique({
-        where: { walletAddress },
+        where: isWalletAddress
+            ? { walletAddress }
+            : { username: walletAddress },
         include: {
             posts: {
                 take: 10,
@@ -54,7 +59,7 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
     });
 
     if (!user) {
-        throw new AppError('User profile not found for this wallet address', 404);
+        throw new AppError(`User profile not found for "${walletAddress}"`, 404);
     }
 
     const followersCount = await prisma.follow.count({

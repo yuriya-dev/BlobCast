@@ -52,6 +52,7 @@ export default function ProfilePage() {
   const { user: authUser } = useAuth();
   const searchParams = useSearchParams();
   const queryWallet = searchParams?.get('wallet');
+  const queryUsername = searchParams?.get('username');
 
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const bannerUrlResolved = useWalrusImage(currentUser?.bannerBlobId);
@@ -229,11 +230,23 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
-  }, [queryWallet, authUser]);
+  }, [queryWallet, queryUsername, authUser]);
 
   const loadProfile = async () => {
-    const targetWalletAddress = queryWallet || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
-    const walletKey = targetWalletAddress.toLowerCase();
+    // Support lookup by wallet address OR username
+    const lookupKey = queryWallet || queryUsername || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+    // Use as walletKey for localStorage scoping (may be username if wallet not known yet)
+    let targetWalletAddress = queryWallet || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f';
+    let walletKey = targetWalletAddress.toLowerCase();
+
+    if (queryUsername && !queryWallet) {
+      // Try to resolve wallet from mockDb first for localStorage key
+      const mockUser = mockDb.users.find(u => (u.username || '').toLowerCase() === queryUsername.toLowerCase());
+      if (mockUser) {
+        targetWalletAddress = mockUser.walletAddress;
+        walletKey = mockUser.walletAddress.toLowerCase();
+      }
+    }
 
     if (typeof window !== 'undefined') {
       const storedWebsite = localStorage.getItem(`blobcast_my_website_${walletKey}`);
@@ -246,10 +259,13 @@ export default function ProfilePage() {
     let databasePinnedPostId: string | null = null;
 
     try {
-      const response = await api.fetchUserProfile(targetWalletAddress);
+      const response = await api.fetchUserProfile(lookupKey);
       
       if (response && response.data && response.data.user) {
         const user = response.data.user;
+        // Update walletKey to the real wallet address from the DB response
+        walletKey = user.walletAddress.toLowerCase();
+        targetWalletAddress = user.walletAddress;
         resolvedUserId = user.id;
         databasePinnedPostId = user.pinnedPostId || null;
 
@@ -378,7 +394,12 @@ export default function ProfilePage() {
       console.warn("⚠️ Failed to load profile from Express backend. Falling back to local offline mock db.", err);
       
       // Fetch user profile from mock DB or cached session
+      // Support both wallet address and username lookup
       let user = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWalletAddress.toLowerCase());
+      
+      if (!user && queryUsername) {
+        user = mockDb.users.find(u => (u.username || '').toLowerCase() === queryUsername.toLowerCase());
+      }
       
       if (!user && authUser && authUser.walletAddress.toLowerCase() === targetWalletAddress.toLowerCase()) {
         user = {

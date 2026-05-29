@@ -285,7 +285,9 @@ export function SearchInputWithRecommendations({
                     {matchingCreators.map((creator) => (
                       <Link
                         key={creator.id}
-                        href={`/profile?wallet=${creator.walletAddress}`}
+                        href={creator.username
+                          ? `/profile?username=${encodeURIComponent(creator.username)}`
+                          : `/profile?wallet=${creator.walletAddress}`}
                         onClick={() => setIsFocused(false)}
                         className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all group"
                       >
