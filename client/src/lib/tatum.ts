@@ -16,13 +16,20 @@ const TATUM_SUI_MAINNET = process.env.NEXT_PUBLIC_TATUM_SUI_MAINNET_RPC || 'http
 
 export const tatum = {
   getRpcUrl(network: 'mainnet' | 'testnet' | 'devnet' = 'testnet'): string {
+    let url = '';
     if (network === 'mainnet') {
-      return TATUM_SUI_MAINNET;
+      url = TATUM_SUI_MAINNET;
+    } else if (network === 'testnet') {
+      url = TATUM_SUI_TESTNET;
+    } else {
+      url = getJsonRpcFullnodeUrl('devnet');
     }
-    if (network === 'testnet') {
-      return TATUM_SUI_TESTNET;
+
+    const apiKey = process.env.NEXT_PUBLIC_TATUM_API_KEY;
+    if (apiKey && url.includes('tatum.io') && !url.includes('apiKey=')) {
+      url = `${url}?apiKey=${apiKey}`;
     }
-    return getJsonRpcFullnodeUrl('devnet');
+    return url;
   },
 
   getClient(network: 'mainnet' | 'testnet' | 'devnet' = 'testnet'): SuiJsonRpcClient {

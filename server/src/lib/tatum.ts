@@ -3,7 +3,12 @@ const TATUM_SUI_MAINNET = process.env.TATUM_SUI_MAINNET_RPC || 'https://sui-main
 
 export const tatum = {
   getRpcUrl(network: 'mainnet' | 'testnet' = 'testnet'): string {
-    return network === 'mainnet' ? TATUM_SUI_MAINNET : TATUM_SUI_TESTNET;
+    let url = network === 'mainnet' ? TATUM_SUI_MAINNET : TATUM_SUI_TESTNET;
+    const apiKey = process.env.TATUM_API_KEY;
+    if (apiKey && url.includes('tatum.io') && !url.includes('apiKey=')) {
+      url = `${url}?apiKey=${apiKey}`;
+    }
+    return url;
   },
 
   getClient(network: 'mainnet' | 'testnet' = 'testnet') {
