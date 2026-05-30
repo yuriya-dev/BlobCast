@@ -69,7 +69,7 @@ export const getConversations = asyncHandler(async (req: Request, res: Response)
       });
 
       const otherUser =
-        conv.participant1Id === sessionUser.id ? conv.participant1 : conv.participant2;
+        conv.participant1Id === sessionUser.id ? conv.participant2 : conv.participant1;
 
       return {
         id: conv.id,
