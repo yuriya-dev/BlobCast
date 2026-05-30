@@ -460,8 +460,8 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
       const tx = new Transaction();
       const targetAddress = authorResolved.walletAddress;
       
-      // Tip amount is 1.5 SUI, represented as 1,500,000,000 MIST
-      const amount = 1500000000;
+      // Tip amount is 0.1 SUI, represented as 100,000,000 MIST
+      const amount = 100000000;
       const [coin] = tx.splitCoins(tx.gas, [amount]);
       tx.transferObjects([coin], targetAddress);
 
