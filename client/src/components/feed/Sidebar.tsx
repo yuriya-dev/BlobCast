@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { 
@@ -27,6 +27,35 @@ export function Sidebar() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchUnread = async () => {
+      try {
+        const data = await api.fetchTotalUnreadCount();
+        const count = data?.data?.unreadCount ?? 0;
+        setUnreadCount(count);
+        console.log('Fetched unread count:', count);
+      } catch {
+        setUnreadCount(0);
+        console.log('Failed to fetch unread count');
+      }
+    };
+
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30_000);
+
+    // Re-fetch immediately when user reads a conversation
+    const handleMessagesRead = () => fetchUnread();
+    window.addEventListener('blobcast:messages-read', handleMessagesRead);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('blobcast:messages-read', handleMessagesRead);
+    };
+  }, [user?.id]);
 
   const handleComposerPost = async (newPost: any) => {
     const mockPostObj: MockPost = {
@@ -69,7 +98,7 @@ export function Sidebar() {
   const navigation = [
     { name: 'Home', href: '/feed', icon: Home },
     { name: 'Explore', href: '/explore', icon: Compass },
-    { name: 'Messages', href: '/messages', icon: MessageCircle, badge: 3 },
+    { name: 'Messages', href: '/messages', icon: MessageCircle, ...(unreadCount > 0 ? { badge: unreadCount } : {}) },
     { name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
     { name: 'Profile', href: '/profile', icon: User },
     { name: 'Wallet', href: '/wallet', icon: Wallet },
@@ -122,11 +151,11 @@ export function Sidebar() {
             >
               <item.icon className="h-4 w-4" />
               <span className="flex-1">{item.name}</span>
-              {'badge' in item && item.badge && item.badge > 0 && (
-                <span className="h-4.5 min-w-4.5 px-1 bg-sui-cyan rounded-full text-[9px] font-bold text-deep-space flex items-center justify-center">
-                  {item.badge}
-                </span>
-              )}
+                {item.badge && (
+                  <span className="h-4.5 min-w-4.5 px-1 bg-sui-cyan rounded-full text-[9px] font-bold text-deep-space flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                )}
             </Link>
           );
         })}

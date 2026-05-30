@@ -5,6 +5,7 @@ import {
   getMessages,
   sendMessage,
   markConversationRead,
+  getTotalUnreadCount,
 } from '../controllers/dmController';
 import { requireAuth } from '../middleware/authMiddleware';
 
@@ -18,6 +19,9 @@ router.get('/conversations', getConversations);
 
 // POST /api/dm/conversations                          — create or get existing conversation
 router.post('/conversations', createOrGetConversation);
+
+// GET  /api/dm/conversations/unread-count                — total unread count for auth user
+router.get('/conversations/unread-count', getTotalUnreadCount);
 
 // GET  /api/dm/conversations/:conversationId/messages — get messages in a conversation
 router.get('/conversations/:conversationId/messages', getMessages);

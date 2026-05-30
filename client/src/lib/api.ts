@@ -349,6 +349,16 @@ export const api = {
     }));
     return parseJsonResponse(res, 'Failed to mark as read');
   },
+
+  /**
+   * Fetch total unread count across all conversations for a user.
+   */
+  async fetchTotalUnreadCount(): Promise<{ status: string; data: { unreadCount: number } }> {
+    const res = await fetch(`${BASE_URL}/dm/conversations/unread-count`, requestInit({
+      cache: 'no-store'
+    }));
+    return parseJsonResponse(res, 'Failed to fetch total unread count');
+  }
 };
 
 // ─── DM Types ───────────────────────────────────────────────────────────────

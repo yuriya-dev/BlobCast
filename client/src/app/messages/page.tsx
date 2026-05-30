@@ -165,7 +165,11 @@ export default function MessagesPage() {
       const res = await api.fetchMessages(convId);
       setMessages(res.data.messages);
       // Mark as read
-      api.markConversationRead(convId).catch(() => {});
+      api.markConversationRead(convId).then(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('blobcast:messages-read'));
+        }
+      }).catch(() => {});
       // Reset unread count locally
       setConversations(prev =>
         prev.map(c => c.id === convId ? { ...c, unreadCount: 0 } : c)
@@ -221,7 +225,11 @@ export default function MessagesPage() {
 
     // Auto-mark as read if this conversation is active
     if (activeConvId === incomingMsg.conversationId) {
-      api.markConversationRead(incomingMsg.conversationId).catch(() => {});
+      api.markConversationRead(incomingMsg.conversationId).then(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('blobcast:messages-read'));
+        }
+      }).catch(() => {});
     }
   }, [authUser?.id, activeConvId]);
 

@@ -294,3 +294,35 @@ export const markConversationRead = asyncHandler(async (req: Request, res: Respo
     message: 'Messages marked as read',
   });
 });
+
+/**
+ * GET /api/dm/conversations/unread-count
+ * Returns the total number of unread messages across all conversations for the authenticated user.
+ */
+export const getTotalUnreadCount = asyncHandler(async (req: Request, res: Response) => {
+  const sessionUser = req.authUser;
+  if (!sessionUser) throw new AppError('Authentication required', 401);
+
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      OR: [
+        { participant1Id: sessionUser.id },
+        { participant2Id: sessionUser.id },
+      ],
+    },
+    select: { id: true },
+  });
+
+  const unreadCount = await prisma.directMessage.count({
+    where: {
+      conversationId: { in: conversations.map(c => c.id) },
+      senderId: { not: sessionUser.id },
+      isRead: false,
+    },
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { unreadCount },
+  });
+});
