@@ -7,6 +7,7 @@ import { AppError } from './utils/appError';
 import userRoutes from './routes/userRoutes';
 import postRoutes from './routes/postRoutes';
 import authRoutes from './routes/authRoutes';
+import dmRoutes from './routes/dmRoutes';
 
 // Load environment configurations
 dotenv.config();
@@ -30,6 +31,7 @@ app.use(loggerMiddleware);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/dm', dmRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

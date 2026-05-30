@@ -297,4 +297,86 @@ export const api = {
     }));
     return parseJsonResponse(res, 'Failed to repost');
   },
+
+  // ─── Direct Messages ────────────────────────────────────────────────────────
+
+  /**
+   * Fetch all DM conversations for the authenticated user.
+   */
+  async fetchConversations(): Promise<{ status: string; data: { conversations: ApiConversation[] } }> {
+    const res = await fetch(`${BASE_URL}/dm/conversations`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch conversations');
+  },
+
+  /**
+   * Create or retrieve an existing conversation with a recipient.
+   */
+  async createOrGetConversation(recipientId: string, suiObjectId?: string | null): Promise<{ status: string; data: { conversation: { id: string; suiObjectId: string | null; otherUser: ApiUser; createdAt: string; lastMessageAt: string | null } } }> {
+    const res = await fetch(`${BASE_URL}/dm/conversations`, requestInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipientId, suiObjectId: suiObjectId || null }),
+    }));
+    return parseJsonResponse(res, 'Failed to create conversation');
+  },
+
+  /**
+   * Fetch messages for a specific conversation with pagination.
+   */
+  async fetchMessages(conversationId: string, page = 1, limit = 50): Promise<{ status: string; data: { messages: ApiDirectMessage[] }; pagination: any }> {
+    const res = await fetch(`${BASE_URL}/dm/conversations/${conversationId}/messages?page=${page}&limit=${limit}`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch messages');
+  },
+
+  /**
+   * Send a direct message in a conversation.
+   */
+  async sendMessage(conversationId: string, text: string, walrusBlobId?: string | null): Promise<{ status: string; data: { message: ApiDirectMessage } }> {
+    const res = await fetch(`${BASE_URL}/dm/conversations/${conversationId}/messages`, requestInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, walrusBlobId: walrusBlobId || null }),
+    }));
+    return parseJsonResponse(res, 'Failed to send message');
+  },
+
+  /**
+   * Mark all messages in a conversation as read.
+   */
+  async markConversationRead(conversationId: string): Promise<{ status: string; message: string }> {
+    const res = await fetch(`${BASE_URL}/dm/conversations/${conversationId}/read`, requestInit({
+      method: 'PATCH',
+    }));
+    return parseJsonResponse(res, 'Failed to mark as read');
+  },
 };
+
+// ─── DM Types ───────────────────────────────────────────────────────────────
+
+export interface ApiDirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  text: string;
+  walrusBlobId: string | null;
+  isRead: boolean;
+  createdAt: string;
+  sender?: ApiUser;
+}
+
+export interface ApiConversation {
+  id: string;
+  suiObjectId: string | null;
+  otherUser: ApiUser;
+  lastMessage: {
+    id: string;
+    senderId: string;
+    text: string;
+    createdAt: string;
+    isRead: boolean;
+  } | null;
+  lastMessageAt: string | null;
+  createdAt: string;
+  unreadCount: number;
+}
+

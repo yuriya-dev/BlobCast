@@ -1,4 +1,6 @@
+import http from 'http';
 import app from './app';
+import { createWebSocketServer } from './lib/websocket';
 import './indexer'; // Start the off-chain event indexer
 
 // Intercept uncaught synchronous programming mistakes to prevent silent process failures
@@ -10,10 +12,17 @@ process.on('uncaughtException', (err: Error) => {
 
 const PORT = process.env.PORT || 8080;
 
-const server = app.listen(PORT, () => {
+// Create native HTTP server so WebSocket and Express share the same port
+const server = http.createServer(app);
+
+// Attach WebSocket server to the same HTTP server on path /ws
+createWebSocketServer(server);
+
+server.listen(PORT, () => {
     console.log(`🚀 ===================================================`);
     console.log(`🚀 [BlobCast Backend Server] Engine online on port ${PORT}`);
     console.log(`🚀 Supabase Database Engine Connected via Prisma client`);
+    console.log(`🚀 WebSocket server running on ws://localhost:${PORT}/ws`);
     console.log(`🚀 ===================================================`);
 });
 
