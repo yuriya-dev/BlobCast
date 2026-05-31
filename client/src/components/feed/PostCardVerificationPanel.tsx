@@ -41,15 +41,27 @@ export function PostCardVerificationPanel({
         </div>
         <div className="flex items-center justify-between">
           <span>Sui Content Owner:</span>
-          <span className="text-gray-300 truncate w-48 text-right" title={authorResolved.walletAddress}>
+          <a
+            href={`https://suiscan.xyz/testnet/account/${authorResolved.walletAddress}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-300 hover:text-sui-cyan hover:underline truncate w-48 text-right"
+            title={authorResolved.walletAddress}
+          >
             {authorResolved.walletAddress}
-          </span>
+          </a>
         </div>
         <div className="flex items-center justify-between">
-          <span>Aggregator Storage URI:</span>
-          <span className="text-sui-cyan truncate w-48 text-right">
-            Aggregator::{walrusBlobId.replace('walrus://', '')}
-          </span>
+          <span>Walrus Blob Verification:</span>
+          <a
+            href={`https://walruscan.com/testnet/blob/${walrusBlobId.replace('walrus://', '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sui-cyan flex items-center gap-1 hover:underline truncate w-48 justify-end"
+            title="Verify Blob on Walrus Scan"
+          >
+            {walrusBlobId.replace('walrus://', '').substring(0, 16)}... <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
         <div className="flex items-center justify-between">
           <span>Content Hash:</span>
@@ -60,7 +72,12 @@ export function PostCardVerificationPanel({
         {suiObjectId && (
           <div className="flex items-center justify-between border-t border-sui-cyan/5 pt-2 mt-1">
             <span>Sui Object Reference ID:</span>
-            <a href="#" className="text-sui-cyan flex items-center gap-1 hover:underline">
+            <a
+              href={`https://suiscan.xyz/testnet/object/${suiObjectId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sui-cyan flex items-center gap-1 hover:underline"
+            >
               {truncateWallet(suiObjectId)} <ExternalLink className="h-3 w-3" />
             </a>
           </div>
