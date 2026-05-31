@@ -4,17 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { 
   Tv, 
-  Terminal, 
-  Database, 
   Activity, 
-  AlertTriangle,
-  Server,
-  CloudLightning,
-  Sparkles,
-  Share2,
   Bell,
-  Search,
-  CheckCircle2
+  Search
 } from 'lucide-react';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
@@ -29,7 +21,6 @@ import { useAuth } from '@/components/providers/AuthProvider';
 export default function SocialFeedPage() {
   const { user: authUser } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
-  const [isBackendDown, setIsBackendDown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifsLog, setShowNotifsLog] = useState(false);
@@ -69,7 +60,7 @@ export default function SocialFeedPage() {
     loadFeed();
 
     // Sync latest pinned post from DB to localStorage on feed mount
-    if (!isBackendDown && authUser) {
+    if (authUser) {
       (async () => {
         try {
           const res = await api.fetchUserProfile(authUser.walletAddress);
@@ -97,7 +88,7 @@ export default function SocialFeedPage() {
         setSearchQuery(search);
       }
     }
-  }, [isBackendDown, authUser]);
+  }, [authUser]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -110,12 +101,11 @@ export default function SocialFeedPage() {
     return () => {
       window.removeEventListener('blobcast:new-post', handleNewPost);
     };
-  }, [isBackendDown]);
+  }, []);
 
   // Load notifications from indexer telemetry REST API periodically
   useEffect(() => {
     const fetchNotifs = async () => {
-      if (isBackendDown) return;
       try {
         const response = await api.fetchNotifications();
         if (response && response.data && response.data.notifications && response.data.notifications.length > 0) {
@@ -137,7 +127,7 @@ export default function SocialFeedPage() {
     fetchNotifs();
     const interval = setInterval(fetchNotifs, 5000); // Poll every 5s for real-time indexer dynamic action feel!
     return () => clearInterval(interval);
-  }, [isBackendDown]);
+  }, []);
 
   const loadFeed = async () => {
     setIsLoading(true);
@@ -147,103 +137,101 @@ export default function SocialFeedPage() {
       return sorted;
     };
 
-    if (!isBackendDown) {
-      try {
-        const response = await api.fetchPosts(1, 20);
-        if (response && response.data && response.data.posts) {
-          const apiPosts = response.data.posts;
-          
-          const mapped = await Promise.all(apiPosts.map(async (p: ApiPost) => {
-            let text = 'Immutable social post stored on Walrus.';
-            let hashtags: string[] = [];
-            let mediaUrl: string | undefined = undefined;
-            let media: any[] = [];
+    try {
+      const response = await api.fetchPosts(1, 20);
+      if (response && response.data && response.data.posts) {
+        const apiPosts = response.data.posts;
+        
+        const mapped = await Promise.all(apiPosts.map(async (p: ApiPost) => {
+          let text = 'Immutable social post stored on Walrus.';
+          let hashtags: string[] = [];
+          let mediaUrl: string | undefined = undefined;
+          let media: any[] = [];
 
-            // Check if we have dynamic Walrus blob content
-            if (p.walrusBlobId) {
-              try {
-                // Fetch the dynamic JSON schema payload from Walrus publisher/aggregator or localStorage
-                const walrusContent = await walrus.getBlob(p.walrusBlobId);
-                if (walrusContent && typeof walrusContent === 'object') {
-                  const contentObj = walrusContent as any;
-                  
-                  // Support nested content.text or flat text
-                  if (contentObj.content?.text) {
-                    text = contentObj.content.text;
-                  } else if (contentObj.text) {
-                    text = contentObj.text;
-                  } else if (contentObj.content && typeof contentObj.content === 'string') {
-                    text = contentObj.content;
-                  }
-
-                  // Support nested or flat hashtags
-                  if (contentObj.content?.hashtags) {
-                    hashtags = contentObj.content.hashtags;
-                  } else if (contentObj.hashtags) {
-                    hashtags = contentObj.hashtags;
-                  }
-
-                  // Support nested or flat media attachments
-                  const mediaList = contentObj.media || contentObj.content?.media || [];
-                  if (mediaList && mediaList.length > 0) {
-                    media = mediaList;
-                    mediaUrl = mediaList[0].blob_id || mediaList[0].blobUrl || mediaList[0].url;
-                  }
-                } else if (typeof walrusContent === 'string' && walrusContent.length > 0) {
-                  // Plain text content
-                  text = walrusContent;
+          // Check if we have dynamic Walrus blob content
+          if (p.walrusBlobId) {
+            try {
+              // Fetch the dynamic JSON schema payload from Walrus publisher/aggregator or localStorage
+              const walrusContent = await walrus.getBlob(p.walrusBlobId);
+              if (walrusContent && typeof walrusContent === 'object') {
+                const contentObj = walrusContent as any;
+                
+                // Support nested content.text or flat text
+                if (contentObj.content?.text) {
+                  text = contentObj.content.text;
+                } else if (contentObj.text) {
+                  text = contentObj.text;
+                } else if (contentObj.content && typeof contentObj.content === 'string') {
+                  text = contentObj.content;
                 }
-              } catch (walrusErr) {
-                console.warn(`⚠️ Failed to fetch Walrus blob payload for ${p.walrusBlobId}:`, walrusErr);
-                // Generic fallback — show author name and timestamp so the post isn't a confusing stub
-                text = `Cast by ${p.author?.displayName || p.author?.username || 'Anonymous'} · Stored on Walrus`;
+
+                // Support nested or flat hashtags
+                if (contentObj.content?.hashtags) {
+                  hashtags = contentObj.content.hashtags;
+                } else if (contentObj.hashtags) {
+                  hashtags = contentObj.hashtags;
+                }
+
+                // Support nested or flat media attachments
+                const mediaList = contentObj.media || contentObj.content?.media || [];
+                if (mediaList && mediaList.length > 0) {
+                  media = mediaList;
+                  mediaUrl = mediaList[0].blob_id || mediaList[0].blobUrl || mediaList[0].url;
+                }
+              } else if (typeof walrusContent === 'string' && walrusContent.length > 0) {
+                // Plain text content
+                text = walrusContent;
               }
+            } catch (walrusErr) {
+              console.warn(`⚠️ Failed to fetch Walrus blob payload for ${p.walrusBlobId}:`, walrusErr);
+              // Generic fallback — show author name and timestamp so the post isn't a confusing stub
+              text = `Cast by ${p.author?.displayName || p.author?.username || 'Anonymous'} · Stored on Walrus`;
             }
+          }
 
-            // Construct unified post layout for feed rendering
-            return {
-              id: p.id,
+          // Construct unified post layout for feed rendering
+          return {
+            id: p.id,
+            author: {
+              displayName: p.author?.displayName || 'Anonymous Caster',
+              username: p.author?.username || 'anonymous',
+              walletAddress: p.author?.walletAddress || '0x000000...',
+              avatarBlobId: p.author?.avatarBlobId || '',
+              verified: p.author?.verified || false
+            },
+            walrusBlobId: p.walrusBlobId,
+            blobHash: p.blobHash,
+            contentType: p.contentType,
+            text: text,
+            hashtags: hashtags,
+            mediaUrl: mediaUrl,
+            media: media,
+            likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
+            commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
+            repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
+            suiObjectId: p.suiObjectId || undefined,
+            createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+            likes: (p as any).repostOf ? ((p as any).repostOf.likes || []) : ((p as any).likes || []),
+            reposts: (p as any).repostOf ? ((p as any).repostOf.reposts || []) : ((p as any).reposts || []),
+            repostOf: (p as any).repostOf ? {
+              id: (p as any).repostOf.id,
               author: {
-                displayName: p.author?.displayName || 'Anonymous Caster',
-                username: p.author?.username || 'anonymous',
-                walletAddress: p.author?.walletAddress || '0x000000...',
-                avatarBlobId: p.author?.avatarBlobId || '',
-                verified: p.author?.verified || false
-              },
-              walrusBlobId: p.walrusBlobId,
-              blobHash: p.blobHash,
-              contentType: p.contentType,
-              text: text,
-              hashtags: hashtags,
-              mediaUrl: mediaUrl,
-              media: media,
-              likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
-              commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
-              repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
-              suiObjectId: p.suiObjectId || undefined,
-              createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
-              likes: (p as any).repostOf ? ((p as any).repostOf.likes || []) : ((p as any).likes || []),
-              reposts: (p as any).repostOf ? ((p as any).repostOf.reposts || []) : ((p as any).reposts || []),
-              repostOf: (p as any).repostOf ? {
-                id: (p as any).repostOf.id,
-                author: {
-                  displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
-                  username: (p as any).repostOf.author?.username || 'anonymous',
-                  walletAddress: (p as any).repostOf.author?.walletAddress || '0x000000...',
-                  avatarBlobId: (p as any).repostOf.author?.avatarBlobId || '',
-                  verified: (p as any).repostOf.author?.verified || false
-                }
-              } : null
-            };
-          }));
+                displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
+                username: (p as any).repostOf.author?.username || 'anonymous',
+                walletAddress: (p as any).repostOf.author?.walletAddress || '0x000000...',
+                avatarBlobId: (p as any).repostOf.author?.avatarBlobId || '',
+                verified: (p as any).repostOf.author?.verified || false
+              }
+            } : null
+          };
+        }));
 
-          setPosts(sortAndPinPosts(mapped));
-          setIsLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.warn("⚠️ Express Backend offline. Automatically falling back to resilient Walrus Decentralized Aggregator simulation.");
+        setPosts(sortAndPinPosts(mapped));
+        setIsLoading(false);
+        return;
       }
+    } catch (err) {
+      console.warn("⚠️ Express Backend offline. Automatically falling back to resilient Walrus Decentralized Aggregator simulation.");
     }
     
     // Resilient Fallback to InMemory/Walrus aggregator simulated cache
@@ -344,7 +332,7 @@ export default function SocialFeedPage() {
       walrusContent: newPost.walrusContent,
     };
 
-    if (!isBackendDown && authUser) {
+    if (authUser) {
       try {
         await api.createPost({
           authorId: authUser.id,
@@ -408,66 +396,16 @@ export default function SocialFeedPage() {
               <Bell className="h-4 w-4 animate-pulse" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-sui-cyan node-pulse" />
             </button>
-
-            {/* DEMO SLIDE MOMENT TRIGGER CONTROL */}
-            <div className="flex items-center gap-2 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/25 px-3 py-1.5 rounded-2xl transition-all">
-              <input 
-                type="checkbox" 
-                id="outage-toggle"
-                checked={isBackendDown}
-                onChange={(e) => setIsBackendDown(e.target.checked)}
-                className="accent-rose-500 cursor-pointer"
-              />
-              <label htmlFor="outage-toggle" className="text-[10px] font-mono font-bold text-rose-400 cursor-pointer select-none">
-                DEMO: OUTAGE MODE
-              </label>
-            </div>
           </div>
         </header>
 
 
 
-        {/* DEMO OUTAGE BANNER */}
-        <AnimatePresence>
-          {isBackendDown && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-rose-500/10 border-b border-rose-500/20 px-6 py-3 flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5 animate-pulse" />
-                <div className="flex-1 font-mono text-[10px] text-gray-300">
-                  <span className="text-rose-400 font-bold uppercase block mb-0.5">
-                    ⚠️ CRITICAL: Centralized Backend Server Outage Simulated
-                  </span>
-                  Database connection closed. Standard web queries terminated. 
-                  <span className="text-sui-cyan font-semibold block mt-1">
-                    ➡️ Live feed resolved exclusively via Walrus Storage node aggregators & decentralized cryptography!
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Feed Scroll Content */}
         <div className="flex-1 p-6 flex flex-col gap-6">
           
           {/* Post composer wrapper */}
-          {!isBackendDown && (
-            <PostComposer onPostCreated={handlePostCreated} />
-          )}
-
-          {isBackendDown && (
-            <div className="bg-walrus-blue/30 border border-dashed border-rose-500/25 rounded-3xl p-5 text-center font-mono text-xs text-rose-400/80">
-              <CloudLightning className="h-6 w-6 mx-auto mb-2 text-rose-400" />
-              Posting composer offline: Server transactions halted. 
-              <br />
-              <span className="text-gray-500 text-[10px] block mt-1">Decentralized storage read-mode remains 100% operational.</span>
-            </div>
-          )}
+          <PostComposer onPostCreated={handlePostCreated} />
 
           {/* Posts container list */}
           {isLoading ? (
@@ -487,11 +425,6 @@ export default function SocialFeedPage() {
               ) : (
                 filteredPosts.map((post) => (
                   <div key={post.id} className="relative">
-                    {isBackendDown && (
-                      <div className="absolute -top-2.5 right-6 bg-sui-cyan/10 border border-sui-cyan/30 text-sui-cyan font-mono text-[8px] font-bold uppercase px-2 py-0.5 rounded-full z-20 flex items-center gap-1 shadow-md">
-                        <Database className="h-2 w-2" /> Resolved via Walrus Aggregator
-                      </div>
-                    )}
                     <PostCard post={post} onPin={handlePinPost} />
                   </div>
                 ))
