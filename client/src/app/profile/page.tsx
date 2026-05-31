@@ -26,6 +26,14 @@ import { PostCard } from '@/components/feed/PostCard';
 import { mockDb, MockUser, MockPost } from '@/lib/db';
 import { walrus } from '@/lib/walrus';
 import { api } from '@/lib/api';
+import {
+  githubDisplay,
+  githubHref,
+  normalizeGithubForStorage,
+  normalizeWebsiteForStorage,
+  websiteDisplay,
+  websiteHref,
+} from '@/lib/profileLinks';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { useAuth } from '@/components/providers/AuthProvider';
 
@@ -219,8 +227,8 @@ export default function ProfilePage() {
   // Edit form states
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
-  const [website, setWebsite] = useState('https://blobcast.xyz');
-  const [github, setGithub] = useState('https://github.com/blobcast');
+  const [website, setWebsite] = useState('');
+  const [github, setGithub] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
   const editAvatarUrlResolved = useWalrusImage(avatarUrl);
@@ -294,8 +302,8 @@ export default function ProfilePage() {
     if (typeof window !== 'undefined') {
       const storedWebsite = localStorage.getItem(`blobcast_my_website_${walletKey}`);
       const storedGithub = localStorage.getItem(`blobcast_my_github_${walletKey}`);
-      if (storedWebsite) setWebsite(storedWebsite);
-      if (storedGithub) setGithub(storedGithub);
+      if (storedWebsite) setWebsite(normalizeWebsiteForStorage(storedWebsite));
+      if (storedGithub) setGithub(normalizeGithubForStorage(storedGithub));
     }
 
     let resolvedUserId = authUser?.id || '';
@@ -333,8 +341,8 @@ export default function ProfilePage() {
         setBio(user.bio || '');
         setAvatarUrl(user.avatarBlobId || '');
         setBannerUrl(user.bannerBlobId || '');
-        if (user.website) setWebsite(user.website);
-        if (user.github) setGithub(user.github);
+        if (user.website) setWebsite(normalizeWebsiteForStorage(user.website));
+        if (user.github) setGithub(normalizeGithubForStorage(user.github));
 
         // Fetch real tips received from database
         try {
@@ -499,8 +507,8 @@ export default function ProfilePage() {
         setBio(user.bio || '');
         setAvatarUrl(user.avatarBlobId || '');
         setBannerUrl(user.bannerBlobId || '');
-        if (user.website) setWebsite(user.website);
-        if (user.github) setGithub(user.github);
+        if (user.website) setWebsite(normalizeWebsiteForStorage(user.website));
+        if (user.github) setGithub(normalizeGithubForStorage(user.github));
       }
 
       // Filter Yuriya posts
@@ -685,8 +693,8 @@ export default function ProfilePage() {
         avatar_blob_id: avatarUrl.startsWith('walrus') ? avatarUrl : `walrus://${avatarUrl}`,
         banner_blob_id: bannerUrl.startsWith('walrus') ? bannerUrl : `walrus://${bannerUrl}`,
         links: {
-          website,
-          github
+          website: normalizeWebsiteForStorage(website),
+          github: normalizeGithubForStorage(github),
         }
       };
 
@@ -702,8 +710,8 @@ export default function ProfilePage() {
           bio: bio,
           avatarBlobId: avatarUrl,
           bannerBlobId: bannerUrl,
-          website: website,
-          github: github
+          website: normalizeWebsiteForStorage(website),
+          github: normalizeGithubForStorage(github),
         });
       } catch (backendErr) {
         console.warn("⚠️ Failed to synchronize updated profile metadata with REST API server.");
@@ -733,8 +741,8 @@ export default function ProfilePage() {
             const key = `blobcast_my_avatar_blob_id_${walletKey}`;
             localStorage.setItem(key, avatarUrl);
           }
-          localStorage.setItem(`blobcast_my_website_${walletKey}`, website);
-          localStorage.setItem(`blobcast_my_github_${walletKey}`, github);
+          localStorage.setItem(`blobcast_my_website_${walletKey}`, normalizeWebsiteForStorage(website));
+          localStorage.setItem(`blobcast_my_github_${walletKey}`, normalizeGithubForStorage(github));
         }
         
         // Push notification of profile update
@@ -947,18 +955,32 @@ export default function ProfilePage() {
 
             {/* Links and metadata */}
             <div className="flex flex-wrap gap-4 text-xs font-mono text-gray-500 mt-1">
-              <div className="flex items-center gap-1.5">
-                <Globe className="h-3.5 w-3.5 text-sui-cyan" />
-                <a href={website.startsWith('http') ? website : `https://${website}`} target="_blank" className="hover:underline text-gray-400 hover:text-white no-navigate">
-                  {website.replace('https://', '').replace('http://', '')}
-                </a>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <GithubIcon className="h-3.5 w-3.5 text-tatum-purple" />
-                <a href={github.startsWith('http') ? github : `https://github.com/${github}`} target="_blank" className="hover:underline text-gray-400 hover:text-white no-navigate">
-                  {github.replace('https://github.com/', '').replace('github.com/', '').replace('http://github.com/', '')}
-                </a>
-              </div>
+              {websiteHref(website) && (
+                <div className="flex items-center gap-1.5">
+                  <Globe className="h-3.5 w-3.5 text-sui-cyan" />
+                  <a
+                    href={websiteHref(website)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline text-gray-400 hover:text-white no-navigate"
+                  >
+                    {websiteDisplay(website)}
+                  </a>
+                </div>
+              )}
+              {githubHref(github) && (
+                <div className="flex items-center gap-1.5">
+                  <GithubIcon className="h-3.5 w-3.5 text-tatum-purple" />
+                  <a
+                    href={githubHref(github)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline text-gray-400 hover:text-white no-navigate"
+                  >
+                    {githubDisplay(github)}
+                  </a>
+                </div>
+              )}
               <div className="flex items-center gap-1 bg-sui-cyan/5 px-2.5 py-0.5 rounded-full border border-sui-cyan/10 text-[10px] text-sui-cyan">
                 <Database className="h-3 w-3" /> VERIFIED ON WALRUS
               </div>
@@ -1107,20 +1129,22 @@ export default function ProfilePage() {
                 {/* Website Links inputs */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Website URL</label>
+                    <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Website</label>
                     <input 
                       type="text" 
                       value={website}
                       onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="blobcast.xyz"
                       className="bg-walrus-blue/40 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2.5 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-mono"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">GitHub Handle</label>
+                    <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">GitHub</label>
                     <input 
                       type="text" 
                       value={github}
                       onChange={(e) => setGithub(e.target.value)}
+                      placeholder="username"
                       className="bg-walrus-blue/40 border border-sui-cyan/15 rounded-cyber-sm px-3.5 py-2.5 text-xs text-soft-white outline-none focus:border-sui-cyan/50 font-mono"
                     />
                   </div>
