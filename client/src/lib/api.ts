@@ -54,6 +54,8 @@ export interface ApiPost {
   commentCount: number;
   repostCount: number;
   score: number;
+  moderationStatus?: string;
+  moderationReason?: string | null;
   createdAt: string;
   author?: ApiUser;
   media?: any[];
@@ -84,7 +86,8 @@ export const api = {
     contentType: number;
     visibility: number;
     mentions?: string[];
-  }): Promise<{ status: string; data: { post: ApiPost } }> {
+    contentText?: string;
+  }): Promise<{ status: string; message?: string; data: { post: ApiPost; moderation?: { status: string; reason: string } } }> {
     const res = await fetch(`${BASE_URL}/posts`, requestInit({
       method: 'POST',
       headers: {
@@ -274,13 +277,19 @@ export const api = {
   /**
    * Register a permanent Walrus comment blob reference on the post thread.
    */
-  async createComment(id: string, authorId: string, walrusBlobId: string, mentions?: string[]): Promise<{ status: string; data: { comment: any } }> {
+  async createComment(
+    id: string,
+    authorId: string,
+    walrusBlobId: string,
+    mentions?: string[],
+    contentText?: string
+  ): Promise<{ status: string; message?: string; data: { comment: any; moderation?: { status: string; reason: string } } }> {
     const res = await fetch(`${BASE_URL}/posts/${id}/comments`, requestInit({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ authorId, walrusBlobId, mentions }),
+      body: JSON.stringify({ authorId, walrusBlobId, mentions, contentText }),
     }));
     return parseJsonResponse(res, 'Failed to submit comment');
   },

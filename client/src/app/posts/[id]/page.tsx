@@ -197,11 +197,14 @@ export default function PostDetailPage({ params }: PageProps) {
           commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
           repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
           suiObjectId: p.suiObjectId || undefined,
+          moderationStatus: p.moderationStatus,
+          moderationReason: p.moderationReason,
           createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
           likes: (p as any).repostOf ? ((p as any).repostOf.likes || []) : ((p as any).likes || []),
           reposts: (p as any).repostOf ? ((p as any).repostOf.reposts || []) : ((p as any).reposts || []),
           repostOf: (p as any).repostOf ? {
             id: (p as any).repostOf.id,
+            moderationStatus: (p as any).repostOf.moderationStatus,
             author: {
               displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
               username: (p as any).repostOf.author?.username || 'anonymous',
@@ -355,7 +358,18 @@ export default function PostDetailPage({ params }: PageProps) {
           return matches ? matches.map(m => m.replace('@', '').toLowerCase()) : [];
         };
 
-        const response = await api.createComment(id, authorId, walrusUploadInfo.blobId, extractMentions(commentText));
+        const response = await api.createComment(
+          id,
+          authorId,
+          walrusUploadInfo.blobId,
+          extractMentions(commentText),
+          commentText
+        );
+        if (response?.data?.moderation?.status === 'HIDDEN' || response?.data?.comment?.moderationStatus === 'HIDDEN') {
+          alert(response.message || 'Your comment was stored on Walrus but hidden from the feed due to content guidelines.');
+          setIsPostingComment(false);
+          return;
+        }
         if (response && response.data && response.data.comment) {
           await loadPostAndComments();
           setCommentText('');

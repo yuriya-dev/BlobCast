@@ -3,6 +3,12 @@ import { prisma } from '../lib/db';
 import { cache } from '../lib/redis';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
+import {
+    MODERATION_STATUS,
+    runContentModeration,
+    visibleCommentWhere,
+    visiblePostWhere,
+} from '../lib/moderation';
 
 /**
  * Controller to fetch all posts / timeline feed from Supabase with pagination support.
@@ -13,6 +19,7 @@ export const getAllPosts = asyncHandler(async (req: Request, res: Response) => {
     const skip = (page - 1) * limit;
 
     const posts = await prisma.post.findMany({
+        where: visiblePostWhere,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -47,7 +54,7 @@ export const getAllPosts = asyncHandler(async (req: Request, res: Response) => {
         }
     });
 
-    const totalPosts = await prisma.post.count();
+    const totalPosts = await prisma.post.count({ where: visiblePostWhere });
 
     res.status(200).json({
         status: 'success',
@@ -78,6 +85,7 @@ export const getPostById = asyncHandler(async (req: Request, res: Response) => {
             author: true,
             media: true,
             comments: {
+                where: visibleCommentWhere,
                 include: { author: true },
                 orderBy: { createdAt: 'asc' }
             },
@@ -123,7 +131,7 @@ export const getPostById = asyncHandler(async (req: Request, res: Response) => {
  * Controller to create a new permanent post reference object inside Supabase.
  */
 export const createPost = asyncHandler(async (req: Request, res: Response) => {
-    const { authorId, suiObjectId, walrusBlobId, blobHash, contentType, visibility, mentions } = req.body;
+    const { authorId, suiObjectId, walrusBlobId, blobHash, contentType, visibility, mentions, contentText } = req.body;
     const sessionUser = req.authUser;
 
     if (!sessionUser) {
@@ -147,6 +155,8 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
         throw new AppError('Specified author profile does not exist', 404);
     }
 
+    const moderation = await runContentModeration({ contentText, walrusBlobId });
+
     const post = await prisma.post.create({
         data: {
             authorId: sessionUser.id,
@@ -155,7 +165,9 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
             blobHash,
             contentType: parseInt(contentType, 10) || 0,
             visibility: parseInt(visibility, 10) || 0,
-            score: 0
+            score: 0,
+            moderationStatus: moderation.status,
+            moderationReason: moderation.reason === 'none' ? null : moderation.reason,
         },
         include: {
             author: true
@@ -163,7 +175,12 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
     });
 
     // Create Mention Notifications
-    if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+    if (
+        moderation.status === MODERATION_STATUS.VISIBLE &&
+        mentions &&
+        Array.isArray(mentions) &&
+        mentions.length > 0
+    ) {
         try {
             for (const username of mentions) {
                 const trimmedUsername = username.replace(/^@/, '').trim();
@@ -191,8 +208,11 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
 
     res.status(201).json({
         status: 'success',
-        message: 'Post reference registered verifiably in Supabase database',
-        data: { post }
+        message:
+            moderation.status === MODERATION_STATUS.HIDDEN
+                ? 'Post stored on Walrus but hidden from the BlobCast feed due to content guidelines.'
+                : 'Post reference registered verifiably in Supabase database',
+        data: { post, moderation }
     });
 });
 
@@ -304,7 +324,7 @@ export const likePost = asyncHandler(async (req: Request, res: Response) => {
  */
 export const createComment = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params; // Post ID
-    const { authorId, walrusBlobId, mentions } = req.body;
+    const { authorId, walrusBlobId, mentions, contentText } = req.body;
     const sessionUser = req.authUser;
 
     if (!sessionUser) {
@@ -322,31 +342,45 @@ export const createComment = asyncHandler(async (req: Request, res: Response) =>
     // Verify post exists
     const post = await prisma.post.findUnique({ where: { id } });
     if (!post) throw new AppError('Post not found', 404);
+    if (post.moderationStatus !== MODERATION_STATUS.VISIBLE) {
+        throw new AppError('Cannot comment on hidden content', 403);
+    }
 
     // Verify author exists
     const author = await prisma.user.findUnique({ where: { id: sessionUser.id } });
     if (!author) throw new AppError('Author profile not found', 404);
+
+    const moderation = await runContentModeration({ contentText, walrusBlobId });
 
     // Create Comment in database
     const comment = await prisma.comment.create({
         data: {
             postId: id,
             authorId: sessionUser.id,
-            walrusBlobId
+            walrusBlobId,
+            moderationStatus: moderation.status,
+            moderationReason: moderation.reason === 'none' ? null : moderation.reason,
         },
         include: {
             author: true
         }
     });
 
-    // Increment post commentCount
-    await prisma.post.update({
-        where: { id },
-        data: { commentCount: { increment: 1 } }
-    });
+    // Increment post commentCount only for visible comments
+    if (moderation.status === MODERATION_STATUS.VISIBLE) {
+        await prisma.post.update({
+            where: { id },
+            data: { commentCount: { increment: 1 } }
+        });
+    }
 
     // Create Mention Notifications
-    if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+    if (
+        moderation.status === MODERATION_STATUS.VISIBLE &&
+        mentions &&
+        Array.isArray(mentions) &&
+        mentions.length > 0
+    ) {
         try {
             for (const username of mentions) {
                 const trimmedUsername = username.replace(/^@/, '').trim();
@@ -374,8 +408,11 @@ export const createComment = asyncHandler(async (req: Request, res: Response) =>
 
     res.status(201).json({
         status: 'success',
-        message: 'Comment registered successfully in Supabase database',
-        data: { comment }
+        message:
+            moderation.status === MODERATION_STATUS.HIDDEN
+                ? 'Comment stored on Walrus but hidden from the BlobCast feed due to content guidelines.'
+                : 'Comment registered successfully in Supabase database',
+        data: { comment, moderation }
     });
 });
 
@@ -405,6 +442,9 @@ export const repostPost = asyncHandler(async (req: Request, res: Response) => {
     // Verify original post exists
     const originalPost = await prisma.post.findUnique({ where: { id } });
     if (!originalPost) throw new AppError('Original post not found', 404);
+    if (originalPost.moderationStatus !== MODERATION_STATUS.VISIBLE) {
+        throw new AppError('Cannot repost hidden content', 403);
+    }
 
     // Verify author exists
     const author = await prisma.user.findUnique({ where: { id: resolvedAuthorId } });
@@ -438,7 +478,9 @@ export const repostPost = asyncHandler(async (req: Request, res: Response) => {
                 walrusBlobId: originalPost.walrusBlobId,
                 blobHash: originalPost.blobHash,
                 contentType: originalPost.contentType,
-                score: 0
+                score: 0,
+                moderationStatus: MODERATION_STATUS.VISIBLE,
+                moderationReason: null,
             }
         });
         // Increment repostCount on original post

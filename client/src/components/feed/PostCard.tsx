@@ -29,6 +29,8 @@ import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { useRouter, usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { HiddenContentBanner } from '@/components/moderation/HiddenContentBanner';
+import { isContentVisible } from '@/lib/moderation';
 import { PostCardVerificationPanel } from './PostCardVerificationPanel';
 import { PostCardCommentComposer } from './PostCardCommentComposer';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -81,12 +83,15 @@ interface PostCardProps {
     commentCount: number;
     repostCount: number;
     suiObjectId?: string;
+    moderationStatus?: string;
+    moderationReason?: string | null;
     createdAt: Date;
     likes?: Array<{ userId: string }>;
     reposts?: Array<{ authorId: string }>;
     repostOf?: {
       id: string;
       author: PostAuthor;
+      moderationStatus?: string;
     } | null;
   };
   onCommentCreated?: (comment: unknown) => void;
@@ -439,10 +444,17 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
           targetPostId, 
           authorId, 
           walrusUploadInfo.blobId,
-          extractMentions(newCommentText)
+          extractMentions(newCommentText),
+          newCommentText
         );
         if (response && response.data && response.data.comment) {
           const com = response.data.comment;
+          if (response.data.moderation?.status === 'HIDDEN' || com.moderationStatus === 'HIDDEN') {
+            alert(response.message || 'Your comment was stored on Walrus but hidden from the feed due to content guidelines.');
+            setNewCommentText('');
+            setIsPostingComment(false);
+            return;
+          }
           setNewCommentText('');
           post.commentCount += 1;
           setShowComments(false);
@@ -622,6 +634,11 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
 
   if (isDeleted) return null;
 
+  const isPostHidden = !isContentVisible(post.moderationStatus);
+  const isRepostSourceHidden =
+    !!post.repostOf && !isContentVisible(post.repostOf.moderationStatus);
+  const isContentBlocked = isPostHidden || isRepostSourceHidden;
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 15 }}
@@ -751,67 +768,74 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             </div>
           </div>
 
-          {/* Text Content */}
-          <p className="text-sm leading-relaxed text-gray-200 whitespace-pre-wrap font-sans">
-            {renderFormattedText(post.text)}
-          </p>
+          {isContentBlocked ? (
+            <HiddenContentBanner />
+          ) : (
+            <>
+              {/* Text Content */}
+              <p className="text-sm leading-relaxed text-gray-200 whitespace-pre-wrap font-sans">
+                {renderFormattedText(post.text)}
+              </p>
 
-          {/* Hashtags */}
-          {post.hashtags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-0.5">
-              {post.hashtags.map(tag => (
-                <span
-                  key={tag}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/search?q=${encodeURIComponent('#' + tag)}`);
-                  }}
-                  className="text-xs font-mono text-sui-cyan hover:underline cursor-pointer bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10 no-navigate"
+              {/* Hashtags */}
+              {post.hashtags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                  {post.hashtags.map(tag => (
+                    <span
+                      key={tag}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/search?q=${encodeURIComponent('#' + tag)}`);
+                      }}
+                      className="text-xs font-mono text-sui-cyan hover:underline cursor-pointer bg-sui-cyan/5 px-2 py-0.5 rounded-full border border-sui-cyan/10 no-navigate"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Optional Media preview */}
+              {mediaItems.length > 0 && (
+                <PostMediaGallery items={mediaItems} />
+              )}
+
+              {/* Walrus Storage Reference badge bar */}
+              <div className="flex items-center justify-between gap-4 mt-3 bg-walrus-blue/40 border border-sui-cyan/5 rounded-cyber-md p-3">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Database className="h-4.5 w-4.5 text-sui-cyan" />
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-[9px] text-gray-400 font-mono uppercase tracking-wider">Walrus Blob Reference</span>
+                    <span className="text-[10px] font-mono text-sui-cyan truncate" title={post.walrusBlobId}>
+                      {post.walrusBlobId}
+                    </span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setShowMetadataPop(!showMetadataPop)}
+                  className="text-[9px] font-mono border border-sui-cyan/20 hover:border-sui-cyan/60 px-2 py-1 rounded-cyber-sm hover:bg-sui-cyan/5 transition-all text-gray-400 hover:text-white"
                 >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Optional Media preview */}
-          {mediaItems.length > 0 && (
-            <PostMediaGallery items={mediaItems} />
-          )}
-
-          {/* Walrus Storage Reference badge bar */}
-          <div className="flex items-center justify-between gap-4 mt-3 bg-walrus-blue/40 border border-sui-cyan/5 rounded-cyber-md p-3">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <Database className="h-4.5 w-4.5 text-sui-cyan" />
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-[9px] text-gray-400 font-mono uppercase tracking-wider">Walrus Blob Reference</span>
-                <span className="text-[10px] font-mono text-sui-cyan truncate" title={post.walrusBlobId}>
-                  {post.walrusBlobId}
-                </span>
+                  Verify On-Chain
+                </button>
               </div>
-            </div>
 
-            <button 
-              onClick={() => setShowMetadataPop(!showMetadataPop)}
-              className="text-[9px] font-mono border border-sui-cyan/20 hover:border-sui-cyan/60 px-2 py-1 rounded-cyber-sm hover:bg-sui-cyan/5 transition-all text-gray-400 hover:text-white"
-            >
-              Verify On-Chain
-            </button>
-          </div>
-
-          {/* Dynamic cryptographic verification dropdown info panel */}
-          <AnimatePresence>
-            <PostCardVerificationPanel
-              showMetadataPop={showMetadataPop}
-              authorResolved={authorResolved}
-              walrusBlobId={post.walrusBlobId}
-              blobHash={post.blobHash}
-              suiObjectId={post.suiObjectId}
-              truncateWallet={truncateWallet}
-            />
-          </AnimatePresence>
+              {/* Dynamic cryptographic verification dropdown info panel */}
+              <AnimatePresence>
+                <PostCardVerificationPanel
+                  showMetadataPop={showMetadataPop}
+                  authorResolved={authorResolved}
+                  walrusBlobId={post.walrusBlobId}
+                  blobHash={post.blobHash}
+                  suiObjectId={post.suiObjectId}
+                  truncateWallet={truncateWallet}
+                />
+              </AnimatePresence>
+            </>
+          )}
 
           {/* Card interaction controls footer */}
+          {!isContentBlocked && (
           <div className="flex items-center justify-between mt-3 text-gray-500 text-xs font-mono border-t border-sui-cyan/5 pt-3">
             <button 
               onClick={handleLike}
@@ -883,8 +907,10 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
               <Share2 className="h-4 w-4 transition-transform group-active:scale-110" />
             </button>
           </div>
+          )}
 
           {/* Comment submit form inside PostCard */}
+          {!isContentBlocked && (
           <AnimatePresence>
             <PostCardCommentComposer
               showComments={showComments}
@@ -895,6 +921,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
               handleCommentSubmit={handleCommentSubmit}
             />
           </AnimatePresence>
+          )}
 
 
 

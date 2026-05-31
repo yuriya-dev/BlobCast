@@ -58,6 +58,8 @@ model Post {
   commentCount Int       @default(0) @map("comment_count")
   repostCount  Int       @default(0) @map("repost_count")
   score        Float     @default(0)
+  moderationStatus String @default("VISIBLE") @map("moderation_status")
+  moderationReason String? @map("moderation_reason")
   createdAt    DateTime  @default(now()) @map("created_at")
 
   author       User      @relation("UserPosts", fields: [authorId], references: [id], onDelete: Cascade)
@@ -119,6 +121,8 @@ model Comment {
   postId       String   @map("post_id")
   authorId     String   @map("author_id")
   walrusBlobId String?  @map("walrus_blob_id")
+  moderationStatus String @default("VISIBLE") @map("moderation_status")
+  moderationReason String? @map("moderation_reason")
   createdAt    DateTime @default(now()) @map("created_at")
 
   post         Post     @relation("PostComments", fields: [postId], references: [id], onDelete: Cascade)

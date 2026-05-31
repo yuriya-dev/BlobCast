@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
+import { visiblePostWhere } from '../lib/moderation';
 
 /**
  * Controller to fetch User Profile details by wallet address OR username.
@@ -22,6 +23,7 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
             : { username: walletAddress },
         include: {
             posts: {
+                where: visiblePostWhere,
                 take: 10,
                 orderBy: { createdAt: 'desc' },
                 include: {

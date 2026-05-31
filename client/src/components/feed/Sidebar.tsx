@@ -99,7 +99,7 @@ export function Sidebar() {
     };
 
     try {
-      await api.createPost({
+      const res = await api.createPost({
         authorId: newPost.authorId,
         suiObjectId: newPost.suiObjectId || null,
         walrusBlobId: newPost.walrusBlobId,
@@ -107,7 +107,12 @@ export function Sidebar() {
         contentType: newPost.contentType,
         visibility: newPost.visibility,
         mentions: newPost.walrusContent?.content?.mentions || [],
+        contentText: newPost.walrusContent?.content?.text || '',
       });
+      if (res?.data?.post?.moderationStatus === 'HIDDEN') {
+        alert(res.message || 'Your cast was stored on Walrus but hidden from the feed due to content guidelines.');
+        return;
+      }
     } catch (err) {
       console.warn('⚠️ Failed to post via API. Storing in local session cache.', err);
       mockDb.posts.unshift(mockPostObj);
