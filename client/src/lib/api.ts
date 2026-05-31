@@ -358,6 +358,39 @@ export const api = {
       cache: 'no-store'
     }));
     return parseJsonResponse(res, 'Failed to fetch total unread count');
+  },
+
+  /**
+   * Fetch all tips received by a specific user from Supabase.
+   */
+  async fetchTipsReceived(recipientId: string): Promise<{ status: string; data: { tips: any[] } }> {
+    const res = await fetch(`${BASE_URL}/tips?recipientId=${recipientId}`, requestInit({
+      cache: 'no-store'
+    }));
+    return parseJsonResponse(res, 'Failed to fetch tips');
+  },
+
+  /**
+   * Register a new tip in Supabase.
+   */
+  async createTip(tipData: {
+    senderAddress: string;
+    senderName?: string;
+    recipientId: string;
+    postId?: string | null;
+    amount: number;
+    suiTxDigest?: string | null;
+    blobHash?: string | null;
+    verifiedOnSui?: boolean;
+  }): Promise<{ status: string; data: { tip: any } }> {
+    const res = await fetch(`${BASE_URL}/tips`, requestInit({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(tipData),
+    }));
+    return parseJsonResponse(res, 'Failed to register tip');
   }
 };
 

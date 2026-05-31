@@ -1,143 +1,243 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wallet, 
   Coins, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
   Activity, 
   Layers, 
   ShieldCheck, 
   Database,
-  ArrowRight,
   TrendingUp,
   Cpu,
   BadgeCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ExternalLink,
+  RefreshCw,
+  AlertCircle,
+  HardDrive
 } from 'lucide-react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
-import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { api } from '@/lib/api';
 import { 
   AreaChart, 
   Area, 
   XAxis, 
   YAxis, 
   Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell
+  ResponsiveContainer
 } from 'recharts';
+
+// ─── Network Config ──────────────────────────────────────────────────────────
+const SUI_NETWORK = (process.env.NEXT_PUBLIC_SUI_NETWORK as 'testnet' | 'mainnet') || 'testnet';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatSui(mistBalance: bigint): string {
+  const sui = Number(mistBalance) / 1_000_000_000;
+  return sui.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getLast7DayLabels(): string[] {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const result: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    result.push(days[d.getDay()]);
+  }
+  return result;
+}
 
 export default function MyWalletPage() {
   const account = useCurrentAccount();
   const { user: authUser } = useAuth();
-  const [totalTips, setTotalTips] = useState(148.5);
-  const [suiBalance, setSuiBalance] = useState(254.20);
-  const [walrusShardsCount, setWalrusShardsCount] = useState(120);
+  const suiClient = useSuiClient();
+
+  // ─── Balance & Tipping State ────────────────────────────────────────────────
+  const [suiBalance, setSuiBalance] = useState<string | null>(null);
+  const [suiBalanceRaw, setSuiBalanceRaw] = useState<bigint>(BigInt(0));
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [balanceError, setBalanceError] = useState(false);
+
+  const [totalTips, setTotalTips] = useState<number>(0);
+  const [tipTransactions, setTipTransactions] = useState<any[]>([]);
+  const [isLoadingTips, setIsLoadingTips] = useState(false);
+
+  // ─── Storage/Walrus Metrics State ──────────────────────────────────────────
+  const [storageBytes, setStorageBytes] = useState(0);
+  const [walrusShardsCount, setWalrusShardsCount] = useState(0);
+  const [postsCount, setPostsCount] = useState(0);
+
+  // ─── Simulated Tipping Notification ────────────────────────────────────────
   const [showNotification, setShowNotification] = useState(false);
   const [simulatedTipAmount, setSimulatedTipAmount] = useState(0);
 
-  // Pagination state for Audit Logs
+  // ─── Analytics Tipping Chart ───────────────────────────────────────────────
+  const [tippingAnalytics, setTippingAnalytics] = useState<{ day: string; tips: number }[]>([]);
+
+  // ─── Pagination for Audit Logs ─────────────────────────────────────────────
   const ITEMS_PER_PAGE = 5;
   const [auditPage, setAuditPage] = useState(1);
 
-  // Hardcoded gorgeous analytics data for Sui tipping growth
-  const tippingAnalytics = [
-    { day: 'Mon', tips: 12.0 },
-    { day: 'Tue', tips: 18.5 },
-    { day: 'Wed', tips: 34.0 },
-    { day: 'Thu', tips: 15.0 },
-    { day: 'Fri', tips: 28.0 },
-    { day: 'Sat', tips: 21.0 },
-    { day: 'Sun', tips: 20.0 },
-  ];
+  // ─── Fetch On-Chain SUI Balance ───────────────────────────────────────────
+  const fetchBalance = useCallback(async () => {
+    const walletAddr = account?.address || authUser?.walletAddress;
+    if (!walletAddr) return;
 
-  // Hardcoded historical tipping transaction logs
-  const [tipTransactions, setTipTransactions] = useState([
-    {
-      id: 'tx-1',
-      sender: 'Mysten Labs',
-      senderAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7',
-      senderAvatar: 'walrus://mysten-avatar',
-      amount: 10.0,
-      timestamp: '5 minutes ago',
-      verifiedOnSui: true,
-      blobHash: 'sha256-h7f9e8d7c6b5a4',
-      targetPost: 'post-1'
-    },
-    {
-      id: 'tx-2',
-      sender: 'Vitalik Buterin',
-      senderAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
-      senderAvatar: 'walrus://vitalik-avatar',
-      amount: 25.0,
-      timestamp: '2 hours ago',
-      verifiedOnSui: true,
-      blobHash: 'sha256-abc123xyz789',
-      targetPost: 'post-2'
-    },
-    {
-      id: 'tx-3',
-      sender: 'Sui Enthusiast',
-      senderAddress: '0x6e3c5a7f9b0c2d1e8a4f3b6c5d9e0f1a2b3c4d5e',
-      senderAvatar: '',
-      amount: 5.5,
-      timestamp: '1 day ago',
-      verifiedOnSui: true,
-      blobHash: 'sha256-9a8b7c6d5e4f3a',
-      targetPost: 'post-1'
-    },
-    {
-      id: 'tx-4',
-      sender: 'Walrus Miner',
-      senderAddress: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
-      senderAvatar: '',
-      amount: 15.0,
-      timestamp: '2 days ago',
-      verifiedOnSui: true,
-      blobHash: 'sha256-7x8y9z0a1b2c3d',
-      targetPost: 'post-2'
+    setIsLoadingBalance(true);
+    setBalanceError(false);
+    try {
+      const balances = await suiClient.getAllBalances({ owner: walletAddr });
+      const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => b.coinType === '0x2::sui::SUI');
+      const totalMist = suiToken ? BigInt(suiToken.totalBalance) : BigInt(0);
+      setSuiBalanceRaw(totalMist);
+      setSuiBalance(formatSui(totalMist));
+    } catch (err) {
+      console.warn('⚠️ Failed to fetch SUI balance from chain:', err);
+      setBalanceError(true);
+      setSuiBalance(null);
+    } finally {
+      setIsLoadingBalance(false);
     }
-  ]);
+  }, [account?.address, authUser?.walletAddress, suiClient]);
 
-  // Simulate a live tipping payout event (micro-animation helper)
-  const triggerSimulation = () => {
-    const randomAmount = parseFloat((Math.random() * 15 + 2).toFixed(1));
-    setSimulatedTipAmount(randomAmount);
-    setShowNotification(true);
-    
-    // Add to balance and total tips
-    setTotalTips(prev => prev + randomAmount);
-    setSuiBalance(prev => prev + randomAmount);
+  // ─── Fetch Dashboard & relational Postgres tip data ──────────────────────
+  const fetchDashboardData = useCallback(async () => {
+    const walletAddr = account?.address || authUser?.walletAddress;
+    if (!walletAddr) return;
 
-    // Push new simulated tx into list
-    const newTx = {
-      id: `sim-tx-${Date.now()}`,
-      sender: 'Cyber Caster anonymous',
-      senderAddress: `0x${Math.random().toString(16).substring(2, 10)}...`,
-      senderAvatar: '',
-      amount: randomAmount,
-      timestamp: 'Just now',
-      verifiedOnSui: true,
-      blobHash: `sha256-${Math.random().toString(36).substring(2, 10)}`,
-      targetPost: 'post-1'
-    };
+    setIsLoadingTips(true);
+    try {
+      // 1. Fetch profile to calculate post volumes and Walrus footprint metadata
+      const profileRes = await api.fetchUserProfile(walletAddr);
+      const user = profileRes?.data?.user;
+      if (user) {
+        const userPosts = user.posts || [];
+        setPostsCount(userPosts.length);
 
-    setTipTransactions(prev => [newTx, ...prev]);
-    setAuditPage(1); // Reset to first page so new entry is immediately visible
+        // Footprints calculation
+        let byteCount = 0;
+        userPosts.forEach((p: any) => {
+          const mediaBlobSize = (p.media?.length || 0) * 50 * 1024;
+          const textBlobSize = 800;
+          byteCount += textBlobSize + mediaBlobSize;
+        });
+        setStorageBytes(byteCount);
+        setWalrusShardsCount(Math.min(userPosts.length * 120, 120));
 
-    setTimeout(() => {
-      setShowNotification(false);
-    }, 4000);
+        // 2. Fetch tips received from backend database
+        const tipsRes = await api.fetchTipsReceived(user.id);
+        const tipsList = tipsRes?.data?.tips || [];
+        setTipTransactions(tipsList);
+
+        // Sum total tips received
+        const sum = tipsList.reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
+        setTotalTips(sum);
+
+        // 3. Build dynamic 7-day tipping revenue chart
+        const labels = getLast7DayLabels();
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const tipsByDay: Record<string, number> = {};
+        labels.forEach(l => { tipsByDay[l] = 0; });
+
+        const now = new Date();
+        tipsList.forEach((t: any) => {
+          const created = new Date(t.createdAt);
+          const diffDays = Math.floor((now.getTime() - created.getTime()) / 86400000);
+          if (diffDays >= 0 && diffDays < 7) {
+            const dayLabel = dayNames[created.getDay()];
+            if (tipsByDay[dayLabel] !== undefined) {
+              tipsByDay[dayLabel] += t.amount || 0;
+            }
+          }
+        });
+        setTippingAnalytics(labels.map(l => ({ day: l, tips: parseFloat(tipsByDay[l].toFixed(1)) })));
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to load tipping and storage data:', err);
+    } finally {
+      setIsLoadingTips(false);
+    }
+  }, [account?.address, authUser?.walletAddress]);
+
+  // ─── Initial Load & Listeners ──────────────────────────────────────────────
+  useEffect(() => {
+    fetchBalance();
+    fetchDashboardData();
+  }, [fetchBalance, fetchDashboardData]);
+
+  // ─── Dynamic Simulated Tipping Payout Event ────────────────────────────────
+  const triggerSimulation = async () => {
+    const walletAddr = account?.address || authUser?.walletAddress;
+    if (!walletAddr) return;
+
+    try {
+      // Find recipient user profile info
+      const profileRes = await api.fetchUserProfile(walletAddr);
+      const recipientUser = profileRes?.data?.user;
+      if (!recipientUser) return;
+
+      const randomAmount = parseFloat((Math.random() * 15 + 2).toFixed(1));
+      setSimulatedTipAmount(randomAmount);
+      
+      const simulatedTx = {
+        senderAddress: `0x${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
+        senderName: 'Cyber Caster anonymous',
+        recipientId: recipientUser.id,
+        postId: recipientUser.posts?.[0]?.id || null, // associate with latest post
+        amount: randomAmount,
+        suiTxDigest: `digest-${Math.random().toString(36).substring(2, 15)}`,
+        blobHash: `sha256-${Math.random().toString(36).substring(2, 12)}`,
+        verifiedOnSui: true
+      };
+
+      // Call Express API endpoint to register the tip record in Supabase
+      await api.createTip(simulatedTx);
+
+      // Trigger success drawer particle animation
+      setShowNotification(true);
+      setTimeout(() => {
+        setShowNotification(false);
+      }, 4000);
+
+      // Refresh balance and tables
+      fetchBalance();
+      fetchDashboardData();
+      setAuditPage(1); // Reset pagination so newest shows up immediately
+    } catch (err) {
+      console.warn('⚠️ Failed to record simulated tip:', err);
+    }
   };
+
+  const walletAddress = account?.address || authUser?.walletAddress;
+  const suiScanUrl = walletAddress
+    ? `https://suiscan.xyz/${SUI_NETWORK}/account/${walletAddress}`
+    : '#';
 
   return (
     <div className="flex-1 flex w-full max-w-7xl mx-auto h-screen overflow-hidden relative">
@@ -156,9 +256,19 @@ export default function MyWalletPage() {
             <Wallet className="h-5 w-5 text-sui-cyan" />
             <h2 className="font-mono font-bold text-sm tracking-wider uppercase text-white">My Cyber Wallet</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 node-pulse" />
-            <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Sui Mainnet</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { fetchBalance(); fetchDashboardData(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-gray-400 hover:text-sui-cyan border border-sui-cyan/10 hover:border-sui-cyan/40 rounded-lg transition-all bg-walrus-blue/20 cursor-pointer"
+              title="Refresh live data"
+            >
+              <RefreshCw className={`h-3 w-3 ${isLoadingBalance || isLoadingTips ? 'animate-spin text-sui-cyan' : ''}`} />
+              Refresh
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 node-pulse" />
+              <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Sui {SUI_NETWORK}</span>
+            </div>
           </div>
         </header>
 
@@ -168,7 +278,7 @@ export default function MyWalletPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Wallet connection certificate card */}
-            <div className="glass-panel rounded-cyber-xl p-5 border border-sui-cyan/15 relative overflow-hidden flex flex-col justify-between h-48 shadow-cyber-glow">
+            <div className="glass-panel rounded-cyber-xl p-5 border border-sui-cyan/15 relative overflow-hidden flex flex-col justify-between h-52 shadow-cyber-glow">
               {/* Background tech lines */}
               <div 
                 className="absolute inset-0 opacity-[0.03] pointer-events-none" 
@@ -183,7 +293,7 @@ export default function MyWalletPage() {
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Sui Wallet Certificate</span>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="h-2 w-2 rounded-full bg-sui-cyan" />
+                    <span className={`h-2 w-2 rounded-full ${account ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
                       {account ? 'Connected Active' : 'Fallback Simulation'}
                     </span>
@@ -192,21 +302,28 @@ export default function MyWalletPage() {
                 <Cpu className="h-5 w-5 text-sui-cyan opacity-80 animate-pulse" />
               </div>
 
-              <div className="z-10 flex flex-col gap-1.5 my-3">
+              <div className="z-10 flex flex-col gap-1.5 my-2">
                 <span className="text-[10px] font-mono text-gray-400">Account Address:</span>
-                <span className="text-xs font-mono text-sui-cyan break-all bg-walrus-blue/50 border border-sui-cyan/10 rounded-lg p-2 block font-semibold">
-                  {account?.address || authUser?.walletAddress || '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f'}
+                <span className="text-xs font-mono text-sui-cyan break-all bg-walrus-blue/50 border border-sui-cyan/10 rounded-lg p-2 block font-semibold leading-relaxed">
+                  {walletAddress || '—'}
                 </span>
               </div>
 
-              <div className="z-10 flex justify-between items-center text-[10px] font-mono text-gray-500 border-t border-sui-cyan/5 pt-2">
-                <span>Network: Sui Network Devnet</span>
-                <span>Type: Web3 Wallet</span>
+              <div className="z-10 flex justify-between items-center text-[9px] font-mono text-gray-500 border-t border-sui-cyan/5 pt-2">
+                <span>Network: Sui {SUI_NETWORK}</span>
+                <a
+                  href={suiScanUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-sui-cyan/70 hover:text-sui-cyan transition-colors"
+                >
+                  View on SuiScan <ExternalLink className="h-2.5 w-2.5" />
+                </a>
               </div>
             </div>
 
             {/* Tips Received Dashboard Card */}
-            <div className="glass-panel rounded-cyber-xl p-5 border border-amber-500/25 bg-gradient-to-br from-amber-500/5 via-deep-space to-walrus-blue/20 relative overflow-hidden flex flex-col justify-between h-48 shadow-cyber-glow">
+            <div className="glass-panel rounded-cyber-xl p-5 border border-amber-500/25 bg-gradient-to-br from-amber-500/5 via-deep-space to-walrus-blue/20 relative overflow-hidden flex flex-col justify-between h-52 shadow-cyber-glow">
               <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
               
               <div className="flex justify-between items-start z-10">
@@ -217,15 +334,21 @@ export default function MyWalletPage() {
                   </h3>
                 </div>
                 <div className="bg-amber-500/10 border border-amber-500/35 rounded-lg px-2 py-0.5 text-[8px] font-mono text-amber-400 font-bold uppercase">
-                  Verified On-Chain
+                  {isLoadingTips ? 'Updating...' : 'Verified On-Chain'}
                 </div>
               </div>
 
-              <div className="z-10 flex items-baseline gap-2 my-2">
-                <span className="text-3xl font-mono font-black text-amber-400 text-neon-glow">
-                  {totalTips.toFixed(1)}
-                </span>
-                <span className="text-sm font-mono text-amber-400/80 font-bold">SUI</span>
+              <div className="z-10 flex items-baseline gap-2 my-1">
+                {isLoadingTips ? (
+                  <div className="h-8 w-24 bg-amber-500/10 animate-pulse rounded-lg" />
+                ) : (
+                  <>
+                    <span className="text-3xl font-mono font-black text-amber-400 text-neon-glow">
+                      {totalTips.toFixed(1)}
+                    </span>
+                    <span className="text-sm font-mono text-amber-400/80 font-bold">SUI</span>
+                  </>
+                )}
               </div>
 
               <div className="z-10 flex justify-between items-center text-[9px] font-mono text-gray-500 border-t border-amber-500/10 pt-2.5">
@@ -235,7 +358,8 @@ export default function MyWalletPage() {
                 </div>
                 <button 
                   onClick={triggerSimulation}
-                  className="px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 rounded-lg text-amber-400 hover:text-white hover:bg-amber-500/25 transition-all text-[9px] uppercase tracking-wider font-bold cursor-pointer"
+                  disabled={!walletAddress}
+                  className="px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 rounded-lg text-amber-400 hover:text-white hover:bg-amber-500/25 transition-all text-[9px] uppercase tracking-wider font-bold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Simulate a new tip payout to test particle verifications"
                 >
                   Simulate Tip
@@ -248,19 +372,33 @@ export default function MyWalletPage() {
           {/* SUI balance & Walrus metadata metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-walrus-blue/30 border border-sui-cyan/5 rounded-cyber-lg p-4 shadow-md font-mono text-xs">
             <div className="border-r border-sui-cyan/5 flex flex-col justify-center gap-1">
-              <span className="text-[9px] uppercase text-gray-500 tracking-wider">Account Balance</span>
-              <p className="text-sm font-bold text-white">{suiBalance.toFixed(2)} SUI</p>
+              <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                <Coins className="h-3 w-3 text-sui-cyan" /> Account Balance
+              </span>
+              {isLoadingBalance ? (
+                <div className="h-4 w-20 bg-walrus-blue/50 animate-pulse rounded" />
+              ) : balanceError || suiBalance === null ? (
+                <p className="text-xs text-amber-400 font-bold leading-normal">Connect Wallet</p>
+              ) : (
+                <p className="text-sm font-bold text-white truncate">{suiBalance} SUI</p>
+              )}
             </div>
             <div className="border-r border-sui-cyan/5 flex flex-col justify-center gap-1">
-              <span className="text-[9px] uppercase text-gray-500 tracking-wider">Walrus Storage Stake</span>
+              <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                <Cpu className="h-3 w-3 text-amber-400" /> Walrus Storage Stake
+              </span>
               <p className="text-sm font-bold text-white">450 WAL</p>
             </div>
             <div className="border-r border-sui-cyan/5 flex flex-col justify-center gap-1">
-              <span className="text-[9px] uppercase text-gray-500 tracking-wider">Storage footprints</span>
-              <p className="text-sm font-bold text-white">42.8 KB</p>
+              <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                <HardDrive className="h-3 w-3 text-emerald-400" /> Storage footprints
+              </span>
+              <p className="text-sm font-bold text-white">{formatBytes(storageBytes)}</p>
             </div>
             <div className="flex flex-col justify-center gap-1">
-              <span className="text-[9px] uppercase text-gray-500 tracking-wider">Reed-Solomon Shards</span>
+              <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                <Layers className="h-3 w-3 text-sui-cyan" /> Reed-Solomon Shards
+              </span>
               <p className="text-sm font-bold text-sui-cyan">{walrusShardsCount} / 120 Shards</p>
             </div>
           </div>
@@ -277,49 +415,58 @@ export default function MyWalletPage() {
               <span className="text-[9px] font-mono text-gray-500">Live Telemetry Metrics</span>
             </div>
 
-            <div className="h-44 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={tippingAnalytics} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="tipsGlow" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25}/>
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis 
-                    dataKey="day" 
-                    stroke="#4b5563" 
-                    fontSize={10} 
-                    fontFamily="monospace"
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    stroke="#4b5563" 
-                    fontSize={10} 
-                    fontFamily="monospace" 
-                    tickLine={false}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#0a101d', 
-                      borderColor: 'rgba(245, 158, 11, 0.3)',
-                      borderRadius: '12px',
-                      color: '#ffffff',
-                      fontFamily: 'monospace',
-                      fontSize: '11px'
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="tips" 
-                    stroke="#f59e0b" 
-                    strokeWidth={2}
-                    fillOpacity={1} 
-                    fill="url(#tipsGlow)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {isLoadingTips ? (
+              <div className="h-44 bg-walrus-blue/20 animate-pulse rounded-lg" />
+            ) : tippingAnalytics.length === 0 || tippingAnalytics.every(d => d.tips === 0) ? (
+              <div className="h-44 flex flex-col items-center justify-center text-gray-600 font-mono text-xs gap-2">
+                <Coins className="h-8 w-8 opacity-30" />
+                <span>No tips received in the last 7 days</span>
+              </div>
+            ) : (
+              <div className="h-44 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={tippingAnalytics} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="tipsGlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="day" 
+                      stroke="#4b5563" 
+                      fontSize={10} 
+                      fontFamily="monospace"
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="#4b5563" 
+                      fontSize={10} 
+                      fontFamily="monospace" 
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0a101d', 
+                        borderColor: 'rgba(245, 158, 11, 0.3)',
+                        borderRadius: '12px',
+                        color: '#ffffff',
+                        fontFamily: 'monospace',
+                        fontSize: '11px'
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="tips" 
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#tipsGlow)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
 
           {/* Historical Tipping Transaction Logs table */}
@@ -334,104 +481,125 @@ export default function MyWalletPage() {
               <span className="text-[8px] font-mono text-gray-500 uppercase tracking-wider">Relational Postgres Indexes</span>
             </div>
 
-            {/* Paginated list */}
-            <div className="flex flex-col gap-3">
-              {tipTransactions
-                .slice((auditPage - 1) * ITEMS_PER_PAGE, auditPage * ITEMS_PER_PAGE)
-                .map((tx) => (
-                <div 
-                  key={tx.id} 
-                  className="bg-walrus-blue/20 border border-sui-cyan/5 hover:border-sui-cyan/15 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="h-10 w-10 rounded-cyber-sm bg-gradient-to-tr from-amber-500/25 to-sui-cyan/25 p-0.5 flex-shrink-0">
-                      <div className="h-full w-full rounded-[10px] bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs text-amber-400 font-bold">
-                        {tx.senderAvatar ? (
-                          <img 
-                            src={tx.sender === 'Mysten Labs' ? 'https://avatars.githubusercontent.com/u/96434406?s=200&v=4' : 'https://avatars.githubusercontent.com/u/14490333?s=200&v=4'}
-                            alt="Sender Avatar preview" 
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          (tx.sender || 'AN').substring(0, 2).toUpperCase()
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-0.5 overflow-hidden">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-white font-sans truncate leading-none">
-                          {tx.sender}
-                        </span>
-                        {tx.verifiedOnSui && (
-                          <BadgeCheck className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
-                        )}
-                      </div>
-                      <span className="text-[8px] font-mono text-gray-500 truncate leading-none mt-1">
-                        From: {tx.senderAddress}
-                      </span>
-                      <span className="text-[8px] font-mono text-sui-cyan/60 truncate leading-none mt-0.5">
-                        Cert Hash: {tx.blobHash}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-right flex-shrink-0 flex flex-col gap-1.5 items-end justify-center font-mono">
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
-                      +{tx.amount.toFixed(1)} SUI
-                    </span>
-                    <span className="text-[9px] text-gray-500">{tx.timestamp}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Pagination Controls */}
-            {tipTransactions.length > ITEMS_PER_PAGE && (
-              <div className="flex items-center justify-between pt-3 border-t border-sui-cyan/5 mt-1">
-                {/* Left: entry count info */}
-                <span className="text-[9px] font-mono text-gray-500">
-                  Showing {Math.min((auditPage - 1) * ITEMS_PER_PAGE + 1, tipTransactions.length)}–{Math.min(auditPage * ITEMS_PER_PAGE, tipTransactions.length)} of {tipTransactions.length} logs
-                </span>
-
-                {/* Right: page controls */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setAuditPage(p => Math.max(1, p - 1))}
-                    disabled={auditPage === 1}
-                    className="h-7 w-7 flex items-center justify-center rounded-cyber-sm border border-sui-cyan/20 hover:border-sui-cyan/50 hover:bg-sui-cyan/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sui-cyan cursor-pointer"
-                    title="Previous page"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-
-                  {/* Page number pills */}
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.ceil(tipTransactions.length / ITEMS_PER_PAGE) }).map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setAuditPage(i + 1)}
-                        className={`h-6 min-w-[1.5rem] px-1.5 rounded-cyber-sm text-[9px] font-mono font-bold transition-all cursor-pointer ${
-                          auditPage === i + 1
-                            ? 'bg-sui-cyan/20 border border-sui-cyan/50 text-sui-cyan'
-                            : 'border border-sui-cyan/10 text-gray-500 hover:border-sui-cyan/30 hover:text-gray-300'
-                        }`}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => setAuditPage(p => Math.min(Math.ceil(tipTransactions.length / ITEMS_PER_PAGE), p + 1))}
-                    disabled={auditPage >= Math.ceil(tipTransactions.length / ITEMS_PER_PAGE)}
-                    className="h-7 w-7 flex items-center justify-center rounded-cyber-sm border border-sui-cyan/20 hover:border-sui-cyan/50 hover:bg-sui-cyan/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sui-cyan cursor-pointer"
-                    title="Next page"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+            {isLoadingTips ? (
+              <div className="flex flex-col gap-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-16 bg-walrus-blue/20 animate-pulse rounded-2xl" />
+                ))}
               </div>
+            ) : tipTransactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-600 font-mono text-xs gap-3">
+                <Layers className="h-10 w-10 opacity-20" />
+                <span>No tips found. Simulate a tip payout to write records into Supabase!</span>
+              </div>
+            ) : (
+              <>
+                {/* Paginated list */}
+                <div className="flex flex-col gap-3">
+                  {tipTransactions
+                    .slice((auditPage - 1) * ITEMS_PER_PAGE, auditPage * ITEMS_PER_PAGE)
+                    .map((tx) => (
+                    <motion.div 
+                      key={tx.id} 
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-walrus-blue/20 border border-sui-cyan/5 hover:border-sui-cyan/15 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="h-10 w-10 rounded-cyber-sm bg-gradient-to-tr from-amber-500/25 to-sui-cyan/25 p-0.5 flex-shrink-0">
+                          <div className="h-full w-full rounded-[10px] bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs text-amber-400 font-bold">
+                            {(tx.senderName || 'AN').substring(0, 2).toUpperCase()}
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col gap-0.5 overflow-hidden">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-white font-sans truncate leading-none">
+                              {tx.senderName || 'Anonymous Caster'}
+                            </span>
+                            {tx.verifiedOnSui && (
+                              <BadgeCheck className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                            )}
+                          </div>
+                          <span className="text-[8px] font-mono text-gray-500 truncate leading-none mt-1">
+                            From: {tx.senderAddress}
+                          </span>
+                          {tx.blobHash && (
+                            <span className="text-[8px] font-mono text-sui-cyan/60 truncate leading-none mt-0.5">
+                              Cert Hash: {tx.blobHash}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right flex-shrink-0 flex flex-col gap-1.5 items-end justify-center font-mono">
+                        <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                          +{tx.amount.toFixed(1)} SUI
+                        </span>
+                        <span className="text-[9px] text-gray-500">{timeAgo(tx.createdAt)}</span>
+                        {tx.suiTxDigest && (
+                          <a
+                            href={`https://suiscan.xyz/${SUI_NETWORK}/tx/${tx.suiTxDigest}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-0.5 text-[8px] text-sui-cyan/60 hover:text-sui-cyan transition-colors"
+                          >
+                            Verify <ExternalLink className="h-2 w-2" />
+                          </a>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {tipTransactions.length > ITEMS_PER_PAGE && (
+                  <div className="flex items-center justify-between pt-3 border-t border-sui-cyan/5 mt-1">
+                    {/* Left: entry count info */}
+                    <span className="text-[9px] font-mono text-gray-500">
+                      Showing {Math.min((auditPage - 1) * ITEMS_PER_PAGE + 1, tipTransactions.length)}–{Math.min(auditPage * ITEMS_PER_PAGE, tipTransactions.length)} of {tipTransactions.length} logs
+                    </span>
+
+                    {/* Right: page controls */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                        disabled={auditPage === 1}
+                        className="h-7 w-7 flex items-center justify-center rounded-cyber-sm border border-sui-cyan/20 hover:border-sui-cyan/50 hover:bg-sui-cyan/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sui-cyan cursor-pointer"
+                        title="Previous page"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Page number pills */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.ceil(tipTransactions.length / ITEMS_PER_PAGE) }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setAuditPage(i + 1)}
+                            className={`h-6 min-w-[1.5rem] px-1.5 rounded-cyber-sm text-[9px] font-mono font-bold transition-all cursor-pointer ${
+                              auditPage === i + 1
+                                ? 'bg-sui-cyan/20 border border-sui-cyan/50 text-sui-cyan'
+                                : 'border border-sui-cyan/10 text-gray-500 hover:border-sui-cyan/30 hover:text-gray-300'
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => setAuditPage(p => Math.min(Math.ceil(tipTransactions.length / ITEMS_PER_PAGE), p + 1))}
+                        disabled={auditPage >= Math.ceil(tipTransactions.length / ITEMS_PER_PAGE)}
+                        className="h-7 w-7 flex items-center justify-center rounded-cyber-sm border border-sui-cyan/20 hover:border-sui-cyan/50 hover:bg-sui-cyan/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sui-cyan cursor-pointer"
+                        title="Next page"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="bg-sui-cyan/5 border border-sui-cyan/15 rounded-cyber-sm p-4 text-[9px] font-mono text-gray-400 flex items-start gap-2 leading-relaxed">

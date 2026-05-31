@@ -26,6 +26,7 @@ model User {
   posts           Post[]         @relation("UserPosts")
   likes           Like[]
   comments        Comment[]      @relation("UserComments")
+  receivedTips    Tip[]          @relation("ReceivedTips")
   
   // Follow relations
   followers       Follow[]       @relation("FollowingUsers")
@@ -69,6 +70,7 @@ model Post {
   likes        Like[]
   comments     Comment[] @relation("PostComments")
   notifications Notification[] @relation("PostNotifications")
+  tips         Tip[]     @relation("PostTips")
 
   @@map("posts")
 }
@@ -178,5 +180,23 @@ model SimulatedBlob {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("simulated_blobs")
+}
+
+model Tip {
+  id             String   @id @default(uuid())
+  senderAddress  String   @map("sender_address")
+  senderName     String?  @map("sender_name")
+  recipientId    String   @map("recipient_id")
+  postId         String?  @map("post_id")
+  amount         Float    // Tip amount in SUI
+  suiTxDigest    String?  @map("sui_tx_digest")
+  blobHash       String?  @map("blob_hash")
+  verifiedOnSui  Boolean  @default(true) @map("verified_on_sui")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  recipient      User     @relation("ReceivedTips", fields: [recipientId], references: [id], onDelete: Cascade)
+  post           Post?    @relation("PostTips", fields: [postId], references: [id], onDelete: SetNull)
+
+  @@map("tips")
 }
 
