@@ -215,12 +215,13 @@ if (process.env.DATABASE_URL) {
     prisma = globalForPrisma.prisma || new PrismaClient();
     if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
   } catch (error) {
-    console.warn("⚠️ Failed to initialize actual Prisma Client. Falling back to InMemory Mock Database.", error);
+    // Silently fall back to in-memory mock
     isMock = true;
-    prisma = {} as PrismaClient; // empty fallback so compilation does not complain
+    prisma = {} as PrismaClient;
   }
 } else {
-  console.warn("⚠️ DATABASE_URL is not set. Falling back to InMemory Mock Database.");
+  // DATABASE_URL is intentionally a server-only var (no NEXT_PUBLIC_ prefix).
+  // In the browser, always use the in-memory mock DB for demo/outage mode.
   isMock = true;
   prisma = {} as PrismaClient;
 }

@@ -1,5 +1,5 @@
-const TATUM_SUI_TESTNET = process.env.TATUM_SUI_TESTNET_RPC || 'https://sui-testnet.node.tatum.io';
-const TATUM_SUI_MAINNET = process.env.TATUM_SUI_MAINNET_RPC || 'https://sui-mainnet.node.tatum.io';
+const TATUM_SUI_TESTNET = process.env.TATUM_SUI_TESTNET_RPC || 'https://sui-testnet.gateway.tatum.io';
+const TATUM_SUI_MAINNET = process.env.TATUM_SUI_MAINNET_RPC || 'https://sui-mainnet.gateway.tatum.io';
 
 export const tatum = {
   getRpcUrl(network: 'mainnet' | 'testnet' = 'testnet'): string {

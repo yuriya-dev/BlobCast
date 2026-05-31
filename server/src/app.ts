@@ -7,6 +7,8 @@ import { AppError } from './utils/appError';
 import userRoutes from './routes/userRoutes';
 import postRoutes from './routes/postRoutes';
 import authRoutes from './routes/authRoutes';
+import messageRoutes from './routes/messageRoutes';
+import walrusSimRoutes from './routes/walrusSimRoutes';
 import dmRoutes from './routes/dmRoutes';
 
 // Load environment configurations
@@ -31,6 +33,8 @@ app.use(loggerMiddleware);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/walrus/blobs', walrusSimRoutes);
 app.use('/api/dm', dmRoutes);
 
 // Health check endpoint

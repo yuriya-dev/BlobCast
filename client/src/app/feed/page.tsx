@@ -176,20 +176,14 @@ export default function SocialFeedPage() {
                     media = contentObj.media;
                     mediaUrl = contentObj.media[0].blob_id;
                   }
+                } else if (typeof walrusContent === 'string' && walrusContent.length > 0) {
+                  // Plain text content
+                  text = walrusContent;
                 }
               } catch (walrusErr) {
                 console.warn(`⚠️ Failed to fetch Walrus blob payload for ${p.walrusBlobId}:`, walrusErr);
-                // Fallback text if it fails to resolve
-                if (p.id === 'post-1') {
-                  text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
-                  hashtags = ['blobcast', 'sui'];
-                } else if (p.id === 'post-2') {
-                  text = 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!';
-                  hashtags = ['decentralized', 'walrus'];
-                  mediaUrl = 'walrus://blob-post-2-image';
-                } else {
-                  text = `Casting payload registered verifiably. Walrus Blob Reference: ${p.walrusBlobId}`;
-                }
+                // Generic fallback — show author name and timestamp so the post isn't a confusing stub
+                text = `Cast by ${p.author?.displayName || p.author?.username || 'Anonymous'} · Stored on Walrus`;
               }
             }
 

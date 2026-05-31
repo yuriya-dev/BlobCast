@@ -171,3 +171,12 @@ model DirectMessage {
 
   @@map("direct_messages")
 }
+
+model SimulatedBlob {
+  id        String   @id
+  content   String   @map("content")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("simulated_blobs")
+}
+

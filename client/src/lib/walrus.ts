@@ -18,8 +18,8 @@ export interface WalrusBlobInfo {
   }>;
 }
 
-const WALRUS_PUBLISHER = 'https://publisher.walrus-testnet.walrus.space';
-const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space';
+const WALRUS_PUBLISHER = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
+const WALRUS_AGGREGATOR = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
 
 // Generate mock storage nodes for visualization
 function generateMockStorageNodes(blobId: string, size: number): WalrusBlobInfo['shardsMap'] {
@@ -145,7 +145,7 @@ export const walrus = {
   /**
    * Upload raw JSON or string content to Walrus publisher
    */
-  async uploadBlob(content: string | Record<string, any>, epochs: number = 5): Promise<WalrusBlobInfo> {
+  async uploadBlob(content: string | Record<string, any>, epochs: number = 53): Promise<WalrusBlobInfo> {
     const serialized = typeof content === 'string' ? content : JSON.stringify(content);
     const size = new Blob([serialized]).size;
 
@@ -155,7 +155,7 @@ export const walrus = {
         method: 'PUT',
         body: serialized,
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(5000), // 5 seconds timeout fallback
+        signal: AbortSignal.timeout(15000), // 15 seconds timeout fallback
       });
 
       if (response.ok) {
@@ -205,6 +205,18 @@ export const walrus = {
       }
     }
 
+    // Sync simulated blob to Express backend for global cross-device synchronization
+    const syncUrl = `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api'}/walrus/blobs`;
+    try {
+      await fetch(syncUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blobId: simulatedBlobId, content: serialized }),
+      });
+    } catch (syncErr) {
+      console.warn('⚠️ Failed to sync simulated blob to backend database:', syncErr);
+    }
+
     return {
       blobId: simulatedBlobId,
       size,
@@ -231,7 +243,14 @@ export const walrus = {
       cleanId.length < 10;
 
     if (isMockPlaceholder) {
-      throw new Error(`Mock placeholder blob ID "${cleanId}" cannot be fetched from Walrus aggregator.`);
+      // Return a graceful default payload so the feed doesn't crash on demo seed data
+      return {
+        content: {
+          text: 'This post is stored on the Walrus decentralized network.',
+          hashtags: ['blobcast', 'walrus'],
+        },
+        media: [],
+      } as unknown as T;
     }
 
     // Check if it's simulated
@@ -258,11 +277,46 @@ export const walrus = {
       }
 
       if (!content) {
-        throw new Error(`Simulated Walrus Blob ID ${cleanId} not found or expired.`);
+        try {
+          const syncUrl = `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api'}/walrus/blobs/${cleanId}`;
+          const res = await fetch(syncUrl);
+          if (res.ok) {
+            const rawText = await res.text();
+            if (rawText) {
+              content = rawText;
+              // Cache it locally so subsequent calls are instant
+              if (typeof window !== 'undefined') {
+                try {
+                  localStorage.setItem(cleanId, content);
+                } catch {}
+                simulatedMemoryStore.set(cleanId, content);
+              }
+            }
+          }
+        } catch (syncErr) {
+          console.warn('⚠️ Failed to fetch simulated blob from backend database:', syncErr);
+        }
+      }
+
+      if (!content) {
+        // Graceful fallback: simulated blob expired or lost (e.g. after server restart / DB reset).
+        // Return a default payload so the feed/profile doesn't crash.
+        console.warn(`⚠️ Simulated Walrus Blob ID ${cleanId} not found or expired. Returning fallback content.`);
+        return {
+          content: {
+            text: 'This post was stored on the Walrus decentralized network.',
+            hashtags: ['blobcast', 'walrus'],
+          },
+          media: [],
+        } as unknown as T;
       }
 
       try {
-        return JSON.parse(content) as T;
+        // If content is wrapped in quotes, it might be a double-stringified JSON
+        const cleanContent = content.startsWith('"') && content.endsWith('"')
+          ? JSON.parse(content)
+          : content;
+        return typeof cleanContent === 'string' ? JSON.parse(cleanContent) as T : cleanContent as T;
       } catch {
         return content as unknown as T;
       }
@@ -333,7 +387,8 @@ export const walrus = {
           return cached;
         }
       }
-      return '';
+      const baseUrl = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api';
+      return `${baseUrl}/walrus/blobs/${cleanId}/image`;
     }
     
     // Fallbacks for mock avatars in db.ts to make the design look stunning

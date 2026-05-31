@@ -1,5 +1,34 @@
 // Tatum Sui RPC Infrastructure Helper
-import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { getJsonRpcFullnodeUrl, SuiJsonRpcClient, JsonRpcHTTPTransport } from '@mysten/sui/jsonRpc';
+
+// Custom fetch to strip CORS-blocking client-sdk headers from Tatum RPC requests
+const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  if (init && init.headers) {
+    const headers = init.headers;
+    if (headers instanceof Headers) {
+      const keysToDelete: string[] = [];
+      headers.forEach((_, key) => {
+        if (key.toLowerCase().startsWith('client-')) {
+          keysToDelete.push(key);
+        }
+      });
+      keysToDelete.forEach(key => headers.delete(key));
+    } else if (Array.isArray(headers)) {
+      init.headers = headers.filter(
+        ([key]) => !key.toLowerCase().startsWith('client-')
+      );
+    } else {
+      const headersRecord = { ...headers } as Record<string, string>;
+      Object.keys(headersRecord).forEach(key => {
+        if (key.toLowerCase().startsWith('client-')) {
+          delete headersRecord[key];
+        }
+      });
+      init.headers = headersRecord;
+    }
+  }
+  return fetch(input, init);
+};
 
 export interface TatumNodeStats {
   endpoint: string;
@@ -10,9 +39,8 @@ export interface TatumNodeStats {
   blocksProcessed: number;
 }
 
-// Tatum custom endpoints (with default public gateways fallback for instant plug-and-play)
-const TATUM_SUI_TESTNET = process.env.NEXT_PUBLIC_TATUM_SUI_TESTNET_RPC || 'https://sui-testnet.node.tatum.io';
-const TATUM_SUI_MAINNET = process.env.NEXT_PUBLIC_TATUM_SUI_MAINNET_RPC || 'https://sui-mainnet.node.tatum.io';
+const TATUM_SUI_TESTNET = process.env.NEXT_PUBLIC_TATUM_SUI_TESTNET_RPC || 'https://sui-testnet.gateway.tatum.io';
+const TATUM_SUI_MAINNET = process.env.NEXT_PUBLIC_TATUM_SUI_MAINNET_RPC || 'https://sui-mainnet.gateway.tatum.io';
 
 export const tatum = {
   getRpcUrl(network: 'mainnet' | 'testnet' | 'devnet' = 'testnet'): string {
@@ -33,7 +61,11 @@ export const tatum = {
   },
 
   getClient(network: 'mainnet' | 'testnet' | 'devnet' = 'testnet'): SuiJsonRpcClient {
-    return new SuiJsonRpcClient({ url: this.getRpcUrl(network), network: network as any });
+    const transport = new JsonRpcHTTPTransport({
+      url: this.getRpcUrl(network),
+      fetch: customFetch
+    });
+    return new SuiJsonRpcClient({ transport, network: network as any });
   },
 
   /**

@@ -4,10 +4,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database, X } from 'lucide-react';
 import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
+import {
+  computeSha256,
+  hashToHex,
+  buildPublishPostTransaction,
+  parseCreatedObjectId
+} from '@/lib/sui';
 import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
@@ -19,6 +25,7 @@ interface PostComposerProps {
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const account = useCurrentAccount();
+  const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   const { user: authUser } = useAuth();
   interface MediaItem {
     blobId: string;
@@ -301,12 +308,42 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
       const walrusUploadInfo = await walrus.uploadBlob(postBlob);
 
+      let suiObjectId: string | null = null;
+      let blobHash = `sha256-${Math.random().toString(36).substring(2, 10)}`; // fallback
+
+      // If wallet is connected, we attempt to register on-chain!
+      if (account) {
+        try {
+          // Compute real SHA-256 hash of the content
+          const hashBytes = await computeSha256(JSON.stringify(postBlob));
+          blobHash = hashToHex(hashBytes);
+
+          const tx = buildPublishPostTransaction(
+            walrusUploadInfo.blobId,
+            hashBytes,
+            mediaItems.length > 0 ? 1 : 0,
+            0, // visibility
+            null, // replyToId
+            null, // repostOfId
+          );
+
+          console.log('🔗 [Sui Transaction] Signing and executing transaction block to publish post on-chain...', tx);
+          const result = await signAndExecuteTransaction({
+            transaction: tx,
+          });
+          console.log('✅ [Sui Transaction] Post published successfully:', result);
+          suiObjectId = parseCreatedObjectId(result) || result.digest;
+        } catch (txErr) {
+          console.warn('⚠️ [Sui Transaction] Failed signing and executing Sui transaction block:', txErr);
+        }
+      }
+
       onPostCreated({
         id: `post_${Date.now()}`,
         authorId: activeUser.id,
-        suiObjectId: `0x${Math.random().toString(16).substring(2, 18)}sui_object`,
+        suiObjectId: suiObjectId,
         walrusBlobId: walrusUploadInfo.blobId,
-        blobHash: `sha256-${Math.random().toString(36).substring(2, 10)}`,
+        blobHash: blobHash,
         contentType: mediaItems.length > 0 ? 1 : 0,
         visibility: 0,
         replyToId: null,
