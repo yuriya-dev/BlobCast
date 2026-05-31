@@ -21,7 +21,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const SESSION_CACHE_KEY = 'blobcast_auth_user';
 
 const publicAuthRoutes = ['/login', '/register'];
-const protectedRoutePrefixes = ['/feed', '/profile', '/bookmarks', '/messages', '/wallet', '/explore', '/search', '/posts', '/dev'];
+const protectedRoutePrefixes = ['/feed', '/profile', '/bookmarks', '/messages', '/wallet', '/settings', '/explore', '/search', '/posts', '/dev'];
 
 function isProtectedPath(pathname: string) {
   return protectedRoutePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

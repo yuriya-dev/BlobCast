@@ -5,18 +5,17 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { 
   Home, 
-  Terminal, 
   Compass, 
   Bell, 
   User, 
-  Zap, 
   MessageSquareShare,
   Bookmark,
   Wallet,
-  MessageCircle
+  MessageCircle,
+  Settings,
 } from 'lucide-react';
-import { ConnectButton } from '@mysten/dapp-kit';
 import { PostComposer } from './PostComposer';
+import { SidebarWalletConnect } from '@/components/wallet/SidebarWalletConnect';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { mockDb, type MockPost } from '@/lib/db';
@@ -127,7 +126,7 @@ export function Sidebar() {
     { name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
     { name: 'Profile', href: '/profile', icon: User },
     { name: 'Wallet', href: '/wallet', icon: Wallet },
-    // { name: 'Diagnostics', href: '/dev', icon: Terminal },
+    { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
   return (
@@ -196,13 +195,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Sui Wallet DappKit Connect Button */}
-        <div className="custom-wallet-connect-wrapper">
-          <ConnectButton 
-            connectText="Connect Wallet"
-            className="w-full rounded-cyber-md! bg-linear-to-r! from-sui-cyan! to-tatum-purple! text-deep-space! font-mono! text-xs! font-bold! py-3! px-4! shadow-md! hover:opacity-90! transition-all! cursor-pointer!"
-          />
-        </div>
+        <SidebarWalletConnect />
 
         {/* Glowing Neon Compose Button */}
         <button 
