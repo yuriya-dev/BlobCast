@@ -2,7 +2,7 @@
 import { getJsonRpcFullnodeUrl, SuiJsonRpcClient, JsonRpcHTTPTransport } from '@mysten/sui/jsonRpc';
 
 // Custom fetch to strip CORS-blocking client-sdk headers from Tatum RPC requests
-const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (init && init.headers) {
     const headers = init.headers;
     if (headers instanceof Headers) {
@@ -27,7 +27,45 @@ const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
       init.headers = headersRecord;
     }
   }
-  return fetch(input, init);
+
+  try {
+    const res = await fetch(input, init);
+    if (res.status === 429) {
+      console.warn('⚠️ [Tatum RPC] Rate limited (429). Dynamically falling back to SUI public fullnode...');
+      const urlStr = typeof input === 'string' ? input : input.toString();
+      if (urlStr.includes('tatum.io')) {
+        const publicUrl = 'https://fullnode.testnet.sui.io:443';
+        return fetch(publicUrl, init);
+      }
+    }
+
+    if (res.status === 200) {
+      const clonedRes = res.clone();
+      try {
+        const json = await clonedRes.json();
+        const isMethodNotFound = (item: any) => item && item.error && item.error.code === -32601;
+        const hasError = Array.isArray(json) ? json.some(isMethodNotFound) : isMethodNotFound(json);
+        if (hasError) {
+          console.warn('⚠️ [Tatum RPC] Method not found (-32601). Dynamically falling back to SUI public fullnode...');
+          const urlStr = typeof input === 'string' ? input : input.toString();
+          if (urlStr.includes('tatum.io')) {
+            const publicUrl = 'https://fullnode.testnet.sui.io:443';
+            return fetch(publicUrl, init);
+          }
+        }
+      } catch (_) {}
+    }
+
+    return res;
+  } catch (err) {
+    console.warn('⚠️ [Tatum RPC] Fetch failed, attempting public fullnode fallback...', err);
+    const urlStr = typeof input === 'string' ? input : input.toString();
+    if (urlStr.includes('tatum.io')) {
+      const publicUrl = 'https://fullnode.testnet.sui.io:443';
+      return fetch(publicUrl, init);
+    }
+    throw err;
+  }
 };
 
 export interface TatumNodeStats {

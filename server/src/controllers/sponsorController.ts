@@ -10,8 +10,50 @@ const CLOCK_ID = '0x6';
 // Dynamic import helper to bypass ESM-CommonJS compile/runtime issues
 const importDynamic = new Function('modulePath', 'return import(modulePath)');
 
+const customFetch = async (input: any, init?: any) => {
+    try {
+        const res = await fetch(input, init);
+        if (res.status === 429) {
+            console.warn('⚠️ [Backend Tatum RPC] Rate limited (429). Dynamically falling back to SUI public fullnode...');
+            const urlStr = typeof input === 'string' ? input : input.toString();
+            if (urlStr.includes('tatum.io')) {
+                const publicUrl = 'https://fullnode.testnet.sui.io:443';
+                return fetch(publicUrl, init);
+            }
+        }
+
+        if (res.status === 200) {
+            const clonedRes = res.clone();
+            try {
+                const json = await clonedRes.json();
+                const isMethodNotFound = (item: any) => item && item.error && item.error.code === -32601;
+                const hasError = Array.isArray(json) ? json.some(isMethodNotFound) : isMethodNotFound(json);
+                if (hasError) {
+                    console.warn('⚠️ [Backend Tatum RPC] Method not found (-32601). Dynamically falling back to SUI public fullnode...');
+                    const urlStr = typeof input === 'string' ? input : input.toString();
+                    if (urlStr.includes('tatum.io')) {
+                        const publicUrl = 'https://fullnode.testnet.sui.io:443';
+                        return fetch(publicUrl, init);
+                    }
+                }
+            } catch (_) {}
+        }
+
+        return res;
+    } catch (err) {
+        console.warn('⚠️ [Backend Tatum RPC] Fetch failed, attempting public fullnode fallback...', err);
+        const urlStr = typeof input === 'string' ? input : input.toString();
+        if (urlStr.includes('tatum.io')) {
+            const publicUrl = 'https://fullnode.testnet.sui.io:443';
+            return fetch(publicUrl, init);
+        }
+        throw err;
+    }
+};
+
 let sdkLoaded = false;
 let SuiClient: any;
+let JsonRpcHTTPTransport: any;
 let Ed25519Keypair: any;
 let Transaction: any;
 let suiClient: any;
@@ -26,11 +68,33 @@ async function ensureSdkLoaded() {
         const txMod = await importDynamic('@mysten/sui/transactions');
 
         SuiClient = clientMod.SuiJsonRpcClient;
+        JsonRpcHTTPTransport = clientMod.JsonRpcHTTPTransport;
         Ed25519Keypair = keypairsMod.Ed25519Keypair;
         Transaction = txMod.Transaction;
 
-        const SUI_RPC_URL = process.env.TATUM_SUI_TESTNET_RPC || 'https://fullnode.testnet.sui.io:443';
-        suiClient = new SuiClient({ url: SUI_RPC_URL });
+        let SUI_RPC_URL = 'https://fullnode.testnet.sui.io:443';
+        const tatumRpc = process.env.TATUM_SUI_TESTNET_RPC;
+        const apiKey = process.env.TATUM_API_KEY;
+
+        if (tatumRpc) {
+            let normalizedRpc = tatumRpc;
+            // Correct the incorrect hostname from .env if present
+            if (tatumRpc.includes('sui-testnet.node.tatum.io')) {
+                normalizedRpc = 'https://sui-testnet.gateway.tatum.io';
+            }
+            
+            if (apiKey && !normalizedRpc.includes('apiKey=')) {
+                SUI_RPC_URL = `${normalizedRpc}?apiKey=${apiKey}`;
+            } else {
+                SUI_RPC_URL = normalizedRpc;
+            }
+        }
+        
+        const transport = new JsonRpcHTTPTransport({
+            url: SUI_RPC_URL,
+            fetch: customFetch
+        });
+        suiClient = new SuiClient({ transport });
 
         // Initialize sponsor keypair
         sponsorKeypair = getSponsorKeypairInternal();
