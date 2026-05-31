@@ -138,6 +138,22 @@ export default function ProfilePage() {
     }
   };
 
+  const syncFollowStateFromServer = async (targetWallet: string) => {
+    const lookupKey = queryWallet || queryUsername || targetWallet;
+    const profileRes = await api.fetchUserProfile(lookupKey);
+    const user = profileRes?.data?.user;
+    if (!user) return;
+    setCurrentUser((prev: any) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        isFollowing: user.isFollowing ?? false,
+        followersCount: user.followersCount ?? prev.followersCount ?? 0,
+        followingCount: user.followingCount ?? prev.followingCount ?? 0,
+      };
+    });
+  };
+
   const handleFollowToggle = async () => {
     if (!currentUser || !authUser) return;
     setIsTogglingFollow(true);
@@ -146,23 +162,25 @@ export default function ProfilePage() {
       if (currentUser.isFollowing) {
         try {
           await api.unfollowUser(targetWallet);
+          await syncFollowStateFromServer(targetWallet);
         } catch (apiErr) {
-          console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
+          console.warn("⚠️ API unfollow failed, trying mockDb fallback:", apiErr);
           const followerId = authUser.id;
           const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
           mockDb.follows = mockDb.follows.filter(f => !(f.followerId === followerId && f.followingId === followingUser.id));
+          setCurrentUser((prev: any) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              isFollowing: false,
+              followersCount: Math.max(0, (prev.followersCount || 0) - 1)
+            };
+          });
         }
-        setCurrentUser((prev: any) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            isFollowing: false,
-            followersCount: Math.max(0, (prev.followersCount || 0) - 1)
-          };
-        });
       } else {
         try {
           await api.followUser(targetWallet);
+          await syncFollowStateFromServer(targetWallet);
         } catch (apiErr) {
           console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
           const followerId = authUser.id;
@@ -175,15 +193,20 @@ export default function ProfilePage() {
               createdAt: new Date()
             });
           }
+          setCurrentUser((prev: any) => {
+            if (!prev) return null;
+            const alreadyFollowing = mockDb.follows.some(
+              f => f.followerId === followerId && f.followingId === followingUser.id
+            );
+            return {
+              ...prev,
+              isFollowing: true,
+              followersCount: alreadyFollowing
+                ? (prev.followersCount || 0)
+                : (prev.followersCount || 0) + 1
+            };
+          });
         }
-        setCurrentUser((prev: any) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            isFollowing: true,
-            followersCount: (prev.followersCount || 0) + 1
-          };
-        });
       }
     } catch (err) {
       console.error("Failed to toggle follow status:", err);

@@ -187,6 +187,15 @@ export const followUser = asyncHandler(async (req: Request, res: Response) => {
         throw new AppError('You cannot follow yourself', 400);
     }
 
+    const existingFollow = await prisma.follow.findUnique({
+        where: {
+            followerId_followingId: {
+                followerId: sessionUser.id,
+                followingId: targetUser.id
+            }
+        }
+    });
+
     await prisma.follow.upsert({
         where: {
             followerId_followingId: {
@@ -201,8 +210,7 @@ export const followUser = asyncHandler(async (req: Request, res: Response) => {
         }
     });
 
-    // Create Follow Notification
-    if (targetUser.id !== sessionUser.id) {
+    if (!existingFollow) {
         try {
             await prisma.notification.create({
                 data: {
@@ -216,9 +224,14 @@ export const followUser = asyncHandler(async (req: Request, res: Response) => {
         }
     }
 
+    const followersCount = await prisma.follow.count({
+        where: { followingId: targetUser.id }
+    });
+
     res.status(200).json({
         status: 'success',
-        message: 'Successfully followed user'
+        message: 'Successfully followed user',
+        data: { isFollowing: true, followersCount }
     });
 });
 
@@ -258,9 +271,14 @@ export const unfollowUser = asyncHandler(async (req: Request, res: Response) => 
         // Silently succeed if relationship didn't exist
     }
 
+    const followersCount = await prisma.follow.count({
+        where: { followingId: targetUser.id }
+    });
+
     res.status(200).json({
         status: 'success',
-        message: 'Successfully unfollowed user'
+        message: 'Successfully unfollowed user',
+        data: { isFollowing: false, followersCount }
     });
 });
 

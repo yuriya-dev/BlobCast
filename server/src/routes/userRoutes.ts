@@ -10,7 +10,7 @@ import {
     getUserNotifications,
     markNotificationsRead
 } from '../controllers/userController';
-import { requireAuth } from '../middleware/authMiddleware';
+import { optionalAuth, requireAuth } from '../middleware/authMiddleware';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ router.get('/notifications', requireAuth, getUserNotifications);
 router.post('/notifications/read', requireAuth, markNotificationsRead);
 
 // GET /api/users/:walletAddress - Get profile details by SUI address
-router.get('/:walletAddress', getUserProfile);
+router.get('/:walletAddress', optionalAuth, getUserProfile);
 
 // GET /api/users/:walletAddress/followers - Get list of followers
 router.get('/:walletAddress/followers', getUserFollowers);
