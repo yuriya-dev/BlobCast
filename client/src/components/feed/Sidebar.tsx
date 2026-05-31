@@ -110,17 +110,15 @@ export function Sidebar() {
       
       {/* Dynamic Cyber Logo */}
       <Link href="/" className="flex items-center gap-2 px-3 py-1 group mb-4">
-        <div className="h-9 w-9 rounded-cyber-md bg-linear-to-tr from-sui-cyan to-tatum-purple p-0.5 shrink-0 group-hover:rotate-6 transition-all duration-300">
-          <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-bold text-sui-cyan">
-            BC
-          </div>
+        <div className="h-9 w-9 rounded-cyber-md p-0.5 shrink-0 group-hover:rotate-6 transition-all duration-300">
+          <img src="/logo.svg" alt="BlobCast" width={32} height={32} className="rounded-md" />
         </div>
         <div className="flex flex-col">
           <span className="font-mono font-black text-sm tracking-widest text-white text-neon-glow leading-none">
             BLOBCAST
           </span>
           <span className="text-[9px] font-mono text-gray-500 mt-0.5 uppercase tracking-wider leading-none">
-            Permanent Social
+            Own Your Posts Forever
           </span>
         </div>
       </Link>

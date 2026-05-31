@@ -30,10 +30,8 @@ export default function Home() {
 
       <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10 relative">
         <div className="flex items-center gap-2 group">
-          <div className="h-9 w-9 rounded-xl bg-linear-to-tr from-sui-cyan to-tatum-purple p-0.5 group-hover:rotate-6 transition-all duration-300">
-            <div className="h-full w-full rounded-xl bg-walrus-blue flex items-center justify-center font-bold text-sui-cyan font-mono text-sm">
-              BC
-            </div>
+          <div className="h-9 w-9 rounded-xl p-0.5 group-hover:rotate-6 transition-all duration-300">
+            <img src="/logo.svg" alt="BlobCast" width={32} height={32} />
           </div>
           <div>
             <p className="font-mono font-black text-sm tracking-[0.3em] text-white text-neon-glow">BLOBCAST</p>
