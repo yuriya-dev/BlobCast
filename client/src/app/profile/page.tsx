@@ -62,7 +62,7 @@ export default function ProfilePage() {
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [likedPosts, setLikedPosts] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'casts' | 'media' | 'likes'>('casts');
-  const [totalTips, setTotalTips] = useState(148.5);
+  const [totalTips, setTotalTips] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -292,6 +292,17 @@ export default function ProfilePage() {
         setBannerUrl(user.bannerBlobId || '');
         if (user.website) setWebsite(user.website);
         if (user.github) setGithub(user.github);
+
+        // Fetch real tips received from database
+        try {
+          const tipsRes = await api.fetchTipsReceived(user.id);
+          const tipsList = tipsRes?.data?.tips || [];
+          const sum = tipsList.reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
+          setTotalTips(sum);
+        } catch (tipsErr) {
+          console.warn("⚠️ Failed to fetch real tips for profile:", tipsErr);
+          setTotalTips(0);
+        }
 
         // Sync database pinnedPostId with localStorage so the PostCard can also hydrate correctly
         if (typeof window !== 'undefined') {
