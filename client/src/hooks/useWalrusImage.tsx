@@ -18,47 +18,56 @@ export function useWalrusImage(blobId: string | null | undefined): string {
 
     const cleanId = blobId.replace('walrus://', '');
     
-    // 1. Try synchronous cache lookup first (localStorage or RAM store) for both real and simulated blobs
+    // 1. Try synchronous cache lookup — resolveImageUrl checks localStorage/RAM
     const syncUrl = walrus.resolveImageUrl(blobId);
-    if (syncUrl && syncUrl.startsWith('data:')) {
+    
+    // 2. If the resolved URL is a data: URI or any HTTP(S) URL, we can set it directly.
+    //    This covers: cached base64 from localStorage, backend /image endpoint, aggregator URLs.
+    //    Browser handles the HTTP fetch natively for img src.
+    if (syncUrl && (syncUrl.startsWith('data:') || syncUrl.startsWith('http'))) {
       setImageUrl(syncUrl);
       return;
     }
 
-    // 2. Mock fallbacks, SVGs, and direct http/https URLs resolve synchronously instantly
-    const isMockOrHttp = !cleanId.startsWith('walrus_sim_') && (
-      cleanId.includes('avatar') || 
-      cleanId.includes('banner') || 
-      cleanId.startsWith('http') || 
-      cleanId.startsWith('blob-') ||
-      cleanId.startsWith('post-') ||
-      cleanId.length < 15
-    );
-
-    if (isMockOrHttp) {
-      setImageUrl(syncUrl);
-      return;
-    }
-
-    // 3. Otherwise (real or simulated blobs not in memory), fetch asynchronously via getBlob to populate RAM/localStorage, then resolve
+    // 3. For blobs not yet resolvable (no cache, not walrus_sim_), try async getBlob
+    //    which will fetch from IndexedDB or backend and re-populate the cache.
     let active = true;
     
     walrus.getBlob(cleanId)
       .then((content) => {
-        if (active) {
-          if (content && typeof content === 'string' && content.startsWith('data:')) {
-            setImageUrl(content);
-          } else {
-            // Fallback to direct aggregator URL
-            setImageUrl(syncUrl);
-          }
+        if (!active) return;
+
+        // After getBlob runs, localStorage/memory cache is populated.
+        // Re-call resolveImageUrl — it will now find the cached data.
+        const resolvedAfterFetch = walrus.resolveImageUrl(cleanId);
+        if (resolvedAfterFetch && (resolvedAfterFetch.startsWith('data:') || resolvedAfterFetch.startsWith('http'))) {
+          setImageUrl(resolvedAfterFetch);
+          return;
         }
+
+        // Handle case where content itself is the base64 string
+        if (content && typeof content === 'string' && content.startsWith('data:')) {
+          setImageUrl(content);
+          return;
+        }
+
+        // Handle case where content is a JSON string wrapping a base64 string
+        if (content && typeof content === 'string') {
+          try {
+            const parsed = JSON.parse(content);
+            if (typeof parsed === 'string' && parsed.startsWith('data:')) {
+              setImageUrl(parsed);
+              return;
+            }
+          } catch {}
+        }
+
+        // Final fallback
+        if (syncUrl) setImageUrl(syncUrl);
       })
       .catch((err) => {
         console.warn(`⚠️ Failed to load image blob ${cleanId} asynchronously:`, err);
-        if (active) {
-          setImageUrl(syncUrl);
-        }
+        if (active && syncUrl) setImageUrl(syncUrl);
       });
 
     return () => {
