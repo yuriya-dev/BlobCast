@@ -284,7 +284,7 @@ export function PostCardCommentComposer({
           </button>
         </div>
 
-        <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-full left-[63.5%] mb-2 z-50">
+        <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-[10%] left-[66.5%] mb-2 z-50">
           <div
             className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
             style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}

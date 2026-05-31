@@ -197,7 +197,7 @@ export function Sidebar() {
           onClick={() => setIsComposeOpen(false)}
         >
           <div
-            className="glass-panel bg-walrus-blue rounded-cyber-lg shadow-cyber-glow max-w-lg w-full max-h-[90vh] overflow-y-auto border border-sui-cyan/25 relative flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200"
+            className="glass-panel bg-walrus-blue rounded-cyber-lg shadow-cyber-glow max-w-lg w-full max-h-[90vh] border border-sui-cyan/25 relative flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <button 

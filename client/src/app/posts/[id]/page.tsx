@@ -584,7 +584,7 @@ export default function PostDetailPage({ params }: PageProps) {
 
                             <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-full mb-2 z-50">
                               <div
-                                className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
+                                className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow"
                                 style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
                               >
                                 <EmojiPicker

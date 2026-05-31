@@ -521,7 +521,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
             {/** Emoji modal positioned above the trigger; use single component to handle outside clicks */}
             <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="top-full left-0 mt-2 z-50 w-[320px]">
-              <div className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
+              <div className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow"
               style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
               >
                 <EmojiPicker
