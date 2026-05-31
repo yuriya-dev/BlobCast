@@ -15,7 +15,8 @@ import {
   CheckCircle,
   Globe,
   Loader2,
-  UserPlus
+  UserPlus,
+  UserMinus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -36,6 +37,7 @@ import {
 } from '@/lib/profileLinks';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 // Custom SVG component for Github icon to avoid library version inconsistencies
 function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -95,6 +97,7 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+  const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
 
   const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
   const [isFollowingModalOpen, setIsFollowingModalOpen] = useState(false);
@@ -162,62 +165,92 @@ export default function ProfilePage() {
     });
   };
 
-  const handleFollowToggle = async () => {
+  const runUnfollow = async () => {
+    if (!currentUser || !authUser) return;
+    const targetWallet = currentUser.walletAddress;
+    try {
+      await api.unfollowUser(targetWallet);
+      await syncFollowStateFromServer(targetWallet);
+    } catch (apiErr) {
+      console.warn("⚠️ API unfollow failed, trying mockDb fallback:", apiErr);
+      const followerId = authUser.id;
+      const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
+      mockDb.follows = mockDb.follows.filter(f => !(f.followerId === followerId && f.followingId === followingUser.id));
+      setCurrentUser((prev: any) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          isFollowing: false,
+          followersCount: Math.max(0, (prev.followersCount || 0) - 1)
+        };
+      });
+    }
+  };
+
+  const runFollow = async () => {
+    if (!currentUser || !authUser) return;
+    const targetWallet = currentUser.walletAddress;
+    try {
+      await api.followUser(targetWallet);
+      await syncFollowStateFromServer(targetWallet);
+    } catch (apiErr) {
+      console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
+      const followerId = authUser.id;
+      const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
+      const exists = mockDb.follows.some(f => f.followerId === followerId && f.followingId === followingUser.id);
+      if (!exists) {
+        mockDb.follows.push({
+          followerId,
+          followingId: followingUser.id,
+          createdAt: new Date()
+        });
+      }
+      setCurrentUser((prev: any) => {
+        if (!prev) return null;
+        const alreadyFollowing = mockDb.follows.some(
+          f => f.followerId === followerId && f.followingId === followingUser.id
+        );
+        return {
+          ...prev,
+          isFollowing: true,
+          followersCount: alreadyFollowing
+            ? (prev.followersCount || 0)
+            : (prev.followersCount || 0) + 1
+        };
+      });
+    }
+  };
+
+  const handleFollowButtonClick = () => {
+    if (!currentUser || !authUser) return;
+    if (currentUser.isFollowing) {
+      setShowUnfollowConfirm(true);
+      return;
+    }
+    void handleFollow();
+  };
+
+  const handleFollow = async () => {
     if (!currentUser || !authUser) return;
     setIsTogglingFollow(true);
     try {
-      const targetWallet = currentUser.walletAddress;
-      if (currentUser.isFollowing) {
-        try {
-          await api.unfollowUser(targetWallet);
-          await syncFollowStateFromServer(targetWallet);
-        } catch (apiErr) {
-          console.warn("⚠️ API unfollow failed, trying mockDb fallback:", apiErr);
-          const followerId = authUser.id;
-          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
-          mockDb.follows = mockDb.follows.filter(f => !(f.followerId === followerId && f.followingId === followingUser.id));
-          setCurrentUser((prev: any) => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              isFollowing: false,
-              followersCount: Math.max(0, (prev.followersCount || 0) - 1)
-            };
-          });
-        }
-      } else {
-        try {
-          await api.followUser(targetWallet);
-          await syncFollowStateFromServer(targetWallet);
-        } catch (apiErr) {
-          console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
-          const followerId = authUser.id;
-          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
-          const exists = mockDb.follows.some(f => f.followerId === followerId && f.followingId === followingUser.id);
-          if (!exists) {
-            mockDb.follows.push({
-              followerId,
-              followingId: followingUser.id,
-              createdAt: new Date()
-            });
-          }
-          setCurrentUser((prev: any) => {
-            if (!prev) return null;
-            const alreadyFollowing = mockDb.follows.some(
-              f => f.followerId === followerId && f.followingId === followingUser.id
-            );
-            return {
-              ...prev,
-              isFollowing: true,
-              followersCount: alreadyFollowing
-                ? (prev.followersCount || 0)
-                : (prev.followersCount || 0) + 1
-            };
-          });
-        }
-      }
+      await runFollow();
     } catch (err) {
-      console.error("Failed to toggle follow status:", err);
+      console.error("Failed to follow user:", err);
+      alert("Failed to update follow relationship. Please try again.");
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  };
+
+  const handleConfirmUnfollow = async () => {
+    if (!currentUser || !authUser) return;
+    setIsTogglingFollow(true);
+    try {
+      await runUnfollow();
+      setShowUnfollowConfirm(false);
+    } catch (err) {
+      console.error("Failed to unfollow user:", err);
       alert("Failed to update follow relationship. Please try again.");
     } finally {
       setIsTogglingFollow(false);
@@ -915,7 +948,7 @@ export default function ProfilePage() {
               </button>
             ) : (
               <button 
-                onClick={handleFollowToggle}
+                onClick={handleFollowButtonClick}
                 disabled={isTogglingFollow}
                 className={`px-5 py-2 rounded-cyber-md text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer ${
                   currentUser?.isFollowing 
@@ -1418,6 +1451,24 @@ export default function ProfilePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        open={showUnfollowConfirm}
+        onClose={() => !isTogglingFollow && setShowUnfollowConfirm(false)}
+        onConfirm={handleConfirmUnfollow}
+        isLoading={isTogglingFollow}
+        title="Unfollow"
+        message={
+          currentUser?.username
+            ? `Unfollow @${currentUser.username}? Their casts will no longer be prioritized in your feed.`
+            : 'Unfollow this user? Their casts will no longer be prioritized in your feed.'
+        }
+        confirmLabel="Unfollow"
+        loadingLabel="Unfollowing..."
+        variant="danger"
+        titleId="unfollow-confirm-title"
+        icon={<UserMinus className="h-5 w-5 text-rose-300" />}
+      />
 
     </div>
   );

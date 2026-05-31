@@ -28,6 +28,7 @@ import { mockDb } from '@/lib/db';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { useRouter, usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PostCardVerificationPanel } from './PostCardVerificationPanel';
 import { PostCardCommentComposer } from './PostCardCommentComposer';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -243,6 +244,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     return pinnedId === targetPostId;
   }, [targetPostId, post.author.walletAddress]);
   const [isDeleted, setIsDeleted] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
 
   useEffect(() => {
@@ -577,13 +579,17 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     }
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDeleteRequest = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowMenu(false);
-    // Remove from mockDb locally
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = () => {
     const idx = mockDb.posts.findIndex(p => p.id === targetPostId);
     if (idx !== -1) mockDb.posts.splice(idx, 1);
     setIsDeleted(true);
+    setShowDeleteConfirm(false);
   };
 
   const handlePin = (e: React.MouseEvent) => {
@@ -711,7 +717,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
                       {/* Delete — only shown to the post owner */}
                       {isOwnPost && (
                         <button
-                          onClick={handleDelete}
+                          onClick={handleDeleteRequest}
                           className="w-full flex items-center gap-3 px-4 py-3 text-xs font-sans text-rose-400 hover:bg-rose-500/10 transition-colors text-left"
                         >
                           <Trash2 className="h-3.5 w-3.5 shrink-0" />
@@ -915,6 +921,18 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
           );
         })()}
       </AnimatePresence>
+
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Cast"
+        message="Delete this cast permanently? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        titleId="delete-cast-title"
+        icon={<Trash2 className="h-5 w-5 text-rose-300" />}
+      />
 
     </motion.div>
   );
