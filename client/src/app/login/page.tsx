@@ -13,7 +13,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 export default function LoginPage() {
   const router = useRouter();
   const account = useCurrentAccount();
-  const { user: authUser, refreshSession } = useAuth();
+  const { user: authUser, refreshSession, isSessionActive, authorizeSessionKey } = useAuth();
   const [isChecking, setIsChecking] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connect your wallet to continue.');
   const [errorMessage, setErrorMessage] = useState('');
@@ -57,14 +57,32 @@ export default function LoginPage() {
         setProfileFound(found);
         
         if (found) {
-          setStatusMessage('Profile found. Redirecting to feed automatically...');
           setIsChecking(true);
           try {
+            let signatureSuccess = true;
+            
+            // Check if we already have an active session in local storage for this wallet
+            const localActive = localStorage.getItem(`blobcast_session_active_${account.address.toLowerCase()}`) === 'true';
+            const localExpires = localStorage.getItem(`blobcast_session_expires_${account.address.toLowerCase()}`);
+            const hasValidLocalSession = localActive && localExpires && parseInt(localExpires, 10) > Date.now();
+
+            if (!isSessionActive && !hasValidLocalSession) {
+              setStatusMessage('Profile found. Authorizing secure session key in your wallet...');
+              signatureSuccess = await authorizeSessionKey(account.address);
+            }
+
+            if (!signatureSuccess) {
+              setErrorMessage('Session key authorization rejected. Please connect wallet again or login manually.');
+              setIsChecking(false);
+              return;
+            }
+
+            setStatusMessage('Logging in and redirecting to feed...');
             await api.loginWithWallet(account.address);
             await refreshSession();
             router.push('/feed');
           } catch {
-            setErrorMessage('Auto-redirect failed. Please click button to continue.');
+            setErrorMessage('Auto-redirect failed. Please click Login to continue.');
           } finally {
             setIsChecking(false);
           }
@@ -102,6 +120,21 @@ export default function LoginPage() {
     setErrorMessage('');
 
     try {
+      const localActive = localStorage.getItem(`blobcast_session_active_${account.address.toLowerCase()}`) === 'true';
+      const localExpires = localStorage.getItem(`blobcast_session_expires_${account.address.toLowerCase()}`);
+      const hasValidLocalSession = localActive && localExpires && parseInt(localExpires, 10) > Date.now();
+
+      if (!isSessionActive && !hasValidLocalSession) {
+        setStatusMessage('Authorizing secure session key...');
+        const signatureSuccess = await authorizeSessionKey(account.address);
+        if (!signatureSuccess) {
+          setErrorMessage('Session key authorization rejected.');
+          setIsChecking(false);
+          return;
+        }
+      }
+
+      setStatusMessage('Logging in...');
       const response = await api.loginWithWallet(account.address);
       const user = response.data.user;
       const ready = Boolean(user.username && user.displayName);
@@ -116,6 +149,23 @@ export default function LoginPage() {
       try {
         const response = await api.fetchUserProfile(account.address);
         const user = response.data.user;
+        
+        let signatureSuccess = true;
+        const localActive = localStorage.getItem(`blobcast_session_active_${account.address.toLowerCase()}`) === 'true';
+        const localExpires = localStorage.getItem(`blobcast_session_expires_${account.address.toLowerCase()}`);
+        const hasValidLocalSession = localActive && localExpires && parseInt(localExpires, 10) > Date.now();
+
+        if (user.username && user.displayName && !isSessionActive && !hasValidLocalSession) {
+          setStatusMessage('Authorizing secure session key...');
+          signatureSuccess = await authorizeSessionKey(account.address);
+        }
+
+        if (!signatureSuccess) {
+          setErrorMessage('Session key authorization rejected.');
+          setIsChecking(false);
+          return;
+        }
+
         router.push(user.username && user.displayName ? '/feed' : '/register');
         return;
       } catch {

@@ -501,7 +501,7 @@ export default function MyWalletPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={authorizeSessionKey}
+                    onClick={() => authorizeSessionKey(walletAddress)}
                     disabled={isAuthorizingSession}
                     className="w-full sm:w-auto px-4 py-2 rounded-cyber-md bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-extrabold text-[11px] uppercase tracking-wider hover:opacity-95 hover:shadow-cyber-glow active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >

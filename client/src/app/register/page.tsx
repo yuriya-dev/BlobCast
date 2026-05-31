@@ -13,7 +13,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 export default function RegisterPage() {
   const router = useRouter();
   const account = useCurrentAccount();
-  const { user: authUser, refreshSession } = useAuth();
+  const { user: authUser, refreshSession, isSessionActive, authorizeSessionKey } = useAuth();
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,14 +57,32 @@ export default function RegisterPage() {
         setDisplayName(user.displayName || '');
         
         if (user.username && user.displayName) {
-          setSuccessMessage('Profile already registered. Auto-redirecting to feed...');
           setIsSubmitting(true);
           try {
+            let signatureSuccess = true;
+            
+            // Check if we already have an active session in local storage for this wallet
+            const localActive = localStorage.getItem(`blobcast_session_active_${account.address.toLowerCase()}`) === 'true';
+            const localExpires = localStorage.getItem(`blobcast_session_expires_${account.address.toLowerCase()}`);
+            const hasValidLocalSession = localActive && localExpires && parseInt(localExpires, 10) > Date.now();
+
+            if (!isSessionActive && !hasValidLocalSession) {
+              setSuccessMessage('Profile already registered. Authorizing secure session key in your wallet...');
+              signatureSuccess = await authorizeSessionKey(account.address);
+            }
+
+            if (!signatureSuccess) {
+              setErrorMessage('Session key authorization rejected. Please connect wallet again or save manually.');
+              setIsSubmitting(false);
+              return;
+            }
+
+            setSuccessMessage('Logging in and redirecting to feed...');
             await api.loginWithWallet(account.address);
             await refreshSession();
             router.push('/feed');
           } catch {
-            setErrorMessage('Auto-redirect failed. Please click Save Profile to continue.');
+            setErrorMessage('Auto-redirect failed. Please click Save profile to continue.');
           } finally {
             setIsSubmitting(false);
           }
@@ -108,6 +126,23 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
     try {
+      let signatureSuccess = true;
+      const localActive = localStorage.getItem(`blobcast_session_active_${account.address.toLowerCase()}`) === 'true';
+      const localExpires = localStorage.getItem(`blobcast_session_expires_${account.address.toLowerCase()}`);
+      const hasValidLocalSession = localActive && localExpires && parseInt(localExpires, 10) > Date.now();
+
+      if (!isSessionActive && !hasValidLocalSession) {
+        setSuccessMessage('Profile details validated. Please sign the secure session key in your wallet...');
+        signatureSuccess = await authorizeSessionKey(account.address);
+      }
+
+      if (!signatureSuccess) {
+        setErrorMessage('Session key authorization rejected.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      setSuccessMessage('Saving profile...');
       await api.registerWithWallet({
         walletAddress: account.address,
         username: nextUsername,

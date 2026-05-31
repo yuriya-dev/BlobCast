@@ -12,7 +12,7 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   isSessionActive: boolean;
   isAuthorizingSession: boolean;
-  authorizeSessionKey: () => Promise<boolean>;
+  authorizeSessionKey: (explicitAddress?: string) => Promise<boolean>;
   revokeSessionKey: () => Promise<void>;
 };
 
@@ -81,15 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [account?.address]);
 
-  const authorizeSessionKey = async () => {
-    if (!account?.address) {
-      alert('Connect your Sui wallet to authorize a session.');
+  const authorizeSessionKey = async (explicitAddress?: string) => {
+    const targetAddress = explicitAddress || account?.address;
+    if (!targetAddress) {
+      console.warn('⚠️ [Session Key] Cannot authorize session: No active account address.');
       return false;
     }
 
     setIsAuthorizingSession(true);
     try {
-      const messageText = `Authorize BlobCast Session\n\nAddress: ${account.address}\nExpires: 7 Days\nPermissions:\n- Create Post\n- Create Comment\n- Upload Media\n- Follow Users\n- Repost Content`;
+      const messageText = `Authorize BlobCast Session\n\nAddress: ${targetAddress}\nExpires: 7 Days\nPermissions:\n- Create Post\n- Create Comment\n- Upload Media\n- Follow Users\n- Repost Content`;
       
       const encoder = new TextEncoder();
       const messageBytes = encoder.encode(messageText);
@@ -99,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message: messageBytes
       });
 
-      const activeWallet = account.address.toLowerCase();
+      const activeWallet = targetAddress.toLowerCase();
       const expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
 
       localStorage.setItem(`blobcast_session_active_${activeWallet}`, 'true');
