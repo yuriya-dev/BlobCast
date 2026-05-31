@@ -412,6 +412,34 @@ export const api = {
       method: 'POST'
     }));
     return parseJsonResponse(res, 'Failed to mark notifications as read');
+  },
+
+  /**
+   * Fetch active sponsor address and SUI balance
+   */
+  async fetchSponsorAddress(): Promise<{ status: string; data: { address: string; balance: string; balanceMist: string } }> {
+    const res = await fetch(`${BASE_URL}/sponsor/address`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch sponsor address');
+  },
+
+  /**
+   * Request sponsored transaction block bytes and sponsor signature from Express backend
+   */
+  async requestSponsorship(data: {
+    senderAddress: string;
+    walrusBlobId: string;
+    blobHash: string;
+    contentType: number;
+    visibility: number;
+    replyToId?: string | null;
+    repostOfId?: string | null;
+  }): Promise<{ status: string; data: { txBytes: string; sponsorSignature: string } }> {
+    const res = await fetch(`${BASE_URL}/sponsor`, requestInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }));
+    return parseJsonResponse(res, 'Failed to request transaction sponsorship');
   }
 };
 

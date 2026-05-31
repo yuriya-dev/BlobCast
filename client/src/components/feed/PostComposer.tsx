@@ -4,8 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database, X } from 'lucide-react';
 import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { walrus } from '@/lib/walrus';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
 import {
@@ -25,6 +26,7 @@ interface PostComposerProps {
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   const { user: authUser, isSessionActive } = useAuth();
   interface MediaItem {
@@ -336,14 +338,52 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         } catch (txErr) {
           console.warn('⚠️ [Sui Transaction] Failed signing and executing Sui transaction block:', txErr);
         }
-      } else if (isSessionActive) {
-        // If Session is active, skip blockchain transaction completely!
-        console.log('⚡ [Session Key] Active session detected! Bypassing wallet popup and publishing directly to Walrus & indexer.');
+      } else if (isSessionActive && account) {
+        // If Session is active, request a sponsored transaction from the Express backend and execute it on-chain with zero wallet popups!
+        console.log('⚡ [Session Key] Active session detected! Requesting sponsored transaction block from Gas Station...');
         try {
           const hashBytes = await computeSha256(JSON.stringify(postBlob));
           blobHash = hashToHex(hashBytes);
-        } catch (hashErr) {
-          console.warn('⚠️ Failed to compute content hash:', hashErr);
+
+          const activeWallet = account.address.toLowerCase();
+          const sessionAddress = localStorage.getItem(`blobcast_session_key_address_${activeWallet}`);
+          const sessionSecretKey = localStorage.getItem(`blobcast_session_private_key_${activeWallet}`);
+
+          if (sessionAddress && sessionSecretKey) {
+            console.log('⛽ [Gas Station] Requesting sponsorship for session key:', sessionAddress);
+            const sponsorRes = await api.requestSponsorship({
+              senderAddress: sessionAddress,
+              walrusBlobId: walrusUploadInfo.blobId,
+              blobHash: blobHash,
+              contentType: mediaItems.length > 0 ? 1 : 0,
+              visibility: 0,
+              replyToId: null,
+              repostOfId: null
+            });
+
+            if (sponsorRes && sponsorRes.data) {
+              const { txBytes, sponsorSignature } = sponsorRes.data;
+
+              // Sign with our local Session Key keypair
+              const sessionKeypair = Ed25519Keypair.fromSecretKey(sessionSecretKey);
+              const txBytesBuffer = Buffer.from(txBytes, 'base64');
+              const { signature: senderSignature } = await sessionKeypair.signTransaction(txBytesBuffer);
+
+              console.log('⛽ [Gas Station] Executing sponsored transaction block on SUI blockchain...');
+              const executeResult = await suiClient.executeTransactionBlock({
+                transactionBlock: txBytes,
+                signature: [senderSignature, sponsorSignature]
+              });
+              
+              console.log('✅ [Gas Station] Sponsored post published on-chain successfully!', executeResult);
+              suiObjectId = executeResult.digest;
+            }
+          } else {
+            console.warn('⚠️ [Session Key] Session key details not found in localStorage. Falling back to indexer only.');
+          }
+        } catch (gasErr: any) {
+          console.error('❌ [Gas Station] Failed to execute sponsored transaction block:', gasErr);
+          // Fall back gracefully to indexer only so user flow isn't completely broken
         }
       }
 

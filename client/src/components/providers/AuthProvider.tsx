@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { usePathname, useRouter } from 'next/navigation';
 import { api, type ApiUser } from '@/lib/api';
 import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 type AuthContextValue = {
   user: ApiUser | null;
@@ -90,7 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setIsAuthorizingSession(true);
     try {
-      const messageText = `Authorize BlobCast Session\n\nAddress: ${targetAddress}\nExpires: 7 Days\nPermissions:\n- Create Post\n- Create Comment\n- Upload Media\n- Follow Users\n- Repost Content`;
+      // 1. Generate local Ed25519 Keypair as the ephemeral Session Key!
+      const sessionKeypair = new Ed25519Keypair();
+      const secretKeyStr = sessionKeypair.getSecretKey(); // Bech32 encoded suiprivkey...
+      const sessionAddress = sessionKeypair.getPublicKey().toSuiAddress();
+
+      const messageText = `Authorize BlobCast Session\n\nAddress: ${targetAddress}\nSession Key: ${sessionAddress}\nExpires: 7 Days\nPermissions:\n- Create Post\n- Create Comment\n- Upload Media\n- Follow Users\n- Repost Content`;
       
       const encoder = new TextEncoder();
       const messageBytes = encoder.encode(messageText);
@@ -103,11 +109,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const activeWallet = targetAddress.toLowerCase();
       const expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
 
+      // 2. Save active session details and the session private key securely in localStorage!
       localStorage.setItem(`blobcast_session_active_${activeWallet}`, 'true');
       localStorage.setItem(`blobcast_session_expires_${activeWallet}`, expiresAt.toString());
+      localStorage.setItem(`blobcast_session_private_key_${activeWallet}`, secretKeyStr);
+      localStorage.setItem(`blobcast_session_key_address_${activeWallet}`, sessionAddress);
+      
       setIsSessionActive(true);
       
-      console.log('🔒 BlobCast Session authorized successfully!');
+      console.log(`🔒 BlobCast Session Key authorized! Session address: ${sessionAddress}`);
       return true;
     } catch (err: any) {
       console.error('❌ BlobCast Session authorization failed:', err);
@@ -123,6 +133,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const activeWallet = account.address.toLowerCase();
     localStorage.removeItem(`blobcast_session_active_${activeWallet}`);
     localStorage.removeItem(`blobcast_session_expires_${activeWallet}`);
+    localStorage.removeItem(`blobcast_session_private_key_${activeWallet}`);
+    localStorage.removeItem(`blobcast_session_key_address_${activeWallet}`);
     setIsSessionActive(false);
     console.log('🔓 BlobCast Session Key revoked.');
   };

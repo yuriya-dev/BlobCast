@@ -87,6 +87,26 @@ export default function MyWalletPage() {
   } = useAuth();
   const suiClient = useSuiClient();
 
+  const [sponsorInfo, setSponsorInfo] = useState<{ address: string; balance: string } | null>(null);
+  const [loadingSponsor, setLoadingSponsor] = useState(false);
+
+  const fetchSponsorInfo = useCallback(async () => {
+    setLoadingSponsor(true);
+    try {
+      const res = await api.fetchSponsorAddress();
+      if (res && res.data) {
+        setSponsorInfo({
+          address: res.data.address,
+          balance: res.data.balance
+        });
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed fetching sponsor info from backend:', err);
+    } finally {
+      setLoadingSponsor(false);
+    }
+  }, []);
+
   // ─── Balance & Tipping State (Strictly Real Data) ───────────────────────────
   const [suiBalance, setSuiBalance] = useState<string | null>(null);
   const [suiBalanceRaw, setSuiBalanceRaw] = useState<bigint>(BigInt(0));
@@ -263,14 +283,16 @@ export default function MyWalletPage() {
   useEffect(() => {
     fetchBalance();
     fetchDashboardData();
+    fetchSponsorInfo();
 
     // Auto-refresh tip data every 30 seconds so new incoming tips appear live
     const interval = setInterval(() => {
       fetchDashboardData();
+      fetchSponsorInfo();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [account?.address, authUser?.walletAddress, fetchBalance, fetchDashboardData]);
+  }, [account?.address, authUser?.walletAddress, fetchBalance, fetchDashboardData, fetchSponsorInfo]);
 
   // ─── Compute real 7-day growth % from tipping analytics ─────────────────────
   const tipGrowthPercent = React.useMemo(() => {
@@ -507,7 +529,7 @@ export default function MyWalletPage() {
                   >
                     {isAuthorizingSession ? (
                       <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         Authorizing...
                       </>
                     ) : (
@@ -520,6 +542,36 @@ export default function MyWalletPage() {
                 )}
               </div>
             </div>
+
+            {/* Gas Station / Sponsor Wallet Info */}
+            {sponsorInfo && (
+              <div className="mt-2 border-t border-sui-cyan/5 pt-4 flex flex-col gap-2 bg-deep-space/30 border border-sui-cyan/5 rounded-xl p-3 font-mono text-[10px] select-text">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-linear-to-r from-sui-cyan to-tatum-purple animate-pulse" />
+                    <span className="text-gray-400 uppercase">Sponsor Gas Station Wallet:</span>
+                    <span className="text-white select-all break-all">{sponsorInfo.address}</span>
+                  </div>
+                  <a
+                    href={`https://suiscan.xyz/testnet/account/${sponsorInfo.address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-0.5 text-sui-cyan hover:underline hover:text-white transition-colors"
+                  >
+                    SuiScan <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-sui-cyan/5 pt-2 mt-1">
+                  <span className="text-gray-400 uppercase">Gas Station Fuel Balance:</span>
+                  <span className={`font-bold ${Number(sponsorInfo.balance) > 0.05 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {sponsorInfo.balance} SUI
+                  </span>
+                </div>
+                <p className="text-[9px] text-gray-500 font-sans leading-relaxed mt-1">
+                  ⚠️ Note: If the Gas Station Fuel Balance runs low, sponsored transactions will fall back to local offline indexer mode. You can fund the sponsor address using any testnet wallet or faucet to keep E2E sponsored transactions active.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Analytics Block: 7-Day Tipping Growth Chart */}

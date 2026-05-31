@@ -67,3 +67,6 @@ contract/build/
 *.db-journal
 
 docs/
+
+# sponsor wallet key
+server/sponsor_wallet.key

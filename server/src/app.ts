@@ -9,8 +9,9 @@ import postRoutes from './routes/postRoutes';
 import authRoutes from './routes/authRoutes';
 import messageRoutes from './routes/messageRoutes';
 import walrusSimRoutes from './routes/walrusSimRoutes';
-import dmRoutes from './routes/dmRoutes';
 import tipRoutes from './routes/tipRoutes';
+import sponsorRoutes from './routes/sponsorRoutes';
+import dmRoutes from './routes/dmRoutes';
 
 // Load environment configurations
 dotenv.config();
@@ -38,6 +39,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/walrus/blobs', walrusSimRoutes);
 app.use('/api/dm', dmRoutes);
 app.use('/api/tips', tipRoutes);
+app.use('/api/sponsor', sponsorRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
