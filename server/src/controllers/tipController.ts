@@ -1,3 +1,4 @@
+// Triggering dev server reload for regenerated Prisma Client definitions
 import { Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { asyncHandler } from '../utils/asyncHandler';

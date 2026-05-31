@@ -459,7 +459,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     try {
       const tx = new Transaction();
       const targetAddress = authorResolved.walletAddress;
-      
+
       // Tip amount is 0.1 SUI, represented as 100,000,000 MIST
       const amount = 100000000;
       const [coin] = tx.splitCoins(tx.gas, [amount]);
@@ -468,32 +468,68 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
       signAndExecuteTransaction(
         { transaction: tx },
         {
-          onSuccess: (result) => {
+          onSuccess: async (result) => {
             console.log('🔗 [Web3 Tip] Tip transaction block executed successfully:', result);
-            setTipsCount(prev => prev + 1.5);
+            setTipsCount(prev => prev + 0.1);
             confetti({
               particleCount: 50,
               spread: 60,
               origin: { y: 0.8 },
               colors: ['#6FE7FF', '#7C5CFF', '#0B1F33', '#ffffff'],
             });
+            // Persist tip to Supabase so recipient's wallet page shows real data
+            try {
+              const recipientProfile = await api.fetchUserProfile(authorResolved.walletAddress);
+              if (recipientProfile?.data?.user?.id) {
+                await api.createTip({
+                  senderAddress: authUser?.walletAddress || CURRENT_USER_WALLET,
+                  senderName: authUser?.displayName || authUser?.username || 'Anonymous Caster',
+                  recipientId: recipientProfile.data.user.id,
+                  postId: targetPostId || null,
+                  amount: 0.1,
+                  suiTxDigest: result?.digest || null,
+                  blobHash: post.blobHash || null,
+                  verifiedOnSui: true,
+                });
+                console.log('✅ [Web3 Tip] Tip recorded in Supabase.');
+              }
+            } catch (dbErr) {
+              console.warn('⚠️ [Web3 Tip] Failed to persist tip to database:', dbErr);
+            }
           },
           onError: (err) => {
             console.error('❌ [Web3 Tip] Tipping execution signature rejected or failed:', err);
-            alert('Tipping transaction block rejected or failed. Please check wallet status.');
+            alert(`Tipping transaction block failed: ${err.message || JSON.stringify(err) || 'Please check wallet connection or balance.'}`);
           }
         }
       );
     } catch (err) {
       console.warn('⚠️ [Web3 Tip] Simulation offline fallback tipping active:', err);
-      // Fallback for simulation / mock offline environment so tipping still triggers high-fidelity animations
-      setTipsCount(prev => prev + 1.5);
+      setTipsCount(prev => prev + 0.1);
       confetti({
         particleCount: 50,
         spread: 60,
         origin: { y: 0.8 },
         colors: ['#6FE7FF', '#7C5CFF', '#0B1F33', '#ffffff'],
       });
+      // Still persist to Supabase in the offline fallback path
+      try {
+        const recipientProfile = await api.fetchUserProfile(authorResolved.walletAddress);
+        if (recipientProfile?.data?.user?.id) {
+          await api.createTip({
+            senderAddress: authUser?.walletAddress || CURRENT_USER_WALLET,
+            senderName: authUser?.displayName || authUser?.username || 'Anonymous Caster',
+            recipientId: recipientProfile.data.user.id,
+            postId: targetPostId || null,
+            amount: 0.1,
+            suiTxDigest: null,
+            blobHash: post.blobHash || null,
+            verifiedOnSui: false,
+          });
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ [Web3 Tip] Failed to persist fallback tip:', dbErr);
+      }
     }
   };
 
@@ -784,7 +820,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
             <button 
               onClick={(e) => { e.stopPropagation(); handleTip(); }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-cyber-sm border border-sui-cyan/10 bg-sui-cyan/5 hover:bg-sui-cyan/15 hover:border-sui-cyan/40 hover:text-sui-cyan transition-all group/tip"
-              title="Tip Creator 1.5 SUI"
+              title="Tip Creator 0.1 SUI"
             >
               <Coins className="h-4 w-4 transition-transform group-hover/tip:rotate-12" />
               <span>{tipsCount > 0 ? `${tipsCount.toFixed(1)} SUI` : 'Tip Creator'}</span>

@@ -25,6 +25,7 @@ import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { api } from '@/lib/api';
+import { tatum } from '@/lib/tatum';
 import { 
   AreaChart, 
   Area, 
@@ -78,7 +79,7 @@ export default function MyWalletPage() {
   const { user: authUser } = useAuth();
   const suiClient = useSuiClient();
 
-  // ─── Balance & Tipping State ────────────────────────────────────────────────
+  // ─── Balance & Tipping State (Strictly Real Data) ───────────────────────────
   const [suiBalance, setSuiBalance] = useState<string | null>(null);
   const [suiBalanceRaw, setSuiBalanceRaw] = useState<bigint>(BigInt(0));
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
@@ -93,11 +94,8 @@ export default function MyWalletPage() {
   const [walrusShardsCount, setWalrusShardsCount] = useState(0);
   const [postsCount, setPostsCount] = useState(0);
 
-  // ─── Simulated Tipping Notification ────────────────────────────────────────
-  const [showNotification, setShowNotification] = useState(false);
-  const [simulatedTipAmount, setSimulatedTipAmount] = useState(0);
 
-  // ─── Analytics Tipping Chart ───────────────────────────────────────────────
+  // ─── Analytics Tipping Chart (Strictly Real Data) ───────────────────────────
   const [tippingAnalytics, setTippingAnalytics] = useState<{ day: string; tips: number }[]>([]);
 
   // ─── Pagination for Audit Logs ─────────────────────────────────────────────
@@ -118,9 +116,62 @@ export default function MyWalletPage() {
       setSuiBalanceRaw(totalMist);
       setSuiBalance(formatSui(totalMist));
     } catch (err) {
-      console.warn('⚠️ Failed to fetch SUI balance from chain:', err);
-      setBalanceError(true);
-      setSuiBalance(null);
+      console.warn('⚠️ Primary Sui client failed, attempting fallback to public fullnode RPC:', err);
+      try {
+        const fallbackUrl = tatum.getRpcUrl(SUI_NETWORK as any);
+          
+        const res = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'suix_getAllBalances',
+            params: [walletAddr]
+          })
+        });
+
+        if (!res.ok) throw new Error(`Fallback RPC HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message || 'RPC JSON Error');
+
+        const balances = json.result || [];
+        const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => b.coinType === '0x2::sui::SUI');
+        const totalMist = suiToken ? BigInt(suiToken.totalBalance) : BigInt(0);
+        setSuiBalanceRaw(totalMist);
+        setSuiBalance(formatSui(totalMist));
+      } catch (fallbackErr) {
+        console.warn('⚠️ Tatum RPC fallback failed (429 or network error). Trying public Sui RPC fullnode...', fallbackErr);
+        try {
+          const publicUrl = SUI_NETWORK === 'mainnet'
+            ? 'https://fullnode.mainnet.sui.io:443'
+            : 'https://fullnode.testnet.sui.io:443';
+            
+          const res = await fetch(publicUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 2,
+              method: 'suix_getAllBalances',
+              params: [walletAddr]
+            })
+          });
+
+          if (!res.ok) throw new Error(`Public RPC HTTP ${res.status}`);
+          const json = await res.json();
+          if (json.error) throw new Error(json.error.message || 'RPC JSON Error');
+
+          const balances = json.result || [];
+          const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => b.coinType === '0x2::sui::SUI');
+          const totalMist = suiToken ? BigInt(suiToken.totalBalance) : BigInt(0);
+          setSuiBalanceRaw(totalMist);
+          setSuiBalance(formatSui(totalMist));
+        } catch (publicErr) {
+          console.error('❌ All Sui RPC queries failed:', publicErr);
+          setBalanceError(true);
+        }
+      }
     } finally {
       setIsLoadingBalance(false);
     }
@@ -133,14 +184,26 @@ export default function MyWalletPage() {
 
     setIsLoadingTips(true);
     try {
-      // 1. Fetch profile to calculate post volumes and Walrus footprint metadata
-      const profileRes = await api.fetchUserProfile(walletAddr);
-      const user = profileRes?.data?.user;
+      // 1. Fetch profile. If they aren't registered yet, register them anonymously in Supabase
+      let user: any = null;
+      try {
+        const profileRes = await api.fetchUserProfile(walletAddr);
+        user = profileRes?.data?.user;
+      } catch (err) {
+        console.warn('⚠️ Wallet not registered in database. Autocreating anonymous DB profile...', err);
+        const registerRes = await api.upsertUserProfile({
+          walletAddress: walletAddr,
+          displayName: 'Cyber Caster',
+          username: `anon_${walletAddr.substring(2, 8)}`
+        });
+        user = registerRes?.data?.user;
+      }
+
       if (user) {
         const userPosts = user.posts || [];
         setPostsCount(userPosts.length);
 
-        // Footprints calculation
+        // Footprints calculation based on real posts stored on Walrus
         let byteCount = 0;
         userPosts.forEach((p: any) => {
           const mediaBlobSize = (p.media?.length || 0) * 50 * 1024;
@@ -148,22 +211,25 @@ export default function MyWalletPage() {
           byteCount += textBlobSize + mediaBlobSize;
         });
         setStorageBytes(byteCount);
-        setWalrusShardsCount(Math.min(userPosts.length * 120, 120));
+        setWalrusShardsCount(userPosts.length * 120);
 
-        // 2. Fetch tips received from backend database
+        // 2. Fetch tips received from backend database strictly
         const tipsRes = await api.fetchTipsReceived(user.id);
         const tipsList = tipsRes?.data?.tips || [];
         setTipTransactions(tipsList);
 
-        // Sum total tips received
+        // Sum real total tips received
         const sum = tipsList.reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
         setTotalTips(sum);
 
-        // 3. Build dynamic 7-day tipping revenue chart
+        // 3. Build dynamic 7-day tipping revenue chart strictly from real data
         const labels = getLast7DayLabels();
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
         const tipsByDay: Record<string, number> = {};
-        labels.forEach(l => { tipsByDay[l] = 0; });
+        labels.forEach(l => {
+          tipsByDay[l] = 0;
+        });
 
         const now = new Date();
         tipsList.forEach((t: any) => {
@@ -185,54 +251,27 @@ export default function MyWalletPage() {
     }
   }, [account?.address, authUser?.walletAddress]);
 
-  // ─── Initial Load & Listeners ──────────────────────────────────────────────
+  // ─── Initial Load & Auto-poll every 30 seconds for live tips ───────────────
   useEffect(() => {
     fetchBalance();
     fetchDashboardData();
-  }, [fetchBalance, fetchDashboardData]);
 
-  // ─── Dynamic Simulated Tipping Payout Event ────────────────────────────────
-  const triggerSimulation = async () => {
-    const walletAddr = account?.address || authUser?.walletAddress;
-    if (!walletAddr) return;
-
-    try {
-      // Find recipient user profile info
-      const profileRes = await api.fetchUserProfile(walletAddr);
-      const recipientUser = profileRes?.data?.user;
-      if (!recipientUser) return;
-
-      const randomAmount = parseFloat((Math.random() * 15 + 2).toFixed(1));
-      setSimulatedTipAmount(randomAmount);
-      
-      const simulatedTx = {
-        senderAddress: `0x${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
-        senderName: 'Cyber Caster anonymous',
-        recipientId: recipientUser.id,
-        postId: recipientUser.posts?.[0]?.id || null, // associate with latest post
-        amount: randomAmount,
-        suiTxDigest: `digest-${Math.random().toString(36).substring(2, 15)}`,
-        blobHash: `sha256-${Math.random().toString(36).substring(2, 12)}`,
-        verifiedOnSui: true
-      };
-
-      // Call Express API endpoint to register the tip record in Supabase
-      await api.createTip(simulatedTx);
-
-      // Trigger success drawer particle animation
-      setShowNotification(true);
-      setTimeout(() => {
-        setShowNotification(false);
-      }, 4000);
-
-      // Refresh balance and tables
-      fetchBalance();
+    // Auto-refresh tip data every 30 seconds so new incoming tips appear live
+    const interval = setInterval(() => {
       fetchDashboardData();
-      setAuditPage(1); // Reset pagination so newest shows up immediately
-    } catch (err) {
-      console.warn('⚠️ Failed to record simulated tip:', err);
-    }
-  };
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [account?.address, authUser?.walletAddress, fetchBalance, fetchDashboardData]);
+
+  // ─── Compute real 7-day growth % from tipping analytics ─────────────────────
+  const tipGrowthPercent = React.useMemo(() => {
+    if (tippingAnalytics.length < 2) return null;
+    const last = tippingAnalytics[tippingAnalytics.length - 1]?.tips ?? 0;
+    const prev = tippingAnalytics[tippingAnalytics.length - 2]?.tips ?? 0;
+    if (prev === 0) return last > 0 ? 100 : null;
+    return parseFloat((((last - prev) / prev) * 100).toFixed(1));
+  }, [tippingAnalytics]);
 
   const walletAddress = account?.address || authUser?.walletAddress;
   const suiScanUrl = walletAddress
@@ -293,9 +332,9 @@ export default function MyWalletPage() {
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Sui Wallet Certificate</span>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className={`h-2 w-2 rounded-full ${account ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    <span className={`h-2 w-2 rounded-full ${walletAddress ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-                      {account ? 'Connected Active' : 'Fallback Simulation'}
+                      {walletAddress ? 'Connected Active' : 'Fallback Simulation'}
                     </span>
                   </div>
                 </div>
@@ -353,17 +392,24 @@ export default function MyWalletPage() {
 
               <div className="z-10 flex justify-between items-center text-[9px] font-mono text-gray-500 border-t border-amber-500/10 pt-2.5">
                 <div className="flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3 text-emerald-400" />
-                  <span className="text-emerald-400 font-semibold">+18.5% Growth</span>
+                  {tipGrowthPercent !== null ? (
+                    <>
+                      <TrendingUp className={`h-3 w-3 ${tipGrowthPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />
+                      <span className={`font-semibold ${tipGrowthPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {tipGrowthPercent >= 0 ? '+' : ''}{tipGrowthPercent}% vs yesterday
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="h-3 w-3 text-gray-500" />
+                      <span className="text-gray-500">{tipTransactions.length === 0 ? 'No tips yet' : 'Tracking...'}</span>
+                    </>
+                  )}
                 </div>
-                <button 
-                  onClick={triggerSimulation}
-                  disabled={!walletAddress}
-                  className="px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 rounded-lg text-amber-400 hover:text-white hover:bg-amber-500/25 transition-all text-[9px] uppercase tracking-wider font-bold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Simulate a new tip payout to test particle verifications"
-                >
-                  Simulate Tip
-                </button>
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-emerald-400 font-bold uppercase tracking-wider">Live · {tipTransactions.length} tips</span>
+                </div>
               </div>
             </div>
 
@@ -375,12 +421,16 @@ export default function MyWalletPage() {
               <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">
                 <Coins className="h-3 w-3 text-sui-cyan" /> Account Balance
               </span>
-              {isLoadingBalance ? (
-                <div className="h-4 w-20 bg-walrus-blue/50 animate-pulse rounded" />
-              ) : balanceError || suiBalance === null ? (
+              {!walletAddress ? (
                 <p className="text-xs text-amber-400 font-bold leading-normal">Connect Wallet</p>
+              ) : isLoadingBalance && suiBalance === null ? (
+                <div className="h-4 w-20 bg-walrus-blue/50 animate-pulse rounded" />
+              ) : balanceError && suiBalance === null ? (
+                <p className="text-[10px] text-amber-400 font-semibold leading-normal truncate" title="Sui fullnode RPC endpoints are currently rate-limited or unreachable.">
+                  RPC Rate Limited
+                </p>
               ) : (
-                <p className="text-sm font-bold text-white truncate">{suiBalance} SUI</p>
+                <p className="text-sm font-bold text-white truncate">{suiBalance || '0.00'} SUI</p>
               )}
             </div>
             <div className="border-r border-sui-cyan/5 flex flex-col justify-center gap-1">
@@ -536,8 +586,8 @@ export default function MyWalletPage() {
                         <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
                           +{tx.amount.toFixed(1)} SUI
                         </span>
-                        <span className="text-[9px] text-gray-500">{timeAgo(tx.createdAt)}</span>
-                        {tx.suiTxDigest && (
+                        <span className="text-[9px] text-gray-500">{tx.createdAt ? timeAgo(tx.createdAt) : 'Just now'}</span>
+                        {tx.suiTxDigest && tx.suiTxDigest.startsWith('digest-') === false && (
                           <a
                             href={`https://suiscan.xyz/${SUI_NETWORK}/tx/${tx.suiTxDigest}`}
                             target="_blank"
@@ -624,7 +674,7 @@ export default function MyWalletPage() {
       </aside>
 
       {/* 4. Live Simulated Tipping Toast Alert Drawer */}
-      <AnimatePresence>
+      {/* <AnimatePresence>
         {showNotification && (
           <motion.div 
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
@@ -649,7 +699,7 @@ export default function MyWalletPage() {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence> */}
 
     </div>
   );
