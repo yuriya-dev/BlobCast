@@ -6,7 +6,9 @@ import {
   Tv, 
   Activity, 
   Bell,
-  Search
+  Search,
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
@@ -17,9 +19,11 @@ import { mockDb, MockPost } from '@/lib/db';
 import { api, ApiPost } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 
 export default function SocialFeedPage() {
-  const { user: authUser } = useAuth();
+  const { user: authUser, isSessionActive, isAuthorizingSession, authorizeSessionKey } = useAuth();
+  const account = useCurrentAccount();
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -401,6 +405,47 @@ export default function SocialFeedPage() {
         </div>
         <TrendingWidget />
       </aside>
+
+      {/* Zero-Friction Session Authorization Banner */}
+      <AnimatePresence>
+        {authUser && !isSessionActive && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-lg glass-panel border border-sui-cyan/20 bg-deep-space/95 rounded-cyber-xl shadow-cyber-glow p-5 flex flex-col sm:flex-row items-center gap-4 backdrop-blur-xl"
+          >
+            <div className="h-10 w-10 rounded-full bg-sui-cyan/10 border border-sui-cyan/30 flex items-center justify-center text-sui-cyan flex-shrink-0 animate-pulse">
+              <Zap className="h-5 w-5 fill-sui-cyan/20" />
+            </div>
+            
+            <div className="flex-1 font-mono text-center sm:text-left">
+              <span className="text-sui-cyan font-bold uppercase tracking-wider text-xs block mb-0.5">
+                ⚡ Enable Zero-Friction Social Mode
+              </span>
+              <p className="text-gray-300 font-sans text-[11px] leading-relaxed">
+                Sign a one-time secure session key to post, comment, and like with <strong>zero gas fees</strong> and <strong>no wallet popups</strong> for 7 days!
+              </p>
+            </div>
+
+            <button
+              onClick={authorizeSessionKey}
+              disabled={isAuthorizingSession}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-cyber-md bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space font-extrabold text-[11px] uppercase tracking-wider hover:opacity-95 hover:shadow-cyber-glow active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer font-mono whitespace-nowrap font-mono"
+            >
+              {isAuthorizingSession ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Authorizing...
+                </>
+              ) : (
+                'Enable Now'
+              )}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

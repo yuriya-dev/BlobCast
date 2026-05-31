@@ -3,13 +3,17 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, type ApiUser } from '@/lib/api';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
 
 type AuthContextValue = {
   user: ApiUser | null;
   isLoading: boolean;
   refreshSession: () => Promise<ApiUser | null>;
   logout: () => Promise<void>;
+  isSessionActive: boolean;
+  isAuthorizingSession: boolean;
+  authorizeSessionKey: () => Promise<boolean>;
+  revokeSessionKey: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -49,8 +53,78 @@ function storeCachedUser(user: ApiUser | null) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const account = useCurrentAccount();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const [user, setUser] = useState<ApiUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [isAuthorizingSession, setIsAuthorizingSession] = useState(false);
+
+  // Scoped session key validation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const activeWallet = account?.address;
+    if (!activeWallet) {
+      setIsSessionActive(false);
+      return;
+    }
+
+    const expiresVal = localStorage.getItem(`blobcast_session_expires_${activeWallet.toLowerCase()}`);
+    const isActive = localStorage.getItem(`blobcast_session_active_${activeWallet.toLowerCase()}`) === 'true';
+
+    if (isActive && expiresVal && parseInt(expiresVal, 10) > Date.now()) {
+      setIsSessionActive(true);
+    } else {
+      setIsSessionActive(false);
+      localStorage.removeItem(`blobcast_session_active_${activeWallet.toLowerCase()}`);
+      localStorage.removeItem(`blobcast_session_expires_${activeWallet.toLowerCase()}`);
+    }
+  }, [account?.address]);
+
+  const authorizeSessionKey = async () => {
+    if (!account?.address) {
+      alert('Connect your Sui wallet to authorize a session.');
+      return false;
+    }
+
+    setIsAuthorizingSession(true);
+    try {
+      const messageText = `Authorize BlobCast Session\n\nAddress: ${account.address}\nExpires: 7 Days\nPermissions:\n- Create Post\n- Create Comment\n- Upload Media\n- Follow Users\n- Repost Content`;
+      
+      const encoder = new TextEncoder();
+      const messageBytes = encoder.encode(messageText);
+
+      console.log('Signing session authorization message:', messageText);
+      await signPersonalMessage({
+        message: messageBytes
+      });
+
+      const activeWallet = account.address.toLowerCase();
+      const expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
+
+      localStorage.setItem(`blobcast_session_active_${activeWallet}`, 'true');
+      localStorage.setItem(`blobcast_session_expires_${activeWallet}`, expiresAt.toString());
+      setIsSessionActive(true);
+      
+      console.log('🔒 BlobCast Session authorized successfully!');
+      return true;
+    } catch (err: any) {
+      console.error('❌ BlobCast Session authorization failed:', err);
+      alert(`Authorization failed: ${err.message || err}`);
+      return false;
+    } finally {
+      setIsAuthorizingSession(false);
+    }
+  };
+
+  const revokeSessionKey = async () => {
+    if (!account?.address) return;
+    const activeWallet = account.address.toLowerCase();
+    localStorage.removeItem(`blobcast_session_active_${activeWallet}`);
+    localStorage.removeItem(`blobcast_session_expires_${activeWallet}`);
+    setIsSessionActive(false);
+    console.log('🔓 BlobCast Session Key revoked.');
+  };
 
   const refreshSession = async () => {
     try {
@@ -105,7 +179,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [account?.address, user]);
 
-  const value = useMemo(() => ({ user, isLoading, refreshSession, logout }), [user, isLoading]);
+  const value = useMemo(() => ({
+    user,
+    isLoading,
+    refreshSession,
+    logout,
+    isSessionActive,
+    isAuthorizingSession,
+    authorizeSessionKey,
+    revokeSessionKey
+  }), [user, isLoading, isSessionActive, isAuthorizingSession]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

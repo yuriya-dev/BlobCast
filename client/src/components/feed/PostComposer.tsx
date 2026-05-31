@@ -26,7 +26,7 @@ interface PostComposerProps {
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const account = useCurrentAccount();
   const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
-  const { user: authUser } = useAuth();
+  const { user: authUser, isSessionActive } = useAuth();
   interface MediaItem {
     blobId: string;
     type: 'image' | 'video';
@@ -312,7 +312,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       let blobHash = `sha256-${Math.random().toString(36).substring(2, 10)}`; // fallback
 
       // If wallet is connected, we attempt to register on-chain!
-      if (account) {
+      if (account && !isSessionActive) {
         try {
           // Compute real SHA-256 hash of the content
           const hashBytes = await computeSha256(JSON.stringify(postBlob));
@@ -335,6 +335,15 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           suiObjectId = parseCreatedObjectId(result) || result.digest;
         } catch (txErr) {
           console.warn('⚠️ [Sui Transaction] Failed signing and executing Sui transaction block:', txErr);
+        }
+      } else if (isSessionActive) {
+        // If Session is active, skip blockchain transaction completely!
+        console.log('⚡ [Session Key] Active session detected! Bypassing wallet popup and publishing directly to Walrus & indexer.');
+        try {
+          const hashBytes = await computeSha256(JSON.stringify(postBlob));
+          blobHash = hashToHex(hashBytes);
+        } catch (hashErr) {
+          console.warn('⚠️ Failed to compute content hash:', hashErr);
         }
       }
 
