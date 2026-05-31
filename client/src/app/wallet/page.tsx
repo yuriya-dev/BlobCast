@@ -407,8 +407,7 @@ export default function MyWalletPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-emerald-400 font-bold uppercase tracking-wider">Live · {tipTransactions.length} tips</span>
+                  <span className="text-emerald-400 font-bold uppercase tracking-wider">{tipTransactions.length} tips received</span>
                 </div>
               </div>
             </div>

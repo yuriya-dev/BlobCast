@@ -139,8 +139,9 @@ export default function ExplorePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {filteredTags.map((tag) => (
-                  <div 
+                  <Link 
                     key={tag.name}
+                    href={`/search?q=${encodeURIComponent('#' + tag.name)}`}
                     className="glass-panel glass-panel-hover rounded-cyber-lg p-5 border border-sui-cyan/5 transition-all duration-300 relative group flex justify-between items-center"
                   >
                     <div>
@@ -159,14 +160,13 @@ export default function ExplorePage() {
                       <span className="text-xs font-mono text-emerald-400 bg-emerald-400/5 px-2.5 py-0.5 rounded-full border border-emerald-400/20 font-bold">
                         {tag.trend}
                       </span>
-                      <Link 
-                        href={`/search?q=${encodeURIComponent('#' + tag.name)}`}
+                      <span
                         className="text-[10px] font-mono text-gray-500 hover:text-sui-cyan flex items-center gap-1 mt-2 justify-end transition-colors"
                       >
                         Explore Feed <ArrowRight className="h-3 w-3" />
-                      </Link>
+                      </span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
