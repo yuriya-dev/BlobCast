@@ -15,15 +15,41 @@ import { AutocompleteDropdown } from '@/components/feed/AutocompleteDropdown';
 function CommentComposerAvatar({ authUser }: { authUser: any }) {
   const imageUrl = useWalrusImage(authUser?.avatarBlobId);
   const finalUrl = imageUrl || (authUser?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${authUser.username}` : '');
-  if (!finalUrl) return null;
-  return <img src={finalUrl} alt="My avatar" className="h-full w-full object-cover z-10" />;
+
+  return (
+    <>
+      {finalUrl ? (
+        <img 
+          src={finalUrl} 
+          alt="My avatar" 
+          className="h-full w-full object-cover z-10" 
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function CommentAuthorAvatar({ author }: { author: any }) {
   const imageUrl = useWalrusImage(author?.avatarBlobId);
   const finalUrl = imageUrl || (author?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${author.username}` : '');
-  if (!finalUrl) return null;
-  return <img src={finalUrl} alt="Author avatar" className="h-full w-full object-cover z-10" />;
+
+  return (
+    <>
+      {finalUrl ? (
+        <img 
+          src={finalUrl} 
+          alt="Author avatar" 
+          className="h-full w-full object-cover z-10" 
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 import { api } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
@@ -518,9 +544,6 @@ export default function PostDetailPage({ params }: PageProps) {
                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
                       <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-bold text-xs font-mono text-sui-cyan relative">
                         <CommentComposerAvatar authUser={authUser} />
-                        <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none font-mono">
-                          {(authUser?.displayName || authUser?.username || 'YU').substring(0, 2).toUpperCase()}
-                        </span>
                       </div>
                     </div>
 
@@ -648,9 +671,6 @@ export default function PostDetailPage({ params }: PageProps) {
                         <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
                           <div className="h-full w-full rounded-full bg-walrus-blue overflow-hidden flex items-center justify-center font-mono text-xs font-bold text-sui-cyan relative">
                             <CommentAuthorAvatar author={comment.author} />
-                            <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 text-neon-glow font-mono text-[10px]">
-                              {(comment.author?.displayName || comment.author?.username || 'AN').substring(0, 2).toUpperCase()}
-                            </span>
                           </div>
                         </div>
 

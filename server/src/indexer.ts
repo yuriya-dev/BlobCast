@@ -163,10 +163,15 @@ class BlobCastIndexer {
         console.log(`📝 [Indexer::Event] Detected event blobcast::events::PostCreated`);
 
         try {
+            const firstUser = await prisma.user.findFirst();
+            if (!firstUser) {
+                console.log(`   ➡️ PostgreSQL Synced: No users found. Skipping simulated post creation.`);
+                return;
+            }
             // Write to Postgres via Prisma
             const post = await prisma.post.create({
                 data: {
-                    authorId: 'usr-2-sademir', // Yuriya profile
+                    authorId: firstUser.id,
                     walrusBlobId: `walrus://post_${Date.now()}`,
                     blobHash: `sha256-${Math.random().toString(36).substring(2, 10)}`,
                     contentType: 0,

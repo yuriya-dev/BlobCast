@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, 
@@ -59,7 +59,7 @@ function NotificationActorAvatar({ actor }: { actor: any }) {
   );
 }
 
-export default function NotificationsPage() {
+function NotificationsContent() {
   const { user: authUser } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -366,5 +366,17 @@ export default function NotificationsPage() {
       </aside>
 
     </div>
+  );
+}
+
+export default function NotificationsPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-screen bg-deep-space flex items-center justify-center font-mono text-xs text-sui-cyan">
+        Loading Notifications...
+      </div>
+    }>
+      <NotificationsContent />
+    </Suspense>
   );
 }

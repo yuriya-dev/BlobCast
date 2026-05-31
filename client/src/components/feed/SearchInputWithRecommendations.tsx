@@ -15,6 +15,49 @@ import {
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
+import { useWalrusImage } from '@/hooks/useWalrusImage';
+
+function CreatorRecommendationAvatar({ username, displayName, registeredUsers }: { username: string; displayName: string; registeredUsers: any[] }) {
+  const source = registeredUsers.length > 0 ? registeredUsers : mockDb.users;
+  const user = source.find(u => u.username === username);
+  const avatarUrlResolved = useWalrusImage(user?.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`;
+
+  return (
+    <div className="h-6 w-6 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-[10px] font-bold text-sui-cyan border border-sui-cyan/10 relative">
+      {finalAvatar ? (
+        <img 
+          src={finalAvatar} 
+          alt={displayName}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CreatorAutocompleteAvatar({ creator }: { creator: any }) {
+  const avatarUrlResolved = useWalrusImage(creator.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || (creator.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${creator.username}` : '');
+
+  return (
+    <div className="h-7 w-7 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-xs font-bold text-sui-cyan border border-sui-cyan/10 relative">
+      {finalAvatar ? (
+        <img 
+          src={finalAvatar} 
+          alt={creator.displayName || ''}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 interface SearchInputWithRecommendationsProps {
   placeholder?: string;
@@ -180,13 +223,7 @@ export function SearchInputWithRecommendations({
                       className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all text-left group"
                     >
                       <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-[10px] font-bold text-sui-cyan border border-sui-cyan/10">
-                          <img 
-                            src={`https://api.dicebear.com/7.x/bottts/svg?seed=${creator.username}`} 
-                            alt={creator.displayName}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
+                        <CreatorRecommendationAvatar username={creator.username} displayName={creator.displayName} registeredUsers={registeredUsers} />
                         <div className="flex flex-col">
                           <span className="text-xs font-sans font-semibold text-white leading-tight">
                             {creator.displayName}
@@ -292,13 +329,7 @@ export function SearchInputWithRecommendations({
                         className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all group"
                       >
                         <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-xs font-bold text-sui-cyan border border-sui-cyan/10">
-                            <img 
-                              src={`https://api.dicebear.com/7.x/bottts/svg?seed=${creator.username || 'YU'}`} 
-                              alt={creator.displayName || ''}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
+                          <CreatorAutocompleteAvatar creator={creator} />
                           <div className="flex flex-col">
                             <span className="text-xs font-sans font-semibold text-white leading-none">
                               {creator.displayName}

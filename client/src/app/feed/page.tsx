@@ -208,29 +208,7 @@ export default function SocialFeedPage() {
     
     // Resilient Fallback to InMemory/Walrus aggregator simulated cache
     setTimeout(() => {
-      const usersMap: Record<string, any> = {
-        'usr-1-vitalik': {
-          displayName: 'Vitalik Buterin',
-          username: 'vitalik',
-          walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
-          avatarBlobId: 'walrus://vitalik-avatar',
-          verified: true
-        },
-        'usr-2-sademir': {
-          displayName: 'Yuriya',
-          username: 'yuriya',
-          walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
-          avatarBlobId: 'walrus://yuriya-avatar',
-          verified: true
-        },
-        'usr-3-mysten': {
-          displayName: 'Mysten Labs',
-          username: 'mystenlabs',
-          walletAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7',
-          avatarBlobId: 'walrus://mysten-avatar',
-          verified: true
-        }
-      };
+      const usersMap: Record<string, any> = {};
 
       if (authUser) {
         usersMap[authUser.id] = {
@@ -253,11 +231,7 @@ export default function SocialFeedPage() {
         };
 
         let text = 'Immutable social post stored on Walrus.';
-        if (p.id === 'post-1') {
-          text = 'Welcome to BlobCast! Own your social posts forever. Text and media are packaged in a single JSON schema and stored permanently on Walrus. Verify it on-chain!';
-        } else if (p.id === 'post-2') {
-          text = 'Excited about decentralized social layers! Decentralization means true resilience. Check this out: even if our centralized server is powered down, this content remains accessible directly from the Walrus storage aggregator grid!';
-        } else if (p.walrusContent) {
+        if (p.walrusContent) {
           text = (p.walrusContent as any).content?.text || text;
         }
 
@@ -268,9 +242,9 @@ export default function SocialFeedPage() {
           blobHash: p.blobHash,
           contentType: p.contentType,
           text,
-          hashtags: p.id === 'post-1' ? ['blobcast', 'sui'] : p.id === 'post-2' ? ['decentralized', 'walrus'] : (p.walrusContent as any)?.content?.hashtags || [],
-          mediaUrl: p.walrusContent?.media?.[0]?.blob_id || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
-          media: p.walrusContent?.media || (p.contentType === 1 ? [{ type: 'image', blob_id: 'walrus://blob-post-2-image' }] : []),
+          hashtags: (p.walrusContent as any)?.content?.hashtags || [],
+          mediaUrl: p.walrusContent?.media?.[0]?.blob_id || undefined,
+          media: p.walrusContent?.media || [],
           walrusContent: p.walrusContent,
           likeCount: p.likeCount,
           commentCount: p.commentCount,

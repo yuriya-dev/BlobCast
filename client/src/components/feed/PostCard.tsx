@@ -93,6 +93,26 @@ interface PostCardProps {
   onPin?: (postId: string, pinned: boolean) => void;
 }
 
+function PostActivityAvatar({ user }: { user: any }) {
+  const avatarUrlResolved = useWalrusImage(user?.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || (user?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` : '');
+
+  return (
+    <div className="h-9 w-9 rounded-full bg-linear-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-sui-cyan shrink-0 overflow-hidden relative">
+      {finalAvatar ? (
+        <img 
+          src={finalAvatar} 
+          alt={user?.displayName || ''}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function PostCard({ post, onCommentCreated, hideCommentComposer = false, onPin }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -633,9 +653,6 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
                   }}
                 />
               ) : null}
-              <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none">
-                {(authorResolved.displayName || authorResolved.username || 'US').substring(0, 2).toUpperCase()}
-              </span>
             </div>
           </div>
         </Link>
@@ -980,17 +997,7 @@ function ActivityModal({
           {activeTabData && activeTabData.data.length > 0 ? (
             activeTabData.data.map((item: any, idx: number) => (
               <div key={idx} className="flex items-center gap-3 bg-walrus-blue/30 border border-sui-cyan/5 rounded-cyber-md p-3">
-                <div className="h-9 w-9 rounded-full bg-linear-to-br from-sui-cyan/30 to-tatum-purple/30 flex items-center justify-center font-mono text-xs font-bold text-sui-cyan shrink-0 overflow-hidden relative">
-                  {item.user?.username ? (
-                    <img 
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${item.user.username}`} 
-                      alt={item.user.displayName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    item.user ? (item.user.displayName || item.user.username || '??').substring(0, 2).toUpperCase() : '??'
-                  )}
-                </div>
+                <PostActivityAvatar user={item.user} />
                 <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
                   <span className="text-xs font-semibold text-white font-sans truncate">
                     {item.user?.displayName || 'Unknown User'}

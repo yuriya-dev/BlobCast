@@ -18,6 +18,35 @@ import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { motion } from 'framer-motion';
+import { useWalrusImage } from '@/hooks/useWalrusImage';
+import { mockDb } from '@/lib/db';
+
+function CreatorAvatar({ username, walletAddress, initials }: { username: string; walletAddress: string; initials: string }) {
+  const mockUser = mockDb.users.find(u => u.username === username || u.walletAddress.toLowerCase() === walletAddress.toLowerCase());
+  const avatarBlobId = mockUser?.avatarBlobId || null;
+  const avatarUrlResolved = useWalrusImage(avatarBlobId);
+  const finalAvatar = avatarUrlResolved || `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`;
+
+  return (
+    <div className="h-full w-full rounded-cyber-md bg-walrus-blue overflow-hidden flex items-center justify-center font-mono font-bold text-sm text-sui-cyan relative">
+      {finalAvatar ? (
+        <img 
+          src={finalAvatar} 
+          alt={username}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+      {!avatarUrlResolved && (
+        <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 font-mono">
+          {initials}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,7 +69,6 @@ export default function ExplorePage() {
       walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
       followers: '4.8M',
       bio: 'Fascinated by decentralized cryptography, social scaling layers, and permanent information archives.',
-      avatarInitials: 'VB'
     },
     {
       id: 'c2',
@@ -49,7 +77,6 @@ export default function ExplorePage() {
       walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
       followers: '1,248',
       bio: 'BlobCast core architect. Writing social schemas directly onto the Walrus storage layers.',
-      avatarInitials: 'YU'
     },
     {
       id: 'c3',
@@ -58,9 +85,12 @@ export default function ExplorePage() {
       walletAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7',
       followers: '320K',
       bio: 'Official builders of the Sui blockchain. Scaling transaction execution and web3 performance.',
-      avatarInitials: 'ML'
     }
-  ];
+  ].map(c => ({
+    ...c,
+    // Derive initials dynamically so there are no hardcoded strings like 'YU'
+    avatarInitials: c.displayName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase(),
+  }));
 
   const filteredTags = trendingTags.filter(tag => 
     tag.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -184,9 +214,7 @@ export default function ExplorePage() {
                   >
                     <div className="flex gap-3">
                       <div className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0">
-                        <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan">
-                          {creator.avatarInitials}
-                        </div>
+                        <CreatorAvatar username={creator.username} walletAddress={creator.walletAddress} initials={creator.avatarInitials} />
                       </div>
 
                       <div className="flex flex-col">

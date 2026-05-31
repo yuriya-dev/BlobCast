@@ -57,9 +57,6 @@ function MessageUserAvatar({ user, className }: { user: any; className?: string 
           onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
         />
       ) : null}
-      <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none font-mono">
-        {(user?.displayName || user?.username || 'US').substring(0, 2).toUpperCase()}
-      </span>
     </div>
   );
 }

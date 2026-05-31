@@ -142,14 +142,16 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         console.warn("⚠️ API offline. Falling back to local db user profile.", err);
       }
       
-      // Offline fallback: use mockDb but override avatarBlobId with whatever was saved by the user
-      const user = { ...(
-        mockDb.users.find(u => u.walletAddress === wallet) || {
-          displayName: 'Yuriya',
-          username: 'yuriya',
-          avatarBlobId: null as string | null
-        }
-      ) };
+      // Offline fallback: use mockDb (which is now empty) or build a minimal anonymous user from the wallet
+      const existingMockUser = mockDb.users.find(u => u.walletAddress === wallet);
+      const user: any = existingMockUser
+        ? { ...existingMockUser }
+        : {
+            walletAddress: wallet,
+            displayName: `anon_${wallet.substring(2, 8)}`,
+            username: `anon_${wallet.substring(2, 8)}`,
+            avatarBlobId: null as string | null,
+          };
       // Override with the locally persisted avatar blob ID so uploads survive page navigation
       const persistedAvatarBlobId = localStorage.getItem(key);
       if (persistedAvatarBlobId) {
@@ -161,9 +163,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     fetchUser();
   }, [account?.address, authUser]);
 
-  const userInitials = (currentUser?.displayName || currentUser?.username || 'YU')
-    .substring(0, 2)
-    .toUpperCase();
+
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setText((prev) => `${prev}${emojiData.emoji}`);
@@ -439,9 +439,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   }}
                 />
               ) : null}
-              <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0 select-none pointer-events-none font-mono">
-                {userInitials}
-              </span>
             </div>
           </div>
           <div className="flex-1 relative">

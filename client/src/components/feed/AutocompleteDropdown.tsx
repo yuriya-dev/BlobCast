@@ -3,6 +3,27 @@
 import React from 'react';
 import type { DropdownType, MentionUser, HashtagSuggestion, TickerSuggestion } from '@/hooks/useTextAutocomplete';
 import { TrendingUp } from 'lucide-react';
+import { useWalrusImage } from '@/hooks/useWalrusImage';
+
+function MentionAutocompleteAvatar({ user }: { user: any }) {
+  const avatarUrlResolved = useWalrusImage(user.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || (user.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` : '');
+
+  return (
+    <div className="h-7 w-7 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-[10px] font-bold text-sui-cyan border border-sui-cyan/15 flex-shrink-0 relative">
+      {finalAvatar ? (
+        <img
+          src={finalAvatar}
+          alt={user.displayName || ''}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 interface AutocompleteDropdownProps {
   show: boolean;
@@ -73,13 +94,7 @@ export function AutocompleteDropdown({
                 : 'hover:bg-walrus-blue/50 border-l-2 border-transparent'
             }`}
           >
-            <div className="h-7 w-7 rounded-full overflow-hidden bg-walrus-blue flex items-center justify-center font-mono text-[10px] font-bold text-sui-cyan border border-sui-cyan/15 flex-shrink-0">
-              <img
-                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${u.username || 'YU'}`}
-                alt={u.displayName || ''}
-                className="h-full w-full object-cover"
-              />
-            </div>
+            <MentionAutocompleteAvatar user={u} />
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-sans font-semibold text-white leading-none truncate">
                 {u.displayName || u.username}

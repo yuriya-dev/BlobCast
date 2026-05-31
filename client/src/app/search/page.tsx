@@ -23,6 +23,27 @@ import { PostCard } from '@/components/feed/PostCard';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
 import { walrus } from '@/lib/walrus';
+import { useWalrusImage } from '@/hooks/useWalrusImage';
+
+function SearchPeopleAvatar({ creator }: { creator: any }) {
+  const avatarUrlResolved = useWalrusImage(creator.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || (creator.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${creator.username}` : '');
+
+  return (
+    <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan relative">
+      {finalAvatar ? (
+        <img 
+          src={finalAvatar} 
+          alt={creator.displayName || ''}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 // Predefined asset data for tickers
 interface AssetData {
@@ -559,18 +580,7 @@ function SearchContent() {
                           href={profileHref} 
                           className="h-11 w-11 rounded-cyber-md bg-gradient-to-tr from-sui-cyan to-tatum-purple p-0.5 flex-shrink-0 overflow-hidden hover:scale-105 transition-transform duration-200"
                         >
-                          <div className="h-full w-full rounded-cyber-md bg-walrus-blue flex items-center justify-center font-mono font-bold text-sm text-sui-cyan relative">
-                            {creator.username ? (
-                              <img 
-                                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${creator.username}`} 
-                                alt={creator.displayName || ''}
-                                className="h-full w-full object-cover z-10"
-                              />
-                            ) : null}
-                            <span className="absolute inset-0 flex items-center justify-center bg-walrus-blue z-0">
-                              {(creator.displayName || creator.username || 'YU').substring(0, 2).toUpperCase()}
-                            </span>
-                          </div>
+                          <SearchPeopleAvatar creator={creator} />
                         </Link>
 
                         <div className="flex flex-col">

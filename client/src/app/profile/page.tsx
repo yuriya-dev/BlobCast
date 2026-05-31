@@ -48,6 +48,26 @@ function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function FollowUserAvatar({ user }: { user: any }) {
+  const avatarUrlResolved = useWalrusImage(user?.avatarBlobId || null);
+  const finalAvatar = avatarUrlResolved || (user?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` : '');
+
+  return (
+    <div className="h-8 w-8 rounded-full overflow-hidden bg-walrus-blue border border-sui-cyan/10 flex items-center justify-center font-mono font-bold text-xs text-sui-cyan relative">
+      {finalAvatar ? (
+        <img 
+          src={finalAvatar} 
+          alt={user?.displayName || ''}
+          className="h-full w-full object-cover z-10"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { user: authUser } = useAuth();
   const searchParams = useSearchParams();
@@ -129,7 +149,7 @@ export default function ProfilePage() {
         } catch (apiErr) {
           console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
           const followerId = authUser.id;
-          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: 'usr-1-vitalik' };
+          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
           mockDb.follows = mockDb.follows.filter(f => !(f.followerId === followerId && f.followingId === followingUser.id));
         }
         setCurrentUser((prev: any) => {
@@ -146,7 +166,7 @@ export default function ProfilePage() {
         } catch (apiErr) {
           console.warn("⚠️ API follow failed, trying mockDb fallback:", apiErr);
           const followerId = authUser.id;
-          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: 'usr-1-vitalik' };
+          const followingUser = mockDb.users.find(u => u.walletAddress.toLowerCase() === targetWallet.toLowerCase()) || { id: targetWallet };
           const exists = mockDb.follows.some(f => f.followerId === followerId && f.followingId === followingUser.id);
           if (!exists) {
             mockDb.follows.push({
@@ -255,7 +275,7 @@ export default function ProfilePage() {
       if (storedGithub) setGithub(storedGithub);
     }
 
-    let resolvedUserId = 'usr-2-sademir';
+    let resolvedUserId = authUser?.id || '';
     let databasePinnedPostId: string | null = null;
 
     try {
@@ -426,12 +446,22 @@ export default function ProfilePage() {
         } as any;
       }
 
-      if (!user) {
-        user = mockDb.users.find(u => u.id === 'usr-2-sademir');
+      if (!user && authUser) {
+        user = {
+          id: authUser.id,
+          walletAddress: authUser.walletAddress,
+          username: authUser.username,
+          displayName: authUser.displayName,
+          avatarBlobId: authUser.avatarBlobId,
+          bannerBlobId: authUser.bannerBlobId,
+          bio: authUser.bio,
+          verified: authUser.verified,
+          createdAt: new Date(authUser.createdAt)
+        } as any;
       }
 
       if (user) {
-        const followerId = authUser?.id || 'usr-2-sademir';
+        const followerId = authUser?.id || '';
         const isFollowing = mockDb.follows.some(f => f.followerId === followerId && f.followingId === user.id);
         const followersCount = mockDb.follows.filter(f => f.followingId === user.id).length;
         const followingCount = mockDb.follows.filter(f => f.followerId === user.id).length;
@@ -451,7 +481,7 @@ export default function ProfilePage() {
       }
 
       // Filter Yuriya posts
-      const userPosts = mockDb.posts.filter(p => p.authorId === user?.id || p.authorId === 'usr-2-sademir');
+      const userPosts = mockDb.posts.filter(p => p.authorId === user?.id);
       
       // Map to feed structure
       const mapped = userPosts.map(p => {
@@ -500,7 +530,7 @@ export default function ProfilePage() {
       setProfilePosts(sortAndPinPosts(mapped, user?.pinnedPostId));
     }
 
-    // Now load liked posts, using the resolved user ID (or falling back to usr-2-sademir)
+    // Now load liked posts, using the resolved user ID
     let likedMapped: any[] = [];
     try {
       const allPostsRes = await api.fetchPosts(1, 100);
@@ -687,9 +717,9 @@ export default function ProfilePage() {
         // Push notification of profile update
         mockDb.notifications.unshift({
           id: `notif_${Date.now()}`,
-          userId: authUser?.id || 'usr-2-sademir',
+          userId: authUser?.id || '',
           type: 'system',
-          actorId: authUser?.id || 'usr-2-sademir',
+          actorId: authUser?.id || '',
           postId: null,
           isRead: false,
           createdAt: new Date()
@@ -840,14 +870,11 @@ export default function ProfilePage() {
                     }}
                   />
                 ) : null}
-                <span className="text-neon-glow absolute inset-0 flex items-center justify-center bg-walrus-blue z-0">
-                  {(currentUser?.displayName || currentUser?.username || 'YU').substring(0, 2).toUpperCase()}
-                </span>
               </div>
             </div>
 
             {/* Edit Profile or Follow/Unfollow Button */}
-            {(!queryWallet || queryWallet.toLowerCase() === authUser?.walletAddress?.toLowerCase()) ? (
+            {(authUser && currentUser && currentUser.walletAddress.toLowerCase() === authUser.walletAddress.toLowerCase()) ? (
               <button 
                 onClick={() => setIsEditing(true)}
                 className="px-4 py-2 rounded-cyber-md border border-sui-cyan/20 hover:border-sui-cyan/50 bg-walrus-blue/60 backdrop-filter backdrop-blur-md text-xs font-mono font-bold tracking-wide text-soft-white hover:text-sui-cyan transition-all flex items-center gap-2 cursor-pointer"
@@ -1257,16 +1284,7 @@ export default function ProfilePage() {
                       className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-full overflow-hidden bg-walrus-blue border border-sui-cyan/10 flex items-center justify-center font-mono font-bold text-xs text-sui-cyan">
-                          <img 
-                            src={fUser.avatarBlobId ? (fUser.avatarBlobId.startsWith('walrus') ? `http://localhost:8080/api/walrus/blob/${fUser.avatarBlobId.replace('walrus://', '')}` : fUser.avatarBlobId) : `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`}
-                            alt={fUser.displayName || ''}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`;
-                            }}
-                          />
-                        </div>
+                        <FollowUserAvatar user={fUser} />
                         <div className="flex flex-col">
                           <span className="text-xs font-sans font-semibold text-white group-hover:text-sui-cyan leading-tight transition-colors">
                             {fUser.displayName}
@@ -1334,16 +1352,7 @@ export default function ProfilePage() {
                       className="flex items-center justify-between p-2 rounded-xl bg-walrus-blue/30 border border-sui-cyan/5 hover:border-sui-cyan/25 hover:bg-walrus-blue/60 transition-all group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-full overflow-hidden bg-walrus-blue border border-sui-cyan/10 flex items-center justify-center font-mono font-bold text-xs text-sui-cyan">
-                          <img 
-                            src={fUser.avatarBlobId ? (fUser.avatarBlobId.startsWith('walrus') ? `http://localhost:8080/api/walrus/blob/${fUser.avatarBlobId.replace('walrus://', '')}` : fUser.avatarBlobId) : `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`}
-                            alt={fUser.displayName || ''}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${fUser.username || 'YU'}`;
-                            }}
-                          />
-                        </div>
+                        <FollowUserAvatar user={fUser} />
                         <div className="flex flex-col">
                           <span className="text-xs font-sans font-semibold text-white group-hover:text-sui-cyan leading-tight transition-colors">
                             {fUser.displayName}
