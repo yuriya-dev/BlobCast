@@ -120,12 +120,31 @@ export default function PostDetailPage({ params }: PageProps) {
             const content = await walrus.getBlob(p.walrusBlobId);
             if (content && typeof content === 'object') {
               const contentObj = content as any;
-              if (contentObj.content?.text) text = contentObj.content.text;
-              if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
-              if (contentObj.media && contentObj.media.length > 0) {
-                media = contentObj.media;
-                mediaUrl = contentObj.media[0].blob_id;
+              
+              // Support nested content.text or flat text
+              if (contentObj.content?.text) {
+                text = contentObj.content.text;
+              } else if (contentObj.text) {
+                text = contentObj.text;
+              } else if (contentObj.content && typeof contentObj.content === 'string') {
+                text = contentObj.content;
               }
+
+              // Support nested or flat hashtags
+              if (contentObj.content?.hashtags) {
+                hashtags = contentObj.content.hashtags;
+              } else if (contentObj.hashtags) {
+                hashtags = contentObj.hashtags;
+              }
+
+              // Support nested or flat media attachments
+              const mediaList = contentObj.media || contentObj.content?.media || [];
+              if (mediaList && mediaList.length > 0) {
+                media = mediaList;
+                mediaUrl = mediaList[0].blob_id || mediaList[0].blobUrl || mediaList[0].url;
+              }
+            } else if (typeof content === 'string' && content.length > 0) {
+              text = content;
             }
           } catch (err) {
             console.warn("⚠️ Failed to load Walrus payload:", err);

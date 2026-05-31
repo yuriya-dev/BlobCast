@@ -18,34 +18,46 @@ export function useWalrusImage(blobId: string | null | undefined): string {
 
     const cleanId = blobId.replace('walrus://', '');
     
-    // Non-simulated URLs (Unsplash mock fallbacks, SVGs, real aggregator endpoints) resolve synchronously instantly
-    if (!cleanId.startsWith('walrus_sim_') || cleanId.includes('avatar') || cleanId.includes('banner')) {
-      setImageUrl(walrus.resolveImageUrl(blobId));
-      return;
-    }
-
-    // Try synchronous cache lookup first (localStorage or RAM store)
+    // 1. Try synchronous cache lookup first (localStorage or RAM store) for both real and simulated blobs
     const syncUrl = walrus.resolveImageUrl(blobId);
-    if (syncUrl) {
+    if (syncUrl && syncUrl.startsWith('data:')) {
       setImageUrl(syncUrl);
       return;
     }
 
-    // If simulated but not in synchronous memory (e.g. after refresh, residing in IndexedDB),
-    // fetch asynchronously via getBlob to populate RAM/localStorage, then resolve
+    // 2. Mock fallbacks, SVGs, and direct http/https URLs resolve synchronously instantly
+    const isMockOrHttp = !cleanId.startsWith('walrus_sim_') && (
+      cleanId.includes('avatar') || 
+      cleanId.includes('banner') || 
+      cleanId.startsWith('http') || 
+      cleanId.startsWith('blob-') ||
+      cleanId.startsWith('post-') ||
+      cleanId.length < 15
+    );
+
+    if (isMockOrHttp) {
+      setImageUrl(syncUrl);
+      return;
+    }
+
+    // 3. Otherwise (real or simulated blobs not in memory), fetch asynchronously via getBlob to populate RAM/localStorage, then resolve
     let active = true;
     
     walrus.getBlob(cleanId)
-      .then(() => {
+      .then((content) => {
         if (active) {
-          const resolved = walrus.resolveImageUrl(cleanId);
-          setImageUrl(resolved);
+          if (content && typeof content === 'string' && content.startsWith('data:')) {
+            setImageUrl(content);
+          } else {
+            // Fallback to direct aggregator URL
+            setImageUrl(syncUrl);
+          }
         }
       })
       .catch((err) => {
-        console.warn(`⚠️ Failed to load simulated image blob ${cleanId} asynchronously:`, err);
+        console.warn(`⚠️ Failed to load image blob ${cleanId} asynchronously:`, err);
         if (active) {
-          setImageUrl('');
+          setImageUrl(syncUrl);
         }
       });
 

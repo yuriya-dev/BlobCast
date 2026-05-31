@@ -163,6 +163,17 @@ export const walrus = {
         const blobObject = data.newlyCreated?.blobObject || data.alreadyCertified?.blobObject;
         if (blobObject) {
           const blobId = blobObject.blobId;
+          
+          // Cache the content locally so it can be resolved instantly on the same machine
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(blobId, serialized);
+            } catch (err) {
+              console.warn("⚠️ LocalStorage quota exceeded. Falling back to in-memory store.");
+              simulatedMemoryStore.set(blobId, serialized);
+            }
+          }
+
           return {
             blobId,
             size,
@@ -251,6 +262,21 @@ export const walrus = {
         },
         media: [],
       } as unknown as T;
+    }
+
+    // ALWAYS check local synchronous storage (localStorage / RAM memory) first for ALL blobIds
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(cleanId) || simulatedMemoryStore.get(cleanId);
+      if (cached) {
+        try {
+          const cleanContent = cached.startsWith('"') && cached.endsWith('"')
+            ? JSON.parse(cached)
+            : cached;
+          return typeof cleanContent === 'string' ? JSON.parse(cleanContent) as T : cleanContent as T;
+        } catch {
+          return cached as unknown as T;
+        }
+      }
     }
 
     // Check if it's simulated
@@ -371,22 +397,24 @@ export const walrus = {
     
     // Clean prefix if any
     const cleanId = blobId.replace('walrus://', '');
+
+    // ALWAYS check local storage first for ANY blobId (both simulated and real)
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(cleanId) || simulatedMemoryStore.get(cleanId);
+      if (cached) {
+        // If the cached content is wrapped in quotes
+        if (cached.startsWith('"') && cached.endsWith('"')) {
+          try {
+            return JSON.parse(cached);
+          } catch {
+            return cached;
+          }
+        }
+        return cached;
+      }
+    }
     
     if (cleanId.startsWith('walrus_sim_')) {
-      if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem(cleanId) || simulatedMemoryStore.get(cleanId);
-        if (cached) {
-          // If the cached content is wrapped in quotes
-          if (cached.startsWith('"') && cached.endsWith('"')) {
-            try {
-              return JSON.parse(cached);
-            } catch {
-              return cached;
-            }
-          }
-          return cached;
-        }
-      }
       const baseUrl = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api';
       return `${baseUrl}/walrus/blobs/${cleanId}/image`;
     }

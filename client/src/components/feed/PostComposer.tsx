@@ -457,10 +457,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-black/40">
-                      <span className="text-[10px] font-mono text-sui-cyan animate-pulse">🎥 Video Blob</span>
-                      <span className="text-[8px] font-mono text-gray-500 truncate max-w-full px-2 mt-1">ID: {item.blobId}</span>
-                    </div>
+                    <VideoPreview blobId={item.blobId} />
                   )}
                   <button
                     type="button"
@@ -570,5 +567,60 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
       </form>
     </div>
+  );
+}
+
+function VideoPreview({ blobId }: { blobId: string }) {
+  const videoUrl = useWalrusImage(blobId);
+  const [resolvedUrl, setResolvedUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!videoUrl) {
+      setResolvedUrl('');
+      return;
+    }
+
+    if (videoUrl.startsWith('data:')) {
+      try {
+        const parts = videoUrl.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([uInt8Array], { type: contentType });
+        const objUrl = URL.createObjectURL(blob);
+        setResolvedUrl(objUrl);
+
+        return () => {
+          URL.revokeObjectURL(objUrl);
+        };
+      } catch (e) {
+        console.warn("Failed to convert base64 video to Object URL:", e);
+        setResolvedUrl(videoUrl);
+      }
+    } else {
+      setResolvedUrl(videoUrl);
+    }
+  }, [videoUrl]);
+
+  if (!resolvedUrl) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-black/40">
+        <Loader2 className="h-5 w-5 text-sui-cyan animate-spin mb-1" />
+        <span className="text-[9px] font-mono text-gray-500">Loading Video...</span>
+      </div>
+    );
+  }
+
+  return (
+    <video 
+      src={resolvedUrl} 
+      controls 
+      className="w-full h-full object-contain bg-black"
+      playsInline
+    />
   );
 }

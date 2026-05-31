@@ -166,15 +166,28 @@ export default function SocialFeedPage() {
                 const walrusContent = await walrus.getBlob(p.walrusBlobId);
                 if (walrusContent && typeof walrusContent === 'object') {
                   const contentObj = walrusContent as any;
+                  
+                  // Support nested content.text or flat text
                   if (contentObj.content?.text) {
                     text = contentObj.content.text;
+                  } else if (contentObj.text) {
+                    text = contentObj.text;
+                  } else if (contentObj.content && typeof contentObj.content === 'string') {
+                    text = contentObj.content;
                   }
+
+                  // Support nested or flat hashtags
                   if (contentObj.content?.hashtags) {
                     hashtags = contentObj.content.hashtags;
+                  } else if (contentObj.hashtags) {
+                    hashtags = contentObj.hashtags;
                   }
-                  if (contentObj.media && contentObj.media.length > 0) {
-                    media = contentObj.media;
-                    mediaUrl = contentObj.media[0].blob_id;
+
+                  // Support nested or flat media attachments
+                  const mediaList = contentObj.media || contentObj.content?.media || [];
+                  if (mediaList && mediaList.length > 0) {
+                    media = mediaList;
+                    mediaUrl = mediaList[0].blob_id || mediaList[0].blobUrl || mediaList[0].url;
                   }
                 } else if (typeof walrusContent === 'string' && walrusContent.length > 0) {
                   // Plain text content
