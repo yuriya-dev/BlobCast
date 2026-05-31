@@ -83,6 +83,7 @@ export const api = {
     blobHash: string;
     contentType: number;
     visibility: number;
+    mentions?: string[];
   }): Promise<{ status: string; data: { post: ApiPost } }> {
     const res = await fetch(`${BASE_URL}/posts`, requestInit({
       method: 'POST',
@@ -273,13 +274,13 @@ export const api = {
   /**
    * Register a permanent Walrus comment blob reference on the post thread.
    */
-  async createComment(id: string, authorId: string, walrusBlobId: string): Promise<{ status: string; data: { comment: any } }> {
+  async createComment(id: string, authorId: string, walrusBlobId: string, mentions?: string[]): Promise<{ status: string; data: { comment: any } }> {
     const res = await fetch(`${BASE_URL}/posts/${id}/comments`, requestInit({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ authorId, walrusBlobId }),
+      body: JSON.stringify({ authorId, walrusBlobId, mentions }),
     }));
     return parseJsonResponse(res, 'Failed to submit comment');
   },
@@ -391,6 +392,26 @@ export const api = {
       body: JSON.stringify(tipData),
     }));
     return parseJsonResponse(res, 'Failed to register tip');
+  },
+
+  /**
+   * Fetch database-backed user notifications.
+   */
+  async fetchDbNotifications(): Promise<{ status: string; data: { notifications: any[] } }> {
+    const res = await fetch(`${BASE_URL}/users/notifications`, requestInit({
+      cache: 'no-store'
+    }));
+    return parseJsonResponse(res, 'Failed to fetch database notifications');
+  },
+
+  /**
+   * Mark all unread database-backed user notifications as read.
+   */
+  async markDbNotificationsRead(): Promise<{ status: string; message: string }> {
+    const res = await fetch(`${BASE_URL}/users/notifications/read`, requestInit({
+      method: 'POST'
+    }));
+    return parseJsonResponse(res, 'Failed to mark notifications as read');
   }
 };
 

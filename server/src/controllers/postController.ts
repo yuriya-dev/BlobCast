@@ -123,7 +123,7 @@ export const getPostById = asyncHandler(async (req: Request, res: Response) => {
  * Controller to create a new permanent post reference object inside Supabase.
  */
 export const createPost = asyncHandler(async (req: Request, res: Response) => {
-    const { authorId, suiObjectId, walrusBlobId, blobHash, contentType, visibility } = req.body;
+    const { authorId, suiObjectId, walrusBlobId, blobHash, contentType, visibility, mentions } = req.body;
     const sessionUser = req.authUser;
 
     if (!sessionUser) {
@@ -161,6 +161,33 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
             author: true
         }
     });
+
+    // Create Mention Notifications
+    if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+        try {
+            for (const username of mentions) {
+                const trimmedUsername = username.replace(/^@/, '').trim();
+                if (!trimmedUsername) continue;
+
+                const mentionedUser = await prisma.user.findUnique({
+                    where: { username: trimmedUsername }
+                });
+
+                if (mentionedUser && mentionedUser.id !== sessionUser.id) {
+                    await prisma.notification.create({
+                        data: {
+                            userId: mentionedUser.id,
+                            actorId: sessionUser.id,
+                            type: 'mention',
+                            postId: post.id
+                        }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error('⚠️ Failed to generate mention notifications:', notifErr);
+        }
+    }
 
     res.status(201).json({
         status: 'success',
@@ -245,6 +272,22 @@ export const likePost = asyncHandler(async (req: Request, res: Response) => {
             data: { likeCount: { increment: 1 } }
         });
         liked = true;
+
+        // Create Like Notification
+        if (post.authorId !== resolvedUserId) {
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: post.authorId,
+                        actorId: resolvedUserId,
+                        type: 'like',
+                        postId: id
+                    }
+                });
+            } catch (notifErr) {
+                console.error('⚠️ Failed to create like notification:', notifErr);
+            }
+        }
     }
 
     const updatedPost = await prisma.post.findUnique({ where: { id } });
@@ -261,7 +304,7 @@ export const likePost = asyncHandler(async (req: Request, res: Response) => {
  */
 export const createComment = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params; // Post ID
-    const { authorId, walrusBlobId } = req.body;
+    const { authorId, walrusBlobId, mentions } = req.body;
     const sessionUser = req.authUser;
 
     if (!sessionUser) {
@@ -301,6 +344,33 @@ export const createComment = asyncHandler(async (req: Request, res: Response) =>
         where: { id },
         data: { commentCount: { increment: 1 } }
     });
+
+    // Create Mention Notifications
+    if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+        try {
+            for (const username of mentions) {
+                const trimmedUsername = username.replace(/^@/, '').trim();
+                if (!trimmedUsername) continue;
+
+                const mentionedUser = await prisma.user.findUnique({
+                    where: { username: trimmedUsername }
+                });
+
+                if (mentionedUser && mentionedUser.id !== sessionUser.id) {
+                    await prisma.notification.create({
+                        data: {
+                            userId: mentionedUser.id,
+                            actorId: sessionUser.id,
+                            type: 'mention',
+                            postId: id
+                        }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error('⚠️ Failed to generate comment mention notifications:', notifErr);
+        }
+    }
 
     res.status(201).json({
         status: 'success',
@@ -377,6 +447,22 @@ export const repostPost = asyncHandler(async (req: Request, res: Response) => {
             data: { repostCount: { increment: 1 } }
         });
         reposted = true;
+
+        // Create Repost Notification
+        if (originalPost.authorId !== resolvedAuthorId) {
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: originalPost.authorId,
+                        actorId: resolvedAuthorId,
+                        type: 'repost',
+                        postId: id
+                    }
+                });
+            } catch (notifErr) {
+                console.error('⚠️ Failed to create repost notification:', notifErr);
+            }
+        }
     }
 
     const updatedPost = await prisma.post.findUnique({ where: { id } });

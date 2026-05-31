@@ -324,7 +324,12 @@ export default function PostDetailPage({ params }: PageProps) {
       const authorId = authUser.id; // Default Caster (Yuriya)
 
       try {
-        const response = await api.createComment(id, authorId, walrusUploadInfo.blobId);
+        const extractMentions = (str: string): string[] => {
+          const matches = str.match(/@\w+/g);
+          return matches ? matches.map(m => m.replace('@', '').toLowerCase()) : [];
+        };
+
+        const response = await api.createComment(id, authorId, walrusUploadInfo.blobId, extractMentions(commentText));
         if (response && response.data && response.data.comment) {
           await loadPostAndComments();
           setCommentText('');

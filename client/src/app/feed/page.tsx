@@ -23,12 +23,6 @@ export default function SocialFeedPage() {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showNotifsLog, setShowNotifsLog] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([
-    { id: 'n1', type: 'tip', text: 'Mysten Labs verifiably tipped you 10 SUI on cast post-1', time: '5m ago' },
-    { id: 'n2', type: 'like', text: 'Vitalik Buterin verifiably signed and liked your cast post-1', time: '12m ago' },
-    { id: 'n3', type: 'system', text: 'Yuriya updated profile metadata JSON schema in Walrus publisher node', time: '1h ago' }
-  ]);
 
   // Handle pin: move post to the very top of the feed (only for owner)
   const handlePinPost = async (postId: string, pinned: boolean) => {
@@ -103,31 +97,7 @@ export default function SocialFeedPage() {
     };
   }, []);
 
-  // Load notifications from indexer telemetry REST API periodically
-  useEffect(() => {
-    const fetchNotifs = async () => {
-      try {
-        const response = await api.fetchNotifications();
-        if (response && response.data && response.data.notifications && response.data.notifications.length > 0) {
-          // Prepend latest backend notification, merge with defaults to ensure beautiful content variety
-          setNotifications(prev => {
-            const incoming = response.data.notifications;
-            const filtered = incoming.filter((inc: any) => !prev.some(p => p.id === inc.id));
-            if (filtered.length > 0) {
-              return [...filtered, ...prev].slice(0, 10);
-            }
-            return prev;
-          });
-        }
-      } catch (err) {
-        // Silently capture offline states
-      }
-    };
 
-    fetchNotifs();
-    const interval = setInterval(fetchNotifs, 5000); // Poll every 5s for real-time indexer dynamic action feel!
-    return () => clearInterval(interval);
-  }, []);
 
   const loadFeed = async () => {
     setIsLoading(true);
@@ -340,7 +310,8 @@ export default function SocialFeedPage() {
           walrusBlobId: newPost.walrusBlobId,
           blobHash: newPost.blobHash,
           contentType: newPost.contentType,
-          visibility: newPost.visibility
+          visibility: newPost.visibility,
+          mentions: newPost.walrusContent?.content?.mentions || []
         });
         loadFeed();
         return;
@@ -383,19 +354,6 @@ export default function SocialFeedPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live Activity Notification Log Bell Button */}
-            <button 
-              onClick={() => setShowNotifsLog(!showNotifsLog)}
-              className={`p-2 rounded-xl border transition-all relative cursor-pointer ${
-                showNotifsLog 
-                  ? 'bg-sui-cyan/20 text-sui-cyan border-sui-cyan/40 shadow-cyber-glow' 
-                  : 'bg-walrus-blue/40 border-sui-cyan/15 text-gray-400 hover:text-white hover:border-sui-cyan/30'
-              }`}
-              title="System Activity Logs"
-            >
-              <Bell className="h-4 w-4 animate-pulse" />
-              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-sui-cyan node-pulse" />
-            </button>
           </div>
         </header>
 
@@ -443,95 +401,6 @@ export default function SocialFeedPage() {
         </div>
         <TrendingWidget />
       </aside>
-
-      {/* 4. Sliding Activity Logs Drawer */}
-      <AnimatePresence>
-        {showNotifsLog && (
-          <>
-            {/* Backdrop overlay */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowNotifsLog(false)}
-              className="fixed inset-0 bg-deep-space/85 z-40 backdrop-blur-sm"
-            />
-
-            {/* Panel Drawer */}
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed top-0 right-0 h-full w-full max-w-md bg-walrus-blue/95 border-l border-sui-cyan/20 shadow-cyber-glow z-50 p-6 flex flex-col gap-6 backdrop-blur-xl"
-            >
-              <div className="flex items-center justify-between border-b border-sui-cyan/15 pb-4">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-sui-cyan animate-pulse" />
-                  <h3 className="font-mono font-bold text-sm tracking-wider uppercase text-white">
-                    System Activity Logs
-                  </h3>
-                </div>
-                <button 
-                  onClick={() => setShowNotifsLog(false)}
-                  className="text-gray-500 hover:text-white transition-colors font-mono text-xs cursor-pointer border border-sui-cyan/20 rounded-lg px-2 py-1 bg-deep-space/40"
-                >
-                  [Close]
-                </button>
-              </div>
-
-              {/* Console log screen */}
-              <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1 font-mono text-xs scrollbar-thin">
-                <div className="bg-deep-space/60 border border-sui-cyan/5 rounded-2xl p-4 flex flex-col gap-3">
-                  <span className="text-[9px] text-gray-500 uppercase tracking-widest block border-b border-sui-cyan/5 pb-2">
-                    ⚡ Real-time Indexer Listening
-                  </span>
-                  
-                  {notifications.map((notif) => (
-                    <div 
-                      key={notif.id} 
-                      className="border-b border-sui-cyan/5 pb-3 last:border-b-0 last:pb-0 flex flex-col gap-1.5"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-md font-bold ${
-                          notif.type === 'tip' 
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-                            : notif.type === 'like' 
-                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
-                              : 'bg-sui-cyan/10 text-sui-cyan border border-sui-cyan/20'
-                        }`}>
-                          {notif.type}
-                        </span>
-                        <span className="text-[9px] text-gray-600">{notif.time}</span>
-                      </div>
-                      <p className="text-gray-300 leading-relaxed font-sans text-xs">
-                        {notif.text}
-                      </p>
-                      <div className="text-[8px] text-gray-500 font-mono truncate">
-                        Sig: 0x{Math.random().toString(16).substring(2, 18)}...
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-sui-cyan/5 border border-sui-cyan/15 rounded-2xl p-4 text-[10px] text-gray-400 leading-relaxed">
-                  <span className="font-bold text-sui-cyan block mb-1">🔗 Indexer Details:</span>
-                  Listening to Sui on-chain transactions via Tatum RPC and indexing IPFS/Walrus blobs dynamically. Reconstructs content hashes in real-time.
-                </div>
-              </div>
-
-              {/* Bottom telemetry */}
-              <div className="border-t border-sui-cyan/15 pt-4 flex items-center justify-between text-[9px] text-gray-500 font-mono">
-                <span>Listening Epoch #22</span>
-                <span className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 node-pulse" />
-                  Telemetry OK
-                </span>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
     </div>
   );

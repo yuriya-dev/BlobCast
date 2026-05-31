@@ -183,6 +183,19 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
         }
     });
 
+    // Create DM Notification
+    try {
+        await prisma.notification.create({
+            data: {
+                userId: receiverId,
+                actorId: senderId,
+                type: 'dm'
+            }
+        });
+    } catch (notifErr) {
+        console.error('⚠️ Failed to create DM notification:', notifErr);
+    }
+
     const formattedMessage = {
         id: message.id,
         senderId: message.senderId,

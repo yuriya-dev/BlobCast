@@ -28,6 +28,7 @@ export function Sidebar() {
   const { user } = useAuth();
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -44,16 +45,38 @@ export function Sidebar() {
       }
     };
 
+    const fetchUnreadNotifs = async () => {
+      try {
+        const data = await api.fetchDbNotifications();
+        const list = data?.data?.notifications || [];
+        const unread = list.filter((n: any) => !n.isRead).length;
+        setUnreadNotifs(unread);
+        console.log('Fetched unread notifications count:', unread);
+      } catch {
+        setUnreadNotifs(0);
+        console.log('Failed to fetch unread notifications count');
+      }
+    };
+
     fetchUnread();
-    const interval = setInterval(fetchUnread, 30_000);
+    fetchUnreadNotifs();
+    const interval = setInterval(() => {
+      fetchUnread();
+      fetchUnreadNotifs();
+    }, 15000);
 
     // Re-fetch immediately when user reads a conversation
     const handleMessagesRead = () => fetchUnread();
     window.addEventListener('blobcast:messages-read', handleMessagesRead);
 
+    // Re-fetch immediately when notifications are read
+    const handleNotifsRead = () => fetchUnreadNotifs();
+    window.addEventListener('blobcast:notifications-read', handleNotifsRead);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('blobcast:messages-read', handleMessagesRead);
+      window.removeEventListener('blobcast:notifications-read', handleNotifsRead);
     };
   }, [user?.id]);
 
@@ -84,6 +107,7 @@ export function Sidebar() {
         blobHash: newPost.blobHash,
         contentType: newPost.contentType,
         visibility: newPost.visibility,
+        mentions: newPost.walrusContent?.content?.mentions || [],
       });
     } catch (err) {
       console.warn('⚠️ Failed to post via API. Storing in local session cache.', err);
@@ -98,6 +122,7 @@ export function Sidebar() {
   const navigation = [
     { name: 'Home', href: '/feed', icon: Home },
     { name: 'Explore', href: '/explore', icon: Compass },
+    { name: 'Notifications', href: '/notifications', icon: Bell, ...(unreadNotifs > 0 ? { badge: unreadNotifs } : {}) },
     { name: 'Messages', href: '/messages', icon: MessageCircle, ...(unreadCount > 0 ? { badge: unreadCount } : {}) },
     { name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
     { name: 'Profile', href: '/profile', icon: User },

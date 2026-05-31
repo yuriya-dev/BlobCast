@@ -59,6 +59,27 @@ export const createTip = asyncHandler(async (req: Request, res: Response) => {
         }
     });
 
+    // Create Tip Notification
+    try {
+        const senderUser = await prisma.user.findUnique({
+            where: { walletAddress: senderAddress }
+        });
+        const actorId = senderUser ? senderUser.id : recipientId;
+
+        if (recipientId !== actorId) {
+            await prisma.notification.create({
+                data: {
+                    userId: recipientId,
+                    actorId,
+                    type: 'tip',
+                    postId: postId || null
+                }
+            });
+        }
+    } catch (notifErr) {
+        console.error('⚠️ Failed to create tip notification:', notifErr);
+    }
+
     res.status(201).json({
         status: 'success',
         message: 'Tip successfully registered in Supabase relational index',

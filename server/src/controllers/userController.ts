@@ -201,6 +201,21 @@ export const followUser = asyncHandler(async (req: Request, res: Response) => {
         }
     });
 
+    // Create Follow Notification
+    if (targetUser.id !== sessionUser.id) {
+        try {
+            await prisma.notification.create({
+                data: {
+                    userId: targetUser.id,
+                    actorId: sessionUser.id,
+                    type: 'follow'
+                }
+            });
+        } catch (notifErr) {
+            console.error('⚠️ Failed to create follow notification:', notifErr);
+        }
+    }
+
     res.status(200).json({
         status: 'success',
         message: 'Successfully followed user'
@@ -304,3 +319,63 @@ export const getUserFollowing = asyncHandler(async (req: Request, res: Response)
         data: { following }
     });
 });
+
+/**
+ * Controller to fetch all notifications for the authenticated user.
+ */
+export const getUserNotifications = asyncHandler(async (req: Request, res: Response) => {
+    const sessionUser = req.authUser;
+
+    if (!sessionUser) {
+        throw new AppError('Authentication required to retrieve notifications', 401);
+    }
+
+    const notifications = await prisma.notification.findMany({
+        where: {
+            userId: sessionUser.id
+        },
+        orderBy: {
+            createdAt: 'desc'
+        },
+        include: {
+            actor: true,
+            post: {
+                include: {
+                    author: true
+                }
+            }
+        }
+    });
+
+    res.status(200).json({
+        status: 'success',
+        data: { notifications }
+    });
+});
+
+/**
+ * Controller to mark all unread notifications for the authenticated user as read.
+ */
+export const markNotificationsRead = asyncHandler(async (req: Request, res: Response) => {
+    const sessionUser = req.authUser;
+
+    if (!sessionUser) {
+        throw new AppError('Authentication required to update notifications', 401);
+    }
+
+    await prisma.notification.updateMany({
+        where: {
+            userId: sessionUser.id,
+            isRead: false
+        },
+        data: {
+            isRead: true
+        }
+    });
+
+    res.status(200).json({
+        status: 'success',
+        message: 'All notifications marked as read'
+    });
+});
+

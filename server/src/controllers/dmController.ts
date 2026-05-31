@@ -243,6 +243,23 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
     }),
   ]);
 
+  // Create DM Notification
+  try {
+    const recipientId = conversation.participant1Id === sessionUser.id
+      ? conversation.participant2Id
+      : conversation.participant1Id;
+
+    await prisma.notification.create({
+      data: {
+        userId: recipientId,
+        actorId: sessionUser.id,
+        type: 'dm'
+      }
+    });
+  } catch (notifErr) {
+    console.error('⚠️ Failed to create DM notification:', notifErr);
+  }
+
   // Broadcast new message to all subscribers of this conversation via WebSocket
   broadcastToConversation(conversationId, {
     type: 'new_message',

@@ -1,11 +1,27 @@
 import { Router } from 'express';
-import { getUserProfile, upsertUserProfile, getAllUsers, followUser, unfollowUser, getUserFollowers, getUserFollowing } from '../controllers/userController';
+import { 
+    getUserProfile, 
+    upsertUserProfile, 
+    getAllUsers, 
+    followUser, 
+    unfollowUser, 
+    getUserFollowers, 
+    getUserFollowing,
+    getUserNotifications,
+    markNotificationsRead
+} from '../controllers/userController';
 import { requireAuth } from '../middleware/authMiddleware';
 
 const router = Router();
 
 // GET /api/users - Get all registered users
 router.get('/', getAllUsers);
+
+// GET /api/users/notifications - Get user notifications
+router.get('/notifications', requireAuth, getUserNotifications);
+
+// POST /api/users/notifications/read - Mark user notifications as read
+router.post('/notifications/read', requireAuth, markNotificationsRead);
 
 // GET /api/users/:walletAddress - Get profile details by SUI address
 router.get('/:walletAddress', getUserProfile);

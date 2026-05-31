@@ -408,7 +408,17 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
       const authorId = authUser.id;
 
       try {
-        const response = await api.createComment(targetPostId, authorId, walrusUploadInfo.blobId);
+        const extractMentions = (str: string): string[] => {
+          const matches = str.match(/@\w+/g);
+          return matches ? matches.map(m => m.replace('@', '').toLowerCase()) : [];
+        };
+
+        const response = await api.createComment(
+          targetPostId, 
+          authorId, 
+          walrusUploadInfo.blobId,
+          extractMentions(newCommentText)
+        );
         if (response && response.data && response.data.comment) {
           const com = response.data.comment;
           setNewCommentText('');
