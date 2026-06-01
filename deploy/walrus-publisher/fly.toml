@@ -2,7 +2,7 @@ app = "blobcast-walrus-publisher"
 primary_region = "sin" # Choose the closest region to your server
 
 [build]
-  image = "ghcr.io/mystenlabs/walrus/publisher:latest"
+  dockerfile = "Dockerfile"
 
 [env]
   # Target Sui & Walrus Mainnet
