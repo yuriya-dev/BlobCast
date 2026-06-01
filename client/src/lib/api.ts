@@ -243,21 +243,24 @@ export const api = {
     return data;
   },
 
-  /**
-   * Fetch the current authenticated session.
-   */
   async fetchCurrentSession(): Promise<ApiSessionResponse> {
     try {
       const res = await fetch(`${BASE_URL}/auth/me`, requestInit({
         cache: 'no-store'
       }));
-      return await parseJsonResponse<ApiSessionResponse>(res, 'Not authenticated');
-    } catch (err) {
-      if (typeof window !== 'undefined') {
-        if (err instanceof Error && (err.message.includes('Not authenticated') || err.message.includes('expired') || err.message.includes('invalid') || err.message.includes('session'))) {
+      
+      // Only remove the token if the server explicitly responds with a 401 Unauthorized.
+      // This protects the session from being wiped out during temporary network glitches,
+      // server restarts, or 502/504 Bad Gateway deployment transitions.
+      if (res.status === 401) {
+        if (typeof window !== 'undefined') {
           window.localStorage.removeItem('blobcast_token');
         }
+        throw new Error('Not authenticated');
       }
+      
+      return await parseJsonResponse<ApiSessionResponse>(res, 'Not authenticated');
+    } catch (err) {
       throw err;
     }
   },
