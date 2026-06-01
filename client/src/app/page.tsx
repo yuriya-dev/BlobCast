@@ -28,31 +28,33 @@ export default function Home() {
       <div className="absolute top-0 right-0 w-140 h-140 rounded-full bg-tatum-purple/5 blur-3xl z-0 pointer-events-none rotating-orb" />
       <div className="absolute bottom-0 left-0 w-130 h-130 rounded-full bg-sui-cyan/5 blur-3xl z-0 pointer-events-none rotating-orb" style={{ animationDirection: 'reverse' }} />
 
-      <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10 relative">
-        <div className="flex items-center gap-2 group">
-          <div className="h-9 w-9 rounded-xl p-0.5 group-hover:rotate-6 transition-all duration-300">
-            <img src="/logo.svg" alt="BlobCast" width={32} height={32} />
+      <header className="fixed top-0 left-0 right-0 z-50 glass-panel border-t-0 border-x-0 border-b border-sui-cyan/10">
+        <div className="w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 group">
+            <div className="h-9 w-9 rounded-xl p-0.5 group-hover:rotate-6 transition-all duration-300">
+              <img src="/logo.svg" alt="BlobCast" width={32} height={32} />
+            </div>
+            <div>
+              <p className="font-mono font-black text-sm tracking-[0.3em] text-white text-neon-glow">BLOBCAST</p>
+              <p className="text-[10px] font-mono text-gray-500 uppercase tracking-[0.3em]">Decentralized social layer</p>
+            </div>
           </div>
-          <div>
-            <p className="font-mono font-black text-sm tracking-[0.3em] text-white text-neon-glow">BLOBCAST</p>
-            <p className="text-[10px] font-mono text-gray-500 uppercase tracking-[0.3em]">Decentralized social layer</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-3">
-          <div className="p-[1px] rounded-2xl bg-gradient-to-r from-sui-cyan to-tatum-purple">
-            <Link
-              href="/login"
-              className="px-8 py-4 rounded-2xl bg-walrus-blue/60 text-sui-cyan font-semibold font-mono text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_0_30px_rgba(111,231,255,0.25)] group"
-            >
-              Login
-            </Link>
+          <div className="flex items-center gap-3">
+            <div className="p-[1px] rounded-2xl bg-gradient-to-r from-sui-cyan to-tatum-purple">
+              <Link
+                href="/login"
+                className="px-8 py-4 rounded-2xl bg-walrus-blue/60 text-sui-cyan font-semibold font-mono text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_0_30px_rgba(111,231,255,0.25)] group"
+              >
+                Login
+              </Link>
+            </div>
+            <ConnectButton connectText="Connect Wallet" className="rounded-xl! bg-linear-to-r! from-sui-cyan! to-tatum-purple! text-deep-space! font-mono! text-xs! font-bold! py-4! px-8! shadow-md!" />
           </div>
-          <ConnectButton connectText="Connect Wallet" className="rounded-xl! bg-linear-to-r! from-sui-cyan! to-tatum-purple! text-deep-space! font-mono! text-xs! font-bold! py-2! px-4! shadow-md!" />
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col justify-center items-center px-6 py-12 md:py-24 text-center max-w-6xl mx-auto z-10 relative w-full">
+      <main className="flex-1 flex flex-col justify-center items-center px-6 pt-32 pb-12 md:pt-48 md:pb-24 text-center max-w-6xl mx-auto z-10 relative w-full">
         {/* Hero Section: two-column layout on md+ */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-12 w-full">
 
@@ -128,25 +130,25 @@ export default function Home() {
         {/* Feature cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full max-w-6xl mt-20 text-left">
           <div className="glass-panel rounded-3xl p-6 border border-sui-cyan/5">
-            <Database className="h-6 w-6 text-sui-cyan mb-4" />
+            <img src="/walrus_logo.svg" alt="Walrus mascot" className="h-12 w-12 mb-4 p-2" />
             <h3 className="font-mono font-bold text-sm text-white mb-2 uppercase">Permanent storage</h3>
             <p className="text-xs text-gray-400 leading-relaxed font-sans">Posts and media remain available through Walrus storage.</p>
           </div>
 
           <div className="glass-panel rounded-3xl p-6 border border-sui-cyan/5">
-            <Wallet className="h-6 w-6 text-sui-cyan mb-4" />
+            <img src="./sui_logo.svg" alt="Sui" className="h-12 w-12 mb-4 p-2" />
             <h3 className="font-mono font-bold text-sm text-white mb-2 uppercase">Wallet identity</h3>
             <p className="text-xs text-gray-400 leading-relaxed font-sans">Connect with a Sui wallet and manage identity without passwords.</p>
           </div>
 
           <div className="glass-panel rounded-3xl p-6 border border-sui-cyan/5">
-            <Cpu className="h-6 w-6 text-tatum-purple mb-4" />
+            <img src="/tatum.svg" alt="Tatum" className="h-12 w-12 mb-4 rounded-2xl p-2" />
             <h3 className="font-mono font-bold text-sm text-white mb-2 uppercase">Tatum RPC</h3>
             <p className="text-xs text-gray-400 leading-relaxed font-sans">Low-latency blockchain access backed by Tatum infrastructure.</p>
           </div>
 
           <div className="glass-panel rounded-3xl p-6 border border-sui-cyan/5">
-            <ShieldCheck className="h-6 w-6 text-emerald-400 mb-4" />
+            <ShieldCheck className="h-12 w-12 text-emerald-400 mb-4 p-2" />
             <h3 className="font-mono font-bold text-sm text-white mb-2 uppercase">Verifiable trust</h3>
             <p className="text-xs text-gray-400 leading-relaxed font-sans">Every action maps to a cryptographically verifiable social record.</p>
           </div>
