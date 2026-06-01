@@ -59,15 +59,16 @@ export function parseCookies(cookieHeader?: string) {
 }
 
 export function buildAuthCookie(token: string) {
+  const isProd = process.env.NODE_ENV === 'production';
   const parts = [
     `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    isProd ? 'SameSite=None' : 'SameSite=Lax',
     `Max-Age=${Math.floor(AUTH_TOKEN_TTL_MS / 1000)}`
   ];
 
-  if (process.env.NODE_ENV === 'production') {
+  if (isProd) {
     parts.push('Secure');
   }
 
@@ -75,11 +76,18 @@ export function buildAuthCookie(token: string) {
 }
 
 export function clearAuthCookie() {
-  return [
+  const isProd = process.env.NODE_ENV === 'production';
+  const parts = [
     `${AUTH_COOKIE_NAME}=`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    isProd ? 'SameSite=None' : 'SameSite=Lax',
     'Max-Age=0'
-  ].join('; ');
+  ];
+
+  if (isProd) {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
 }

@@ -104,7 +104,7 @@ export default function RegisterPage() {
     return () => {
       active = false;
     };
-  }, [account?.address, authUser]);
+  }, [account?.address]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

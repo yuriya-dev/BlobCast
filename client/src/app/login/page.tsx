@@ -108,7 +108,7 @@ export default function LoginPage() {
     return () => {
       active = false;
     };
-  }, [account?.address, authUser]);
+  }, [account?.address]);
 
   const handleContinue = async () => {
     if (!account?.address) {
