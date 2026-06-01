@@ -116,6 +116,9 @@ function NotificationsContent() {
         await api.markDbNotificationsRead();
         console.log('✅ Marked all user notifications as read in DB.');
         
+        // Dynamically mark all local notifications as read so UI badges disappear
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        
         // Dispatch notifications-read event to update Sidebar badge immediately
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('blobcast:notifications-read'));
@@ -129,6 +132,8 @@ function NotificationsContent() {
     const timer = setTimeout(markAsRead, 1500);
     return () => clearTimeout(timer);
   }, [authUser, fetchNotifications]);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const filteredNotifs = notifications.filter(notif => {
     if (activeTab === 'all') return true;
@@ -210,38 +215,46 @@ function NotificationsContent() {
       {/* 2. Middle Notifications Column */}
       <main className="flex-1 border-r border-sui-cyan/5 flex flex-col h-screen overflow-y-auto scrollbar-cyber">
         
-        {/* Top Header navbar */}
-        <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 sticky top-0 z-40 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-sui-cyan animate-pulse" />
-            <h2 className="font-mono font-bold text-sm tracking-wider uppercase text-white">Notifications</h2>
-          </div>
-          <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500 uppercase">
-            <CheckCircle className="h-3.5 w-3.5 text-sui-cyan" />
-            <span>Database Synced</span>
-          </div>
-        </header>
+        {/* Sticky Header and Tab Filters Container */}
+        <div className="sticky top-0 z-40 bg-deep-space/95 backdrop-blur-md flex flex-col flex-shrink-0">
+          {/* Top Header navbar */}
+          <header className="glass-panel border-t-0 border-x-0 border-b border-sui-cyan/5 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-sui-cyan animate-pulse" />
+              <h2 className="font-mono font-bold text-sm tracking-wider uppercase text-white">Notifications</h2>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500 uppercase">
+              <CheckCircle className="h-3.5 w-3.5 text-sui-cyan" />
+              <span>Database Synced</span>
+            </div>
+          </header>
 
-        {/* Tab Filters Bar */}
-        <div className="border-b border-sui-cyan/5 sticky top-13.5 z-30 bg-deep-space/85 backdrop-blur-md px-4 py-2.5 overflow-x-auto flex gap-1.5 scrollbar-thin">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono tracking-wide transition-all shrink-0 cursor-pointer border ${
-                  isActive
-                    ? 'bg-sui-cyan/15 text-sui-cyan border-sui-cyan/30'
-                    : 'text-gray-400 hover:text-white border-transparent hover:bg-walrus-blue/40'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+          {/* Tab Filters Bar */}
+          <div className="border-b border-sui-cyan/5 px-4 py-2.5 overflow-x-auto flex gap-1.5 scrollbar-thin">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono tracking-wide transition-all shrink-0 cursor-pointer border ${
+                    isActive
+                      ? 'bg-sui-cyan/15 text-sui-cyan border-sui-cyan/30'
+                      : 'text-gray-400 hover:text-white border-transparent hover:bg-walrus-blue/40'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{tab.label}</span>
+                  {tab.id === 'all' && unreadCount > 0 && (
+                    <span className="bg-sui-cyan text-deep-space text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-1">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Notifications list area */}
