@@ -8,7 +8,8 @@ import {
     getUserFollowers, 
     getUserFollowing,
     getUserNotifications,
-    markNotificationsRead
+    markNotificationsRead,
+    getSpotlightCreators
 } from '../controllers/userController';
 import { optionalAuth, requireAuth } from '../middleware/authMiddleware';
 
@@ -22,6 +23,9 @@ router.get('/notifications', requireAuth, getUserNotifications);
 
 // POST /api/users/notifications/read - Mark user notifications as read
 router.post('/notifications/read', requireAuth, markNotificationsRead);
+
+// GET /api/users/spotlight - Get spotlight creators
+router.get('/spotlight', getSpotlightCreators);
 
 // GET /api/users/:walletAddress - Get profile details by SUI address
 router.get('/:walletAddress', optionalAuth, getUserProfile);

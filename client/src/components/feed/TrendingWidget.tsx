@@ -1,17 +1,33 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, Flame, Database, Compass } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
 
 export function TrendingWidget() {
   const router = useRouter();
-  const trendingTags = [
-    { name: 'blobcast', posts: '4,289 blobs cast', trend: '+142%' },
-    { name: 'walrus', posts: '12,980 shards saved', trend: '+85%' },
-    { name: 'suinetwork', posts: '8,401 epoch txs', trend: '+45%' },
-    { name: 'tatum', posts: '1,980 gateway calls', trend: '+95%' },
-  ];
+  const [tags, setTags] = useState<Array<{ name: string; posts: string; trend: string }>>([]);
+
+  useEffect(() => {
+    async function loadTags() {
+      try {
+        const res = await api.fetchTrendingTags();
+        if (res?.data?.tags) {
+          setTags(res.data.tags.slice(0, 4));
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to load trending widget tags, using fallback mocks:', err);
+        setTags([
+          { name: 'blobcast', posts: '4,289 blobs cast', trend: '+142%' },
+          { name: 'walrus', posts: '12,980 shards saved', trend: '+85%' },
+          { name: 'suinetwork', posts: '8,401 epoch txs', trend: '+45%' },
+          { name: 'tatum', posts: '1,980 gateway calls', trend: '+95%' },
+        ]);
+      }
+    }
+    loadTags();
+  }, []);
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -24,7 +40,7 @@ export function TrendingWidget() {
         </div>
 
         <div className="flex flex-col gap-4">
-          {trendingTags.map((tag, idx) => (
+          {tags.map((tag, idx) => (
             <div 
               key={tag.name} 
               onClick={() => router.push(`/search?q=${encodeURIComponent('#' + tag.name)}`)}

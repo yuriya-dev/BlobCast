@@ -449,6 +449,30 @@ export const api = {
       body: JSON.stringify(data),
     }));
     return parseJsonResponse(res, 'Failed to request transaction sponsorship');
+  },
+
+  /**
+   * Fetch compiled real-time trending tags from backend.
+   */
+  async fetchTrendingTags(): Promise<{ status: string; data: { tags: Array<{ name: string; posts: string; trend: string; category: string }> } }> {
+    const res = await fetch(`${BASE_URL}/posts/trending-tags`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch trending tags');
+  },
+
+  /**
+   * Fetch top trending casts from backend.
+   */
+  async fetchTrendingCasts(): Promise<{ status: string; data: { posts: ApiPost[] } }> {
+    const res = await fetch(`${BASE_URL}/posts/trending-casts`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch trending casts');
+  },
+
+  /**
+   * Fetch spotlight creators from backend.
+   */
+  async fetchSpotlightCreators(): Promise<{ status: string; data: { creators: Array<{ id: string; displayName: string; username: string; walletAddress: string; followers: number; bio: string; verified: boolean }> } }> {
+    const res = await fetch(`${BASE_URL}/users/spotlight`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch spotlight creators');
   }
 };
 

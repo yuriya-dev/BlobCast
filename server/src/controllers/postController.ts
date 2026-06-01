@@ -10,6 +10,13 @@ import {
     visiblePostWhere,
 } from '../lib/moderation';
 
+const withTimeout = <T>(promise: Promise<T>, ms = 1500, fallback: T): Promise<T> => {
+    return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+    ]);
+};
+
 /**
  * Controller to fetch all posts / timeline feed from Supabase with pagination support.
  */
@@ -513,5 +520,132 @@ export const repostPost = asyncHandler(async (req: Request, res: Response) => {
         status: 'success',
         reposted,
         data: { repostCount: updatedPost?.repostCount || 0 }
+    });
+});
+
+/**
+ * Controller to fetch real-time trending tags, compiling them from simulated blobs and Redis counters.
+ */
+export const getTrendingTags = asyncHandler(async (req: Request, res: Response) => {
+    const tagCounts: { [key: string]: number } = {};
+    
+    // 1. Gather hashtags from database-backed simulated blobs
+    try {
+        const simulatedBlobs = await withTimeout(
+            prisma.simulatedBlob.findMany({
+                take: 100,
+                orderBy: { createdAt: 'desc' }
+            }),
+            1200,
+            []
+        );
+        
+        for (const blob of simulatedBlobs) {
+            try {
+                const parsed = JSON.parse(blob.content);
+                const text = parsed?.content?.text || parsed?.text || '';
+                const hashtags = text.match(/#\w+/g);
+                if (hashtags) {
+                    for (const tag of hashtags) {
+                        const cleanTag = tag.replace('#', '').toLowerCase();
+                        tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
+                    }
+                }
+            } catch {
+                // Skip if not JSON or parsing fails
+            }
+        }
+    } catch (err) {
+        console.warn('⚠️ Failed to compile tags from simulated blobs:', err);
+    }
+    
+    // 2. Merge with Redis active hashtag counters
+    try {
+        const redisKeys = await cache.keys('trending:tags:*');
+        for (const key of redisKeys) {
+            const tag = key.replace('trending:tags:', '').toLowerCase();
+            const val = await cache.get(key);
+            if (val) {
+                const count = parseInt(val, 10);
+                tagCounts[tag] = (tagCounts[tag] || 0) + count;
+            }
+        }
+    } catch (err) {
+        // Redis offline/empty
+    }
+    
+    // 3. Define fallback defaults if database is completely empty
+    const defaultTags = [
+        { name: 'blobcast', posts: '4,289 blobs cast', trend: '+142%', category: 'Social' },
+        { name: 'walrus', posts: '12,980 shards saved', trend: '+85%', category: 'Storage' },
+        { name: 'suinetwork', posts: '8,401 epoch txs', trend: '+45%', category: 'Protocol' },
+        { name: 'tatum', posts: '1,980 gateway calls', trend: '+95%', category: 'RPC' },
+        { name: 'decentSocial', posts: '3,104 profiles', trend: '+120%', category: 'Web3' },
+        { name: 'erasureCoding', posts: '2,900 reconstructions', trend: '+110%', category: 'Math' }
+    ];
+    
+    const compiledTags = Object.keys(tagCounts).map(name => {
+        const count = tagCounts[name];
+        const categories = ['Social', 'Storage', 'Protocol', 'RPC', 'Web3', 'Tech'];
+        const category = categories[Math.abs(name.charCodeAt(0) || 0) % categories.length];
+        return {
+            name,
+            posts: `${count} blobs cast`,
+            trend: `+${20 + (count * 15)}%`,
+            category
+        };
+    });
+    
+    // Sort by count descending
+    compiledTags.sort((a, b) => b.posts.localeCompare(a.posts));
+    
+    const finalTags = compiledTags.length > 2 
+        ? compiledTags.slice(0, 10) 
+        : [...compiledTags, ...defaultTags.filter(dt => !tagCounts[dt.name])].slice(0, 10);
+        
+    res.status(200).json({
+        status: 'success',
+        data: { tags: finalTags }
+    });
+});
+
+/**
+ * Controller to fetch top trending casts based on likes and comments.
+ */
+export const getTrendingCasts = asyncHandler(async (req: Request, res: Response) => {
+    const posts = await withTimeout(
+        prisma.post.findMany({
+            where: {
+                ...visiblePostWhere,
+                repostOfId: null
+            },
+            orderBy: [
+                { likeCount: 'desc' },
+                { commentCount: 'desc' },
+                { createdAt: 'desc' }
+            ],
+            take: 5,
+            include: {
+                author: true,
+                media: true,
+                likes: {
+                    include: {
+                        user: true
+                    }
+                },
+                reposts: {
+                    include: {
+                        author: true
+                    }
+                }
+            }
+        }),
+        1200,
+        []
+    );
+    
+    res.status(200).json({
+        status: 'success',
+        data: { posts }
     });
 });

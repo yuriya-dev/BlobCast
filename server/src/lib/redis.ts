@@ -46,6 +46,18 @@ class RedisMock {
     return 0;
   }
 
+  async keys(pattern: string): Promise<string[]> {
+    const cleanPattern = pattern.replace('*', '');
+    const results: string[] = [];
+    for (const key of this.store.keys()) {
+      const expired = this.checkExpired(key);
+      if (!expired && key.startsWith(cleanPattern)) {
+        results.push(key);
+      }
+    }
+    return results;
+  }
+
   private checkExpired(key: string): boolean {
     const expiry = this.expirations.get(key);
     if (expiry && expiry < Date.now()) {
@@ -134,6 +146,17 @@ export const cache = {
       await redis.expire(key, seconds);
     } catch {
       await redisMock.expire(key, seconds);
+    }
+  },
+
+  async keys(pattern: string): Promise<string[]> {
+    if (isRedisMock || !redis) {
+      return redisMock.keys(pattern);
+    }
+    try {
+      return await redis.keys(pattern);
+    } catch {
+      return redisMock.keys(pattern);
     }
   }
 };

@@ -6,7 +6,9 @@ import {
     getNotifications, 
     likePost, 
     createComment, 
-    repostPost 
+    repostPost,
+    getTrendingTags,
+    getTrendingCasts
 } from '../controllers/postController';
 import { requireAuth } from '../middleware/authMiddleware';
 
@@ -17,6 +19,12 @@ router.get('/', getAllPosts);
 
 // GET /api/posts/notifications - Get latest active indexer telemetry logs from Redis
 router.get('/notifications', getNotifications);
+
+// GET /api/posts/trending-tags - Compile real-time trending tags
+router.get('/trending-tags', getTrendingTags);
+
+// GET /api/posts/trending-casts - Fetch top trending casts
+router.get('/trending-casts', getTrendingCasts);
 
 // GET /api/posts/:id - Get a specific post registry with author and comment threads
 router.get('/:id', getPostById);

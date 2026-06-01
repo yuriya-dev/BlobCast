@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Flame, 
@@ -20,6 +20,7 @@ import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWit
 import { motion } from 'framer-motion';
 import { useWalrusImage } from '@/hooks/useWalrusImage';
 import { mockDb } from '@/lib/db';
+import { api } from '@/lib/api';
 
 function CreatorAvatar({ username, walletAddress, initials }: { username: string; walletAddress: string; initials: string }) {
   const mockUser = mockDb.users.find(u => u.username === username || u.walletAddress.toLowerCase() === walletAddress.toLowerCase());
@@ -51,48 +52,80 @@ function CreatorAvatar({ username, walletAddress, initials }: { username: string
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<'trending' | 'creators' | 'ecosystem'>('trending');
+  const [tags, setTags] = useState<Array<{ name: string; posts: string; trend: string; category: string }>>([]);
+  const [creators, setCreators] = useState<Array<{ id: string; displayName: string; username: string; walletAddress: string; followers: number; bio: string; verified: boolean }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const trendingTags = [
-    { name: 'blobcast', posts: '4,289 blobs cast', trend: '+142%', category: 'Social' },
-    { name: 'walrus', posts: '12,980 shards saved', trend: '+85%', category: 'Storage' },
-    { name: 'suinetwork', posts: '8,401 epoch txs', trend: '+45%', category: 'Protocol' },
-    { name: 'tatum', posts: '1,980 gateway calls', trend: '+95%', category: 'RPC' },
-    { name: 'decentSocial', posts: '3,104 profiles', trend: '+120%', category: 'Web3' },
-    { name: 'erasureCoding', posts: '2,900 reconstructions', trend: '+110%', category: 'Math' },
-  ];
-
-  const creatorsList = [
-    {
-      id: 'c1',
-      displayName: 'Vitalik Buterin',
-      username: 'vitalik',
-      walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
-      followers: '4.8M',
-      bio: 'Fascinated by decentralized cryptography, social scaling layers, and permanent information archives.',
-    },
-    {
-      id: 'c2',
-      displayName: 'Yuriya',
-      username: 'yuriya',
-      walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
-      followers: '1,248',
-      bio: 'BlobCast core architect. Writing social schemas directly onto the Walrus storage layers.',
-    },
-    {
-      id: 'c3',
-      displayName: 'Mysten Labs',
-      username: 'mystenlabs',
-      walletAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7',
-      followers: '320K',
-      bio: 'Official builders of the Sui blockchain. Scaling transaction execution and web3 performance.',
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [tagsRes, creatorsRes] = await Promise.all([
+          api.fetchTrendingTags(),
+          api.fetchSpotlightCreators()
+        ]);
+        if (tagsRes?.data?.tags) {
+          setTags(tagsRes.data.tags);
+        }
+        if (creatorsRes?.data?.creators) {
+          setCreators(creatorsRes.data.creators);
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to load real explore data, using offline fallback mocks:', err);
+        setTags([
+          { name: 'blobcast', posts: '4,289 blobs cast', trend: '+142%', category: 'Social' },
+          { name: 'walrus', posts: '12,980 shards saved', trend: '+85%', category: 'Storage' },
+          { name: 'suinetwork', posts: '8,401 epoch txs', trend: '+45%', category: 'Protocol' },
+          { name: 'tatum', posts: '1,980 gateway calls', trend: '+95%', category: 'RPC' },
+          { name: 'decentSocial', posts: '3,104 profiles', trend: '+120%', category: 'Web3' },
+          { name: 'erasureCoding', posts: '2,900 reconstructions', trend: '+110%', category: 'Math' },
+        ]);
+        setCreators([
+          {
+            id: 'c1',
+            displayName: 'Vitalik Buterin',
+            username: 'vitalik',
+            walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
+            followers: 4800000,
+            bio: 'Fascinated by decentralized cryptography, social scaling layers, and permanent information archives.',
+            verified: true
+          },
+          {
+            id: 'c2',
+            displayName: 'Yuriya',
+            username: 'yuriya',
+            walletAddress: '0x91abc6f3e1b7d8c09a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f',
+            followers: 1248,
+            bio: 'BlobCast core architect. Writing social schemas directly onto the Walrus storage layers.',
+            verified: true
+          },
+          {
+            id: 'c3',
+            displayName: 'Mysten Labs',
+            username: 'mystenlabs',
+            walletAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7',
+            followers: 320000,
+            bio: 'Official builders of the Sui blockchain. Scaling transaction execution and web3 performance.',
+            verified: true
+          }
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
     }
-  ].map(c => ({
+    loadData();
+  }, []);
+
+  const creatorsList = creators.map(c => ({
     ...c,
-    // Derive initials dynamically so there are no hardcoded strings like 'YU'
+    followers: c.followers >= 1000000 
+      ? `${(c.followers / 1000000).toFixed(1)}M` 
+      : c.followers >= 1000 
+        ? `${(c.followers / 1000).toFixed(1)}K` 
+        : c.followers.toString(),
     avatarInitials: c.displayName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase(),
   }));
 
-  const filteredTags = trendingTags.filter(tag => 
+  const filteredTags = tags.filter(tag => 
     tag.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     tag.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
