@@ -57,16 +57,17 @@ async function upsertIdentityProfile(body: Record<string, any>) {
 function attachSession(res: Response, userId: string) {
   const token = createAuthToken(userId);
   res.setHeader('Set-Cookie', buildAuthCookie(token));
+  return token;
 }
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const user = await upsertIdentityProfile(req.body);
-  attachSession(res, user.id);
+  const token = attachSession(res, user.id);
 
   res.status(201).json({
     status: 'success',
     message: 'Account registered successfully',
-    data: { user }
+    data: { user, token }
   });
 });
 
@@ -86,25 +87,33 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError('Profile not found for this wallet. Please register first.', 404);
   }
 
-  attachSession(res, user.id);
+  const token = attachSession(res, user.id);
 
   res.status(200).json({
     status: 'success',
     message: 'Logged in successfully',
-    data: { user }
+    data: { user, token }
   });
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  const cookies = req.headers.cookie || '';
-  const token = cookies
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith('blobcast_session='))
-    ?.split('=')[1];
+  // 1. Try checking the Authorization header first (Bearer Token)
+  const authHeader = req.headers.authorization || '';
+  let token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
-  const decodedToken = token ? decodeURIComponent(token) : null;
-  const payload = verifyAuthToken(decodedToken);
+  // 2. Fall back to reading from session cookies
+  if (!token) {
+    const cookies = req.headers.cookie || '';
+    const cookieToken = cookies
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('blobcast_session='))
+      ?.split('=')[1];
+    
+    token = cookieToken ? decodeURIComponent(cookieToken) : null;
+  }
+
+  const payload = verifyAuthToken(token);
 
   if (!payload) {
     throw new AppError('Session expired or invalid', 401);

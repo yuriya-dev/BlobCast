@@ -5,11 +5,16 @@ function requestInit(init: RequestInit = {}): RequestInit {
     ...(init.headers as Record<string, string> || {}),
   };
 
-  if (typeof document !== 'undefined') {
-    const matches = document.cookie.match(/(?:^|; )blobcast_session=([^;]*)/);
-    const token = matches ? decodeURIComponent(matches[1]) : null;
+  if (typeof window !== 'undefined') {
+    const token = window.localStorage.getItem('blobcast_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      const matches = document.cookie.match(/(?:^|; )blobcast_session=([^;]*)/);
+      const cookieToken = matches ? decodeURIComponent(matches[1]) : null;
+      if (cookieToken) {
+        headers['Authorization'] = `Bearer ${cookieToken}`;
+      }
     }
   }
 
@@ -49,7 +54,7 @@ export interface ApiUser {
 
 export interface ApiSessionResponse {
   status: string;
-  data: { user: ApiUser };
+  data: { user: ApiUser; token?: string };
 }
 
 export interface ApiPost {
@@ -213,7 +218,11 @@ export const api = {
       },
       body: JSON.stringify(profileData),
     }));
-    return parseJsonResponse(res, 'Failed to register account');
+    const data = await parseJsonResponse<ApiSessionResponse>(res, 'Failed to register account');
+    if (typeof window !== 'undefined' && data.data?.token) {
+      window.localStorage.setItem('blobcast_token', data.data.token);
+    }
+    return data;
   },
 
   /**
@@ -227,17 +236,30 @@ export const api = {
       },
       body: JSON.stringify({ walletAddress }),
     }));
-    return parseJsonResponse(res, 'Failed to login');
+    const data = await parseJsonResponse<ApiSessionResponse>(res, 'Failed to login');
+    if (typeof window !== 'undefined' && data.data?.token) {
+      window.localStorage.setItem('blobcast_token', data.data.token);
+    }
+    return data;
   },
 
   /**
    * Fetch the current authenticated session.
    */
   async fetchCurrentSession(): Promise<ApiSessionResponse> {
-    const res = await fetch(`${BASE_URL}/auth/me`, requestInit({
-      cache: 'no-store'
-    }));
-    return parseJsonResponse(res, 'Not authenticated');
+    try {
+      const res = await fetch(`${BASE_URL}/auth/me`, requestInit({
+        cache: 'no-store'
+      }));
+      return await parseJsonResponse<ApiSessionResponse>(res, 'Not authenticated');
+    } catch (err) {
+      if (typeof window !== 'undefined') {
+        if (err instanceof Error && (err.message.includes('Not authenticated') || err.message.includes('expired') || err.message.includes('invalid') || err.message.includes('session'))) {
+          window.localStorage.removeItem('blobcast_token');
+        }
+      }
+      throw err;
+    }
   },
 
   /**
@@ -247,6 +269,9 @@ export const api = {
     const res = await fetch(`${BASE_URL}/auth/logout`, requestInit({
       method: 'POST'
     }));
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('blobcast_token');
+    }
     return parseJsonResponse(res, 'Failed to logout');
   },
 
