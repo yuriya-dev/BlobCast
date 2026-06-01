@@ -176,7 +176,7 @@ Tatum is used as an RPC gateway for:
 | Layer | Platform |
 |-------|----------|
 | Frontend | Vercel |
-| Backend API | Railway / Fly.io |
+| Backend API | Fly.io |
 | Database | Supabase (PostgreSQL) |
 | Cache | Upstash (Redis) |
 | Storage | Walrus (Decentralized) |

@@ -1,125 +1,262 @@
-# 🚀 BlobCast — End-to-End Deployment Guide
+# 🚀 BlobCast — Comprehensive Production Deployment Guide
 
-This document provides step-by-step instructions for building, provisioning, and deploying the **BlobCast** protocol. This guide covers smart contract publication on the Sui network, backend API service deployment on **Railway / Fly.io**, and frontend client deployment on **Vercel**.
+This document is a professional, production-grade guide for building, provisioning, and deploying the **BlobCast** decentralized social publishing protocol onto mainnet infrastructure.
+
+This guide covers:
+1. Deploying Sui Move Smart Contracts onto **Sui Mainnet**.
+2. Provisioning & Deploying the **Walrus Operator Publisher** service on **Fly.io** with persistent volume mounts.
+3. Provisioning & Deploying the **Backend API & Indexer Daemon** on **Fly.io**.
+4. Deploying the **Next.js Frontend Client** on **Vercel**.
 
 ---
 
-## 1. Pre-deployment Prerequisites
+## 📊 Deployment Architecture
 
-Before initiating the deployment workflow, ensure you have set up accounts and installed the required development CLI tools:
+```mermaid
+graph TD
+    subgraph ClientLayer["1. Client Layer (Vercel)"]
+        NextJS["Next.js Web Client"]
+    end
+
+    subgraph APILayer["2. API & Indexer Layer (Fly.io)"]
+        Express["Express API Gateway"]
+        Indexer["Sui Checkpoint Event Indexer"]
+    end
+
+    subgraph StorageLayer["3. Walrus Publisher Layer (Fly.io)"]
+        Publisher["Walrus Operator Publisher (Docker)"]
+        Volume[("Persistent Volume (/wallets)")]
+        Publisher --- Volume
+    end
+
+    subgraph DataCacheLayer["4. Database & Caching Tier"]
+        DB[(Supabase Managed PostgreSQL)]
+        Cache[(Upstash Managed Redis)]
+    end
+
+    subgraph Blockchain["5. Decentralized Web3 Networks"]
+        Sui["Sui Blockchain (Mainnet)"]
+        Walrus["Walrus Storage Grid (Mainnet)"]
+    end
+
+    NextJS -->|JSON REST / WS| Express
+    NextJS -->|Aggregated Read| Walrus
+    Express -->|Read/Write| DB
+    Express -->|Telemetry Cache| Cache
+    Express -->|Proxy Write| Publisher
+    Indexer -->|Sync Checkpoints| Sui
+    Publisher -->|Certify Blobs| Sui
+    Publisher -->|Distribute Shards| Walrus
+```
+
+---
+
+## 🛠️ 1. Pre-deployment Prerequisites
+
+Ensure you have established accounts and installed the required CLI development tools:
 - **Node.js 20+** installed locally.
-- **Sui CLI** (version 1.20+) installed and configured with a funded testnet/mainnet active address.
-- **Tatum Developer Account** with a valid API key for Sui RPC gateway nodes.
+- **Docker** installed locally for compiling container assets.
+- **Sui CLI (v1.20+)** installed and active.
+- **Fly.io CLI (`flyctl`)** installed and logged in (`fly auth login`).
 - **Supabase Account** to provision a managed PostgreSQL database.
 - **Upstash Account** to provision a managed Redis instance.
-- **Vercel Account** for hosting Next.js.
-- **Railway or Fly.io Account** for hosting the backend Express server daemon.
+- **Vercel Account** for hosting the Next.js static and edge bundles.
 
 ---
 
-## 2. Step 1: Deploy Sui Move Smart Contracts
+## ⛓️ 2. Step 1: Deploy Sui Move Smart Contracts
 
-1. **Configure Sui CLI Env**:
-   Switch to testnet (or mainnet if ready):
+Deploy the BlobCast core Move contracts (`blobcast::post`, `blobcast_dm`, and tip registries) to Sui Mainnet.
+
+1. **Switch CLI to Mainnet**:
    ```bash
-   sui client active-env
-   # If not on testnet:
-   sui client switch --env testnet
+   # Add Mainnet environment if not present
+   sui client new-env --rpc https://fullnode.mainnet.sui.io:443 --alias mainnet
+   
+   # Switch active environment
+   sui client switch --env mainnet
    ```
-2. **Verify Gas Funding**:
-   Check your active address balance:
+2. **Fund Your Deployer Address**:
+   Find your active gas address and fund it with ~3–5 SUI:
    ```bash
-   sui client balance
+   sui client active-address
    ```
-3. **Compile contracts**:
-   Navigate to the `/move` directory and build the move package to ensure zero compiler warnings:
+3. **Compile & Test Bytecode**:
+   Navigate to the smart contract folder, compile the package, and run unit tests:
    ```bash
    cd move
    sui move build
+   sui move test
    ```
-4. **Deploy Contract Suite**:
-   Publish the Move package on-chain:
+4. **Publish Contracts**:
+   Deploy the bytecode on-chain:
    ```bash
-   sui client publish --gas-budget 200000000
+   sui client publish --gas-budget 150000000
    ```
-5. **Note Deployment IDs**:
-   Save the printed terminal values. You will need:
-   - **`Package ID`** (the contract code address).
-   - **`Post Shared Object ID`** (the shared post registry object).
+5. **Record On-chain Object IDs**:
+   Extract and record these essential object IDs from the command output:
+   * **`Package ID`**: Deployed bytecode address.
+   * **`PostRegistry ID`**: Shared object created in `init`.
+   * **`DMRegistry ID`**: Shared direct message access registry.
 
 ---
 
-## 3. Step 2: Provision & Deploy the Backend API Service
+## 📦 3. Step 2: Deploy Walrus Operator Publisher on Fly.io
 
-The Express server acts as the central API gateway and runs the off-chain indexer daemon in the background.
+Because Walrus Mainnet does not host public/free write endpoints, you must host your own authorized publisher daemon. To ensure sub-wallets do not get recreated and re-funded on every redeployment, the publisher must be deployed using a **Persistent Volume**.
 
-1. **Initialize Database Schema**:
-   Set up your PostgreSQL database in Supabase. Acquire the transaction-mode Database connection string.
-2. **Configure Environment Variables**:
-   In your hosting dashboard (e.g. Railway), create a new service pulling from your GitHub repository (directory: `/server`). Configure these environment variables:
-   
-   ```properties
-   # Server settings
-   PORT=8080
-   NODE_ENV=production
-   JWT_SECRET=super_secret_jwt_signature_key
+### A. Initialize the Publisher Project
+Create a new directory for the publisher configuration:
+```bash
+mkdir -p deploy/walrus-publisher
+cd deploy/walrus-publisher
+```
 
-   # Relational database (Supabase PostgreSQL)
-   DATABASE_URL="postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres?schema=public&pgbouncer=true"
+### B. Configure the Fly.io Application (`fly.toml`)
+Create a `fly.toml` file to run the official Walrus Publisher Docker image:
+```toml
+app = "blobcast-walrus-publisher"
+primary_region = "sin" # Choose the closest region to your server
 
-   # Redis Caching (Upstash)
-   REDIS_URL="rediss://default:[password]@active-upstash-redis-uri.upstash.io:6379"
+[build]
+  image = "ghcr.io/mystenlabs/walrus/publisher:latest"
 
-   # Tatum RPC Infrastructure
-   TATUM_API_KEY="your_tatum_api_key"
-   TATUM_SUI_TESTNET_RPC="https://sui-testnet.gateway.tatum.io"
-   TATUM_SUI_MAINNET_RPC="https://sui-mainnet.gateway.tatum.io"
+[env]
+  # Target Sui & Walrus Mainnet
+  SUI_NETWORK = "mainnet"
+  
+  # Bind address inside the container
+  BIND_ADDRESS = "0.0.0.0:31415"
 
-   # Sponsor Gas Wallet (for gasless onboarding)
-   SPONSOR_WALLET_KEY="your_sponsor_wallet_private_key"
-   ```
+[mounts]
+  source = "walrus_wallets_vol"
+  destination = "/wallets"
 
-3. **Deploy Schema & Run Indexer**:
-   Ensure your hosting service runs these startup scripts:
+[[services]]
+  http_checks = []
+  internal_port = 31415
+  processes = ["app"]
+  protocol = "tcp"
+  
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
+```
+
+### C. Create and Provision Resources
+1. **Create the Fly Application**:
    ```bash
-   cd server
-   npm install
-   # Push Prisma schema definitions into PostgreSQL
-   npx prisma db push
-   # Start the Express API and background indexer
-   npm run start
+   fly apps create blobcast-walrus-publisher
    ```
+2. **Provision the Persistent Volume**:
+   Create a 1GB persistent volume in your chosen region to save the sub-wallets keys permanently:
+   ```bash
+   fly volumes create walrus_wallets_vol --size 1 --region sin
+   ```
+3. **Mount and Inject the Main Wallet**:
+   The publisher CLI requires your private key to automatically create and fund the sub-wallets. Add your Sui Active Address Key (Bech32 `suiprivkey...`) as a secret:
+   ```bash
+   fly secrets set SUI_PRIVATE_KEY="suiprivkey1qrzj..."
+   ```
+
+### D. Deploy the Publisher
+Launch the publisher on Fly.io:
+```bash
+fly deploy --strategy rolling
+```
+Verify that the service is running, generating sub-wallets, and funding them on Mainnet. Record your live public app domain (e.g., `https://blobcast-walrus-publisher.fly.dev`).
 
 ---
 
-## 4. Step 3: Deploy Frontend Client (Next.js)
+## 🖥️ 4. Step 3: Deploy the Backend API Server on Fly.io
 
-The frontend Next.js App is deployed directly on Vercel.
+The backend Express API gateway processes routes, handles gas sponsorships, and coordinates the Sui Off-chain Indexer daemon.
 
-1. **Connect Repository to Vercel**:
-   Import your git repository and select `/client` as the root directory.
+### A. Configure Fly.io Launch (`server/fly.toml`)
+Navigate to `server/` and initialize your Fly configuration:
+```toml
+app = "blobcast-api-server"
+primary_region = "sin"
+
+[build]
+  # Express Docker build handles building ts assets
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+  SUI_NETWORK = "mainnet"
+  WALRUS_AGGREGATOR_URL = "https://aggregator.walrus-mainnet.walrus.space"
+  WALRUS_PUBLISHER_URL = "https://blobcast-walrus-publisher.fly.dev"
+
+[[services]]
+  internal_port = 8080
+  processes = ["app"]
+  protocol = "tcp"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+```
+
+### B. Configure Secrets on Fly.io
+Inject production credentials and keys securely using Fly Secrets:
+```bash
+fly secrets set \
+  DATABASE_URL="postgresql://postgres:[password]@aws-1.pooler.supabase.com:6543/postgres?schema=public&pgbouncer=true&connection_limit=25" \
+  REDIS_URL="redis://default:[password]@active-upstash-redis.upstash.io:6379" \
+  SPONSOR_PRIVATE_KEY="suiprivkey1qrtr..." \
+  WALRUS_PUBLISHER_JWT_SECRET="super_strong_custom_production_jwt_secret_key" \
+  TATUM_API_KEY="your-tatum-api-key"
+```
+
+### C. Deploy the API & Indexer
+Launch your containerized application:
+```bash
+fly deploy
+```
+Fly.io will automatically trigger the containerized compiler, run the database migrations (`npx prisma db push`), and bring the Express API online together with the off-chain checkpoint event indexer daemon. Save the live URL (e.g., `https://blobcast-api-server.fly.dev`).
+
+---
+
+## 🌐 5. Step 4: Deploy Next.js Client on Vercel
+
+The React frontend handles client-side wallet connections, threshold encryption, and rendering posts.
+
+1. **Import Project to Vercel**:
+   Connect your Github repository on Vercel. Choose the root folder `/client`.
 2. **Configure Client Environment Variables**:
-   Add these environment keys:
-   ```properties
-   # Production API Gateway (pointing to your Railway/Fly.io URL)
-   NEXT_PUBLIC_API_URL="https://blobcast-backend-production.up.railway.app"
+   Inject these variables into your Vercel project configuration dashboard:
+   
+   | Environment Key | Description | Production Value |
+   |:---|:---|:---|
+   | `NEXT_PUBLIC_API_URL` | Your live backend API server | `https://blobcast-api-server.fly.dev/api` |
+   | `NEXT_PUBLIC_SUI_NETWORK` | The targeted Sui network | `mainnet` |
+   | `NEXT_PUBLIC_BLOBCAST_PACKAGE_ID` | Your deployed contract Package ID | `0x391fc852ab7eb69bc3a6c328067b55f25a6411fa859ccfd4679aedfb9e1a909c` |
+   | `NEXT_PUBLIC_WALRUS_AGGREGATOR_URL` | Public Mainnet Walrus aggregator | `https://aggregator.walrus-mainnet.walrus.space` |
+   | `NEXT_PUBLIC_WALRUS_PUBLISHER_URL` | Your active local/proxied Fly publisher | `https://blobcast-walrus-publisher.fly.dev` |
 
-   # On-chain Move Package Configuration
-   NEXT_PUBLIC_SUI_PACKAGE_ID="0xYourDeployedPackageID"
-
-   # Tatum RPC API Key (Client-side Queries)
-   NEXT_PUBLIC_TATUM_API_KEY="your_tatum_api_key"
-   ```
-3. **Trigger Deploy**:
-   Vercel will compile, build, and deploy the application, returning a live production URL (e.g. `https://blobcast.vercel.app`).
+3. **Deploy & Build static assets**:
+   Vercel compiles the React components into statically optimized, high-performance HTML/JS assets and distributes them globally via Vercel Edge Networks.
 
 ---
 
-## 5. Developer Testing Checklist
+## 🔒 6. Post-deployment Production Checklist
 
 To verify that the entire BlobCast network is successfully online and unified:
-- [ ] **Wallet Connect**: Navigate to the homepage, click "Connect Wallet" using a browser wallet (e.g., Suiet, Sui Wallet), and ensure you connect and see your SUI balance.
-- [ ] **Sovereign Profile creation**: Click "Register" and fill out username/bio. Verify that a Sui signature request appears and that upon submission, your profile updates.
-- [ ] **Blob Posting**: Write a new social cast post, upload an image, sign the sponsored transaction block, and verify that the UI shows your post immediately.
-- [ ] **Indexer telemetries**: Open `/api/posts/notifications` in a new tab. Check if the indexer successfully catches and outputs live notifications (e.g. Creator tips, profile upserts).
-- [ ] **Tipping mechanism**: Navigate to another user's post, click "Tip Creator", choose an amount of SUI, sign the transaction block, and ensure the creator receives their coin transfer.
+- [ ] **Sui Gas Sponsorship**: Verify that the backend Sponsor Gas Wallet is funded with a minimum of **50 SUI** on Mainnet to prevent user registration/tip sponsorship failures.
+- [ ] **Storage Funding**: Verify that the Walrus Publisher's active sub-wallets hold sufficient SUI and WAL to pay storage fees. Use the `export-keys.js` script to monitor sub-wallet balances.
+- [ ] **Connection Timeouts**: Ensure all network fetch calls are configured with a **60-second** timeout (`AbortSignal.timeout(60000)`) to cope with high transaction validation queues.
+- [ ] **Content Moderation Protection**: Ensure that moderation flags (`visiblePostWhere` in prisma queries) are active on the production index database to protect users against spam casts.
+- [ ] **Autoshard Fast-Forward Verify**: On the first start, verify that the indexer successfully catches the Mainnet Sui block sequence tip without memory exhaustion.
