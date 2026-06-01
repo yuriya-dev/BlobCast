@@ -402,20 +402,30 @@ export default function ProfilePage() {
             let text = 'Immutable social post stored on Walrus.';
             let hashtags: string[] = [];
             let mediaUrl: string | undefined = undefined;
+            let media: any[] = [];
 
             if (p.walrusBlobId) {
               try {
                 const walrusContent = await walrus.getBlob(p.walrusBlobId);
                 if (walrusContent && typeof walrusContent === 'object') {
                   const contentObj = walrusContent as any;
+                  
                   if (contentObj.content?.text) {
                     text = contentObj.content.text;
+                  } else if (contentObj.text) {
+                    text = contentObj.text;
                   }
+                  
                   if (contentObj.content?.hashtags) {
                     hashtags = contentObj.content.hashtags;
+                  } else if (contentObj.hashtags) {
+                    hashtags = contentObj.hashtags;
                   }
-                  if (contentObj.media && contentObj.media.length > 0) {
-                    mediaUrl = contentObj.media[0].blob_id;
+                  
+                  const mediaList = contentObj.media || contentObj.content?.media || [];
+                  if (mediaList && mediaList.length > 0) {
+                    media = mediaList;
+                    mediaUrl = mediaList[0].blob_id || mediaList[0].blobUrl || mediaList[0].url;
                   }
                 }
               } catch (walrusErr) {
@@ -449,6 +459,7 @@ export default function ProfilePage() {
               hashtags,
               // Robust media resolution matching feed page layout
               mediaUrl: mediaUrl || (p.media && p.media.length > 0 ? p.media[0].walrusBlobId : undefined) || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+              media: media.length > 0 ? media : (p.media || []),
               likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
               commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
               repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
@@ -604,15 +615,31 @@ export default function ProfilePage() {
           let text = 'Immutable social post stored on Walrus.';
           let hashtags: string[] = [];
           let mediaUrl: string | undefined = undefined;
+          let media: any[] = [];
 
           if (p.walrusBlobId) {
             try {
               const walrusContent = await walrus.getBlob(p.walrusBlobId);
               if (walrusContent && typeof walrusContent === 'object') {
                 const contentObj = walrusContent as any;
-                if (contentObj.content?.text) text = contentObj.content.text;
-                if (contentObj.content?.hashtags) hashtags = contentObj.content.hashtags;
-                if (contentObj.media && contentObj.media.length > 0) mediaUrl = contentObj.media[0].blob_id;
+                
+                if (contentObj.content?.text) {
+                  text = contentObj.content.text;
+                } else if (contentObj.text) {
+                  text = contentObj.text;
+                }
+                
+                if (contentObj.content?.hashtags) {
+                  hashtags = contentObj.content.hashtags;
+                } else if (contentObj.hashtags) {
+                  hashtags = contentObj.hashtags;
+                }
+                
+                const mediaList = contentObj.media || contentObj.content?.media || [];
+                if (mediaList && mediaList.length > 0) {
+                  media = mediaList;
+                  mediaUrl = mediaList[0].blob_id || mediaList[0].blobUrl || mediaList[0].url;
+                }
               }
             } catch (err) {
               if (p.id === 'post-1') {
@@ -641,6 +668,7 @@ export default function ProfilePage() {
             text,
             hashtags,
             mediaUrl: mediaUrl || (p.media && p.media.length > 0 ? p.media[0].walrusBlobId : undefined) || (p.contentType === 1 ? 'walrus://blob-post-2-image' : undefined),
+            media: media.length > 0 ? media : (p.media || []),
             likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
             commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
             repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
