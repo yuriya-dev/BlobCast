@@ -1,0 +1,27 @@
+app = "blobcast-api-server"
+primary_region = "sin"
+
+[build]
+  # Express Docker build handles building ts assets
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+  SUI_NETWORK = "mainnet"
+  WALRUS_AGGREGATOR_URL = "https://aggregator.walrus-mainnet.walrus.space"
+  WALRUS_PUBLISHER_URL = "https://blobcast-walrus-publisher.fly.dev"
+
+[[services]]
+  internal_port = 8080
+  processes = ["app"]
+  protocol = "tcp"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443

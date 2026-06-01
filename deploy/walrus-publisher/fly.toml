@@ -1,0 +1,32 @@
+app = "blobcast-walrus-publisher"
+primary_region = "sin" # Choose the closest region to your server
+
+[build]
+  image = "ghcr.io/mystenlabs/walrus/publisher:latest"
+
+[env]
+  # Target Sui & Walrus Mainnet
+  SUI_NETWORK = "mainnet"
+  
+  # Bind address inside the container
+  BIND_ADDRESS = "0.0.0.0:31415"
+
+[mounts]
+  source = "walrus_wallets_vol"
+  destination = "/wallets"
+
+[[services]]
+  http_checks = []
+  internal_port = 31415
+  processes = ["app"]
+  protocol = "tcp"
+  
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
