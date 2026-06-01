@@ -245,12 +245,26 @@ BlobCast/
 │       └── events.move           # On-chain event definitions
 │
 └── 📁 docs/                      # Technical documentation
-    ├── architecture.md           # System architecture overview
-    ├── smartcontract.md          # Smart contract design
-    ├── design.md                 # UI/UX design specs
-    ├── full_architecture.md      # Full architecture deep-dive
-    └── quality-check.md          # Quality checklist
+    ├── architecture_diagram.md   # System architecture & mermaid diagrams
+    ├── database_schema.md        # PostgreSQL schema & Redis cache design
+    ├── smart_contracts.md        # Sui Move contract modules API reference
+    ├── api_documentation.md      # Express gateway endpoints & payloads
+    ├── deployment_guide.md       # End-to-end production deployment guide
+    └── docs_old/                 # Deprecated legacy documentation
 ```
+
+---
+
+## 📚 Technical Documentation
+
+BlobCast is accompanied by standard-setting production documentation compiled by Web3 Solutions Architects. Read the specialized manuals to understand specific layers in detail:
+
+* 🗺️ **[System Architecture Diagram](docs/architecture_diagram.md)** — Architectural diagrams, lifecycle sequence workflows (Post Creation, E2E Encrypted DMs), and failover fail-soft high-availability guides.
+* 🗄️ **[Database Schema Design](docs/database_schema.md)** — Complete Entity-Relationship (ER) model diagram, Prisma PostgreSQL database tables, and key-value Redis caching schemas.
+* 📜 **[Sui Move Smart Contracts](docs/smart_contracts.md)** — Full specification of the smart contracts residing in `/move`, including module breakdowns, structs, core entry function APIs, and event telemetries.
+* 🔌 **[Backend Gateway API](docs/api_documentation.md)** — Comprehensive REST API documentation, passwordless cryptographic challenge-response authentication login guides, request-response payload specs, and simulator gateways.
+* 🚀 **[End-to-End Deployment Guide](docs/deployment_guide.md)** — Step-by-step production runbooks to publish Move contracts to Sui Testnet/Mainnet, deploy the Express indexer service to Railway/Fly.io, and launch the Next.js client on Vercel.
+
 
 ---
 
