@@ -23,12 +23,14 @@ import {
   AlertCircle,
   WifiOff,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useWalrusImage } from '@/hooks/useWalrusImage';
 import { useDMWebSocket } from '@/hooks/useDMWebSocket';
+import { walrus } from '@/lib/walrus';
 import { api, ApiConversation, ApiDirectMessage } from '@/lib/api';
 import { 
   sealEncryptMessage, 
@@ -132,6 +134,131 @@ export default function MessagesPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Media attachments and Emojis
+  const [attachment, setAttachment] = useState<{ name: string; type: 'image' | 'video'; preview: string } | null>(null);
+  const [attachmentBlobId, setAttachmentBlobId] = useState<string | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileType = file.type.startsWith('video/') ? 'video' : 'image';
+    
+    setAttachment({
+      name: file.name,
+      type: fileType,
+      preview: URL.createObjectURL(file),
+    });
+    setIsUploadingAttachment(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const blobInfo = await walrus.uploadBlob(base64data);
+        setAttachmentBlobId(blobInfo.blobId);
+        setIsUploadingAttachment(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Failed uploading attachment to Walrus:", err);
+      alert("Failed uploading attachment to Walrus.");
+      setAttachment(null);
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleRemoveAttachment = () => {
+    if (attachment?.preview) {
+      URL.revokeObjectURL(attachment.preview);
+    }
+    setAttachment(null);
+    setAttachmentBlobId(null);
+    setIsUploadingAttachment(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Helper to parse message text and render media dynamically
+  const renderMessageContent = (msgText: string) => {
+    const mediaRegex = /\[media:(walrus:\/\/[a-zA-Z0-9_\-\.]+)/g;
+    const matches = [...msgText.matchAll(mediaRegex)];
+    
+    if (matches.length > 0) {
+      const cleanText = msgText.replace(/\[media:walrus:\/\/[a-zA-Z0-9_\-\.]+\]/g, '').trim();
+      
+      return (
+        <div className="flex flex-col gap-2.5">
+          {cleanText && <div className="break-words font-sans">{cleanText}</div>}
+          <div className="flex flex-col gap-2 max-w-[280px] sm:max-w-sm rounded-xl overflow-hidden border border-sui-cyan/15 bg-walrus-blue/30 mt-1">
+            {matches.map((match, idx) => {
+              const mediaBlobId = match[1];
+              const resolvedUrl = walrus.resolveImageUrl(mediaBlobId);
+              const isVideo = mediaBlobId.includes('video') || mediaBlobId.endsWith('.mp4') || resolvedUrl.includes('video');
+              
+              return (
+                <div key={idx} className="relative aspect-video w-full flex items-center justify-center bg-black/40 overflow-hidden">
+                  {isVideo ? (
+                    <video 
+                      src={resolvedUrl} 
+                      controls 
+                      className="w-full h-full object-contain max-h-48"
+                      playsInline
+                    />
+                  ) : (
+                    <img 
+                      src={resolvedUrl} 
+                      alt="Decentralized Attachment" 
+                      className="w-full h-full object-cover max-h-48 cursor-zoom-in"
+                      onClick={() => window.open(resolvedUrl, '_blank')}
+                      loading="lazy"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    
+    if (msgText.startsWith('walrus://') || msgText.startsWith('walrus_sim_')) {
+      const resolvedUrl = walrus.resolveImageUrl(msgText);
+      const isVideo = msgText.includes('video') || msgText.endsWith('.mp4') || resolvedUrl.includes('video');
+      return (
+        <div className="max-w-[280px] sm:max-w-sm rounded-xl overflow-hidden border border-sui-cyan/15 bg-walrus-blue/30">
+          <div className="relative aspect-video w-full flex items-center justify-center bg-black/40 overflow-hidden">
+            {isVideo ? (
+              <video 
+                src={resolvedUrl} 
+                controls 
+                className="w-full h-full object-contain max-h-48"
+                playsInline
+              />
+            ) : (
+              <img 
+                src={resolvedUrl} 
+                alt="Decentralized Attachment" 
+                className="w-full h-full object-cover max-h-48 cursor-zoom-in"
+                onClick={() => window.open(resolvedUrl, '_blank')}
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    return <div className="break-words font-sans">{msgText}</div>;
+  };
 
   const activeConv = conversations.find(c => c.id === activeConvId);
 
@@ -255,10 +382,17 @@ export default function MessagesPage() {
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || !activeConvId || isSending || !authUser) return;
+    if (!text && !attachmentBlobId) return;
+    if (!activeConvId || isSending || !authUser) return;
 
     setInputText('');
+    const mediaToUpload = attachmentBlobId;
+    handleRemoveAttachment();
     setIsSending(true);
+
+    const finalMsgText = mediaToUpload
+      ? (text ? `${text}\n\n[media:${mediaToUpload}]` : `[media:${mediaToUpload}]`)
+      : text;
 
     // Optimistic update
     const optimisticId = `optimistic_${Date.now()}`;
@@ -266,7 +400,7 @@ export default function MessagesPage() {
       id: optimisticId,
       conversationId: activeConvId,
       senderId: authUser.id,
-      text,
+      text: finalMsgText,
       walrusBlobId: null,
       isRead: false,
       createdAt: new Date().toISOString(),
@@ -854,12 +988,12 @@ export default function MessagesPage() {
                           )}
 
                           <div className={`flex flex-col gap-1 max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                            <div className={`px-4 py-2.5 rounded-2xl text-sm font-sans leading-relaxed ${
+                            <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                               isMe
                                 ? `bg-gradient-to-br from-sui-cyan/25 to-tatum-purple/20 border text-white rounded-br-md ${isOptimistic ? 'border-sui-cyan/10 opacity-70' : 'border-sui-cyan/20'}`
                                 : 'bg-walrus-blue/60 border border-sui-cyan/8 text-gray-200 rounded-bl-md'
                             }`}>
-                              {msg.text}
+                              {renderMessageContent(msg.text)}
                             </div>
                             <div className={`flex items-center gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                               <span className="text-[9px] font-mono text-gray-600">{formatMessageTime(msg.createdAt)}</span>
@@ -886,12 +1020,59 @@ export default function MessagesPage() {
 
               {/* Input area */}
               <div className="flex-shrink-0 border-t border-sui-cyan/5 p-4">
+                {/* Hidden File Input for Attachments */}
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange}
+                  accept="image/*,video/*"
+                  className="hidden" 
+                />
+
+                {/* Attachment Preview Bar */}
+                {attachment && (
+                  <div className="mb-3 flex items-center justify-between bg-walrus-blue/30 border border-sui-cyan/15 rounded-xl p-2.5 relative">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-lg bg-black/40 overflow-hidden flex items-center justify-center shrink-0 border border-sui-cyan/10">
+                        {attachment.type === 'video' ? (
+                          <video src={attachment.preview} className="h-full w-full object-cover" />
+                        ) : (
+                          <img src={attachment.preview} className="h-full w-full object-cover" />
+                        )}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="text-[11px] text-white font-mono truncate max-w-xs">{attachment.name}</p>
+                        <span className="text-[9px] font-mono text-sui-cyan block mt-0.5">
+                          {isUploadingAttachment ? 'Uploading decentralized asset...' : 'Staged for decentralized publish'}
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={handleRemoveAttachment}
+                      className="h-6 w-6 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:bg-rose-500/40 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                      title="Remove attachment"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-end gap-3 bg-walrus-blue/40 border border-sui-cyan/10 rounded-2xl px-4 py-3 focus-within:border-sui-cyan/30 transition-colors">
                   <div className="flex items-center gap-2 flex-shrink-0 pb-0.5">
-                    <button className="text-gray-500 hover:text-sui-cyan transition-colors" title="Attach image">
+                    <button 
+                      onClick={handleAttachClick}
+                      disabled={isSending || isUploadingAttachment}
+                      className="text-gray-500 hover:text-sui-cyan transition-colors disabled:opacity-30 disabled:cursor-not-allowed" 
+                      title="Attach image"
+                    >
                       <Image className="h-4 w-4" />
                     </button>
-                    <button className="text-gray-500 hover:text-sui-cyan transition-colors" title="Attach file">
+                    <button 
+                      onClick={handleAttachClick}
+                      disabled={isSending || isUploadingAttachment}
+                      className="text-gray-500 hover:text-sui-cyan transition-colors disabled:opacity-30 disabled:cursor-not-allowed" 
+                      title="Attach video"
+                    >
                       <Paperclip className="h-4 w-4" />
                     </button>
                   </div>
@@ -901,20 +1082,72 @@ export default function MessagesPage() {
                     value={inputText}
                     onChange={e => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={`Message @${activeConv.otherUser.username}...`}
+                    placeholder={attachment ? "Add comment to attachment..." : `Message @${activeConv.otherUser.username}...`}
                     rows={1}
                     disabled={isSending}
                     className="flex-1 bg-transparent text-sm font-sans text-gray-200 placeholder-gray-600 resize-none focus:outline-none leading-relaxed max-h-32 overflow-y-auto disabled:opacity-50"
                     style={{ fieldSizing: 'content' } as any}
                   />
 
-                  <div className="flex items-center gap-2 flex-shrink-0 pb-0.5">
-                    <button className="text-gray-500 hover:text-sui-cyan transition-colors" title="Emoji">
+                  <div className="flex items-center gap-2 flex-shrink-0 pb-0.5 relative">
+                    <button 
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className={`text-gray-500 hover:text-sui-cyan transition-colors ${showEmojiPicker ? 'text-sui-cyan' : ''}`} 
+                      title="Emoji"
+                    >
                       <Smile className="h-4 w-4" />
                     </button>
+
+                    {/* Glassmorphic Emoji Picker Popover */}
+                    {showEmojiPicker && (
+                      <div className="absolute right-0 bottom-10 z-50 w-64 glass-panel border border-sui-cyan/20 rounded-cyber-md p-3.5 shadow-2xl flex flex-col gap-2.5 bg-deep-space/95 backdrop-filter backdrop-blur-md">
+                        <div className="flex items-center justify-between border-b border-sui-cyan/10 pb-1.5">
+                          <span className="text-[10px] font-mono text-sui-cyan uppercase tracking-wider font-bold">Select Emoji</span>
+                          <button 
+                            onClick={() => setShowEmojiPicker(false)}
+                            className="text-[9px] font-mono text-gray-500 hover:text-white uppercase transition-colors"
+                          >
+                            [Close]
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto scrollbar-cyber p-1">
+                          {['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃',
+                            '😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜',
+                            '🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','😏','😒','😞','😔',
+                            '😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤',
+                            '😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓',
+                            '🤗','🤔','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🙏',
+                            '🔥','💯','🚀','💎','⛓️','🪙','🔐','👀','✨','🎉','🎈','💖'
+                          ].map(emoji => (
+                            <button
+                              key={emoji}
+                              onClick={() => {
+                                const start = inputRef.current?.selectionStart || 0;
+                                const end = inputRef.current?.selectionEnd || 0;
+                                const val = inputText;
+                                const nextVal = val.substring(0, start) + emoji + val.substring(end);
+                                setInputText(nextVal);
+                                setShowEmojiPicker(false);
+                                
+                                setTimeout(() => {
+                                  if (inputRef.current) {
+                                    inputRef.current.focus();
+                                    inputRef.current.selectionStart = inputRef.current.selectionEnd = start + emoji.length;
+                                  }
+                                }, 50);
+                              }}
+                              className="text-lg hover:scale-125 transition-transform p-1 flex items-center justify-center hover:bg-sui-cyan/10 rounded-md cursor-pointer"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={handleSend}
-                      disabled={!inputText.trim() || isSending}
+                      disabled={(!inputText.trim() && !attachmentBlobId) || isSending || isUploadingAttachment}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-sui-cyan/20 border border-sui-cyan/30 text-sui-cyan hover:bg-sui-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       title="Send (Enter)"
                     >
