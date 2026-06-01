@@ -85,7 +85,15 @@ export const publishWalrusBlob = asyncHandler(async (req: Request, res: Response
     }
 
     const serialized = typeof content === 'string' ? content : JSON.stringify(content);
-    const WALRUS_PUBLISHER = process.env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
+    let WALRUS_PUBLISHER = process.env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
+    
+    // Auto-detect production/cloud environment and resolve localhost to the real Fly.io publisher daemon
+    const isCloudEnv = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production' || process.env.FLY_APP_NAME !== undefined;
+    if (isCloudEnv && (WALRUS_PUBLISHER.includes('127.0.0.1') || WALRUS_PUBLISHER.includes('localhost'))) {
+        console.log("ℹ️ [Server WALRUS_PUBLISHER Resolution] Correcting localhost URL to production Fly.io publisher.");
+        WALRUS_PUBLISHER = 'https://blobcast-walrus-publisher.fly.dev';
+    }
+
     const parsedEpochs = typeof epochs === 'number' ? epochs : parseInt(epochs, 10);
     const effectiveEpochs = Number.isFinite(parsedEpochs) ? parsedEpochs : 26;
     const sizeBytes = Buffer.byteLength(serialized);
@@ -113,17 +121,34 @@ export const publishWalrusBlob = asyncHandler(async (req: Request, res: Response
         ? `&send_object_to=${encodeURIComponent(sendObjectTo)}`
         : '';
 
-    const response = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=${effectiveEpochs}${sendObjectToParam}`, {
-        method: 'PUT',
-        body: serialized,
-        headers,
-        signal: AbortSignal.timeout(120000)
-    });
+    let response: globalThis.Response;
+    try {
+        console.log(`📡 Server Proxy: Publishing blob to ${WALRUS_PUBLISHER}...`);
+        response = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=${effectiveEpochs}${sendObjectToParam}`, {
+            method: 'PUT',
+            body: serialized,
+            headers,
+            signal: AbortSignal.timeout(120000)
+        });
+    } catch (fetchErr: any) {
+        console.warn(`⚠️ WALRUS_PUBLISHER fetch failed for ${WALRUS_PUBLISHER}. Trying fallback to Fly.io publisher...`, fetchErr);
+        if (WALRUS_PUBLISHER !== 'https://blobcast-walrus-publisher.fly.dev') {
+            WALRUS_PUBLISHER = 'https://blobcast-walrus-publisher.fly.dev';
+            response = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=${effectiveEpochs}${sendObjectToParam}`, {
+                method: 'PUT',
+                body: serialized,
+                headers,
+                signal: AbortSignal.timeout(120000)
+            });
+        } else {
+            throw fetchErr;
+        }
+    }
 
     const text = await response.text();
     if (!response.ok) {
         const statusCode = response.status >= 400 && response.status < 600 ? response.status : 502;
-        throw new AppError(`Walrus publisher rejected the request (status ${response.status}).`, statusCode);
+        throw new AppError(`Walrus publisher rejected the request (status ${response.status}). Response: ${text}`, statusCode);
     }
 
     try {
@@ -290,9 +315,15 @@ export const serveSimulatedImage = asyncHandler(async (req: Request, res: Respon
  * GET /api/walrus/status
  */
 export const getWalrusStatus = asyncHandler(async (req: Request, res: Response) => {
-    const WALRUS_PUBLISHER = process.env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
+    let WALRUS_PUBLISHER = process.env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
     const WALRUS_AGGREGATOR = process.env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
     
+    // Auto-detect production/cloud environment and resolve localhost to the real Fly.io publisher daemon
+    const isCloudEnv = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production' || process.env.FLY_APP_NAME !== undefined;
+    if (isCloudEnv && (WALRUS_PUBLISHER.includes('127.0.0.1') || WALRUS_PUBLISHER.includes('localhost'))) {
+        WALRUS_PUBLISHER = 'https://blobcast-walrus-publisher.fly.dev';
+    }
+
     let aggregatorOnline = false;
     let publisherOnline = false;
     let latencyMs = 0;
@@ -322,7 +353,21 @@ export const getWalrusStatus = asyncHandler(async (req: Request, res: Response) 
             publisherOnline = true;
         }
     } catch {
-        // Publisher offline
+        // Retry with Fly.io fallback
+        if (WALRUS_PUBLISHER !== 'https://blobcast-walrus-publisher.fly.dev') {
+            try {
+                const response = await fetch(`https://blobcast-walrus-publisher.fly.dev/v1/blobs`, {
+                    method: 'PUT',
+                    body: 'healthcheck',
+                    signal: AbortSignal.timeout(2000)
+                });
+                if (response.status < 500) {
+                    publisherOnline = true;
+                }
+            } catch {
+                // both failed
+            }
+        }
     }
     
     // 3. Dynamic Epoch Check from SUI network via Tatum
