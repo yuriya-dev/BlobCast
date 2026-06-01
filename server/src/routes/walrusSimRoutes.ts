@@ -2,18 +2,22 @@ import { Router } from 'express';
 import { 
     uploadSimulatedBlob, 
     getSimulatedBlob, 
-    serveSimulatedImage 
+    serveSimulatedImage,
+    getWalrusStatus
 } from '../controllers/walrusSimController';
 
 const router = Router();
 
+// GET /api/walrus/status - Fetch real-time status of Walrus Storage Network
+router.get('/status', getWalrusStatus);
+
 // POST /api/walrus/blobs - Upload/sync a simulated blob to database
-router.post('/', uploadSimulatedBlob);
+router.post('/blobs', uploadSimulatedBlob);
 
 // GET /api/walrus/blobs/:blobId - Retrieve raw content of a simulated blob
-router.get('/:blobId', getSimulatedBlob);
+router.get('/blobs/:blobId', getSimulatedBlob);
 
 // GET /api/walrus/blobs/:blobId/image - Serve base64 simulated image as binary
-router.get('/:blobId/image', serveSimulatedImage);
+router.get('/blobs/:blobId/image', serveSimulatedImage);
 
 export default router;

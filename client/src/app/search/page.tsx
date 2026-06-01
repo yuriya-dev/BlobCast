@@ -78,9 +78,9 @@ const assetsMap: Record<string, AssetData> = {
       'ALL': [0.35, 0.55, 0.85, 1.20, 1.65, 1.32, 1.48],
     }
   },
-  'SNEK': {
-    name: 'Snek',
-    symbol: 'SNEK',
+  'WAL': {
+    name: 'Walrus',
+    symbol: 'WAL',
     meta: 'SUI • Meme • Community Coin',
     marketCap: '$12.8M MC',
     basePrice: 0.000142,
@@ -128,6 +128,51 @@ function SearchContent() {
   const [posts, setPosts] = useState<any[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [liveAsset, setLiveAsset] = useState<any | null>(null);
+  const [isChartLoading, setIsChartLoading] = useState(false);
+  const [isTokenNotFound, setIsTokenNotFound] = useState(false);
+
+  // Determine if searching for a ticker
+  const isTickerSearch = rawQuery.startsWith('$');
+  const cleanTicker = isTickerSearch ? rawQuery.replace('$', '').toUpperCase() : '';
+
+  // Dynamic live oracle chart data fetching
+  useEffect(() => {
+    if (!isTickerSearch || !cleanTicker) {
+      setLiveAsset(null);
+      setIsTokenNotFound(false);
+      return;
+    }
+
+    let active = true;
+    async function loadLiveChart() {
+      setIsChartLoading(true);
+      setIsTokenNotFound(false);
+      try {
+        const response = await api.fetchTickerChart(cleanTicker, timeframe);
+        if (active && response) {
+          if (response.tokenNotFound) {
+            setIsTokenNotFound(true);
+            setLiveAsset(null);
+          } else if (response.status === 'success' && response.data) {
+            setLiveAsset(response.data);
+            setIsTokenNotFound(false);
+          }
+        }
+      } catch (err) {
+        console.warn(`⚠️ Failed to fetch dynamic chart for $${cleanTicker} from GeckoTerminal:`, err);
+      } finally {
+        if (active) {
+          setIsChartLoading(false);
+        }
+      }
+    }
+
+    loadLiveChart();
+    return () => {
+      active = false;
+    };
+  }, [cleanTicker, timeframe, isTickerSearch]);
 
   // Re-sync query state when query parameters change
   useEffect(() => {
@@ -251,10 +296,6 @@ function SearchContent() {
     router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
   };
 
-  // Determine if searching for a ticker
-  const isTickerSearch = rawQuery.startsWith('$');
-  const cleanTicker = isTickerSearch ? rawQuery.replace('$', '').toUpperCase() : '';
-
   // Get active asset details or mock custom one
   const activeAsset: AssetData = assetsMap[cleanTicker] || {
     name: cleanTicker,
@@ -275,13 +316,17 @@ function SearchContent() {
     }
   };
 
-  // Dynamic price calculation based on timeframe filter
-  const timeframeValues = activeAsset.chartData[timeframe] || [0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42];
-  const currentPrice = timeframeValues[timeframeValues.length - 1] || activeAsset.basePrice;
-  const initialPrice = timeframeValues[0] || activeAsset.basePrice;
-  const rawPctChange = ((currentPrice - initialPrice) / initialPrice) * 100;
-  const computedPctChange = rawPctChange.toFixed(1);
-  const isPricePositive = rawPctChange >= 0;
+  // Dynamic price calculation based on timeframe filter and dynamic live data
+  const timeframeValues = liveAsset ? liveAsset.timeframeValues : (activeAsset.chartData[timeframe] || [0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42]);
+  const currentPrice = liveAsset ? liveAsset.currentPrice : (timeframeValues[timeframeValues.length - 1] || activeAsset.basePrice);
+  const computedPctChange = liveAsset ? liveAsset.changePct.toFixed(1) : (((currentPrice - (timeframeValues[0] || activeAsset.basePrice)) / (timeframeValues[0] || activeAsset.basePrice)) * 100).toFixed(1);
+  const isPricePositive = liveAsset ? liveAsset.isPositive : (parseFloat(computedPctChange) >= 0);
+
+  const assetName = liveAsset ? liveAsset.name : activeAsset.name;
+  const assetMeta = liveAsset ? liveAsset.meta : activeAsset.meta;
+  const assetMarketCap = liveAsset ? liveAsset.marketCap : activeAsset.marketCap;
+  const assetAvatarBg = liveAsset ? liveAsset.avatarBg : activeAsset.avatarBg;
+  const assetAvatarText = liveAsset ? liveAsset.avatarText : activeAsset.avatarText;
 
   // Filter posts based on active tab
   const getFilteredPosts = () => {
@@ -335,7 +380,7 @@ function SearchContent() {
     const maxVal = Math.max(...timeframeValues);
     const range = maxVal - minVal || 1;
 
-    const points = timeframeValues.map((val, idx) => {
+    const points = timeframeValues.map((val: number, idx: number) => {
       const x = (idx / (timeframeValues.length - 1)) * width;
       // Invert Y axis for SVG (0,0 is top-left)
       const y = height - ((val - minVal) / range) * (height - 20) - 10;
@@ -416,133 +461,157 @@ function SearchContent() {
 
         {/* Dynamic Ticker/Asset Section (Only rendered if search query starts with '$') */}
         {isTickerSearch && (
-          <div className="mx-6 mt-6 p-6 glass-panel rounded-cyber-xl border border-sui-cyan/10 relative overflow-hidden flex flex-col gap-5 shadow-cyber-glow flex-shrink-0">
-            
-            {/* Cyberpunk ambient chart glow */}
-            <div className="absolute -top-10 -right-10 w-36 h-36 bg-sui-cyan/10 rounded-full blur-2xl pointer-events-none" />
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          isTokenNotFound ? (
+            <div className="mx-6 mt-6 p-8 glass-panel rounded-cyber-xl border border-rose-500/20 text-center font-mono text-xs text-rose-400 relative overflow-hidden flex flex-col items-center justify-center gap-4 shadow-cyber-glow/10 flex-shrink-0">
+              <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-500/5 rounded-full blur-xl pointer-events-none" />
+              <div className="h-12 w-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 text-lg font-bold">
+                ⚠️
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-sm text-soft-white uppercase tracking-wider">No chart for this token yet</span>
+                <span className="text-[10px] text-gray-500">Query: &quot;${cleanTicker}&quot;</span>
+              </div>
+              <p className="text-gray-400 font-sans text-xs leading-relaxed max-w-sm">
+                GeckoTerminal oracle indexer did not locate any active liquidity pools for this asset ticker across all scanned blockchain networks.
+              </p>
+            </div>
+          ) : (
+            <div className="mx-6 mt-6 p-6 glass-panel rounded-cyber-xl border border-sui-cyan/10 relative overflow-hidden flex flex-col gap-5 shadow-cyber-glow flex-shrink-0">
               
-              {/* User-Defined 3. Header Informasi Aset */}
-              <div className="flex items-center gap-3.5">
-                {/* Kiri: Ikon avatar/logo lingkaran */}
-                <div className={`h-11 w-11 rounded-full bg-gradient-to-tr ${activeAsset.avatarBg} p-0.5 flex-shrink-0 flex items-center justify-center font-mono font-bold text-xs text-white shadow-md`}>
-                  <div className="h-full w-full rounded-full bg-walrus-blue/80 flex items-center justify-center font-black">
-                    {activeAsset.avatarText}
+              {/* Cyberpunk ambient chart glow */}
+              <div className="absolute -top-10 -right-10 w-36 h-36 bg-sui-cyan/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                
+                {/* User-Defined 3. Header Informasi Aset */}
+                <div className="flex items-center gap-3.5">
+                  {/* Kiri: Ikon avatar/logo lingkaran */}
+                  <div className={`h-11 w-11 rounded-full bg-gradient-to-tr ${assetAvatarBg} p-0.5 flex-shrink-0 flex items-center justify-center font-mono font-bold text-xs text-white shadow-md`}>
+                    <div className="h-full w-full rounded-full bg-walrus-blue/80 flex items-center justify-center font-black">
+                      {assetAvatarText}
+                    </div>
+                  </div>
+                  {/* Tengah: Teks kolom Judul dan Sub-informasi */}
+                  <div className="flex flex-col">
+                    <h3 className="font-bold text-base text-white leading-none font-mono tracking-wide">
+                      {assetName}
+                    </h3>
+                    <span className="text-[10px] font-mono text-gray-500 mt-1 uppercase tracking-wider">
+                      {assetMeta} • {assetMarketCap}
+                    </span>
                   </div>
                 </div>
-                {/* Tengah: Teks kolom Judul dan Sub-informasi */}
-                <div className="flex flex-col">
-                  <h3 className="font-bold text-base text-white leading-none font-mono tracking-wide">
-                    {activeAsset.name}
-                  </h3>
-                  <span className="text-[10px] font-mono text-gray-500 mt-1 uppercase tracking-wider">
-                    {activeAsset.meta} • {activeAsset.marketCap}
+
+                {/* User-Defined 4. Ringkasan Harga */}
+                <div className="flex flex-col sm:items-end">
+                  {/* Atas: Teks tebal & sangat besar */}
+                  <span className="text-2xl font-black text-white font-mono leading-none tracking-tight">
+                    ${currentPrice >= 0.01 ? currentPrice.toFixed(2) : currentPrice.toFixed(6)}
                   </span>
+                  {/* Bawah: Perubahan persentase & ikon panah kecil */}
+                  <span className={`text-[10px] font-mono font-bold mt-1 flex items-center gap-0.5 ${
+                    isPricePositive ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {isPricePositive ? (
+                      <TrendingUp className="h-3 w-3 animate-bounce" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    <span>
+                      {isPricePositive ? '+' : ''}{computedPctChange}% ({timeframe})
+                    </span>
+                  </span>
+                </div>
+
+              </div>
+
+              {/* User-Defined 5. Area Grafik (Chart) */}
+              <div className="h-44 w-full relative bg-walrus-blue/30 rounded-cyber-lg border border-sui-cyan/5 overflow-hidden p-2 flex items-center justify-center">
+                {isChartLoading && (
+                  <div className="absolute inset-0 bg-deep-space/40 backdrop-blur-[1px] flex items-center justify-center z-20 font-mono text-[9px] text-sui-cyan/85 tracking-widest uppercase animate-pulse">
+                    <div className="flex items-center gap-2 border border-sui-cyan/20 bg-walrus-blue/90 px-3 py-1.5 rounded-cyber-sm">
+                      <div className="h-2 w-2 rounded-full bg-sui-cyan animate-ping" />
+                      Syncing GeckoTerminal oracle...
+                    </div>
+                  </div>
+                )}
+                <svg 
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
+                  className="w-full h-full overflow-visible z-10"
+                  preserveAspectRatio="none"
+                >
+                  <defs>
+                    <linearGradient id="chart-area-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#00F2FE" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#00F2FE" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Garis referensi putus-putus (dashed line) di bagian tengah */}
+                  <line 
+                    x1="0" 
+                    y1={chartHeight / 2} 
+                    x2={chartWidth} 
+                    y2={chartHeight / 2} 
+                    stroke="rgba(111, 231, 255, 0.2)" 
+                    strokeDasharray="4 4" 
+                    strokeWidth="1.5"
+                  />
+
+                  {/* Area under line */}
+                  {chartPaths && (
+                    <path 
+                      d={chartPaths.areaPath} 
+                      fill="url(#chart-area-grad)" 
+                    />
+                  )}
+
+                  {/* Main chart line */}
+                  {chartPaths && (
+                    <path 
+                      d={chartPaths.linePath} 
+                      fill="none" 
+                      stroke="#00F2FE" 
+                      strokeWidth="2.5" 
+                      strokeLinecap="round"
+                      className="drop-shadow-[0_2px_8px_rgba(111,231,255,0.4)]"
+                    />
+                  )}
+                </svg>
+
+                <span className="absolute top-2.5 right-3 text-[8px] font-mono text-gray-600 uppercase tracking-widest pointer-events-none">
+                  Live Shard telemetry indexer
+                </span>
+              </div>
+
+              {/* User-Defined 6. Filter Rentang Waktu (Bottom Bar) */}
+              <div className="flex border-t border-sui-cyan/5 pt-3 justify-between items-center z-10">
+                <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider hidden sm:block">
+                  Select Range
+                </span>
+                
+                <div className="flex gap-2">
+                  {(['1D', '1W', '1M', '1Y', 'ALL'] as const).map(opt => {
+                    const isActive = timeframe === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => setTimeframe(opt)}
+                        className={`px-3.5 py-1.5 rounded-full font-mono text-[10px] font-bold tracking-wider transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space shadow-cyber-glow'
+                            : 'bg-walrus-blue/40 border border-sui-cyan/10 text-gray-500 hover:text-white hover:border-sui-cyan/30'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* User-Defined 4. Ringkasan Harga */}
-              <div className="flex flex-col sm:items-end">
-                {/* Atas: Teks tebal & sangat besar */}
-                <span className="text-2xl font-black text-white font-mono leading-none tracking-tight">
-                  ${currentPrice >= 0.01 ? currentPrice.toFixed(2) : currentPrice.toFixed(6)}
-                </span>
-                {/* Bawah: Perubahan persentase & ikon panah kecil */}
-                <span className={`text-[10px] font-mono font-bold mt-1 flex items-center gap-0.5 ${
-                  isPricePositive ? 'text-emerald-400' : 'text-rose-400'
-                }`}>
-                  {isPricePositive ? (
-                    <TrendingUp className="h-3 w-3 animate-bounce" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3" />
-                  )}
-                  <span>
-                    {isPricePositive ? '+' : ''}{computedPctChange}% ({timeframe})
-                  </span>
-                </span>
-              </div>
-
             </div>
-
-            {/* User-Defined 5. Area Grafik (Chart) */}
-            <div className="h-44 w-full relative bg-walrus-blue/30 rounded-cyber-lg border border-sui-cyan/5 overflow-hidden p-2 flex items-center justify-center">
-              <svg 
-                viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
-                className="w-full h-full overflow-visible z-10"
-                preserveAspectRatio="none"
-              >
-                <defs>
-                  <linearGradient id="chart-area-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00F2FE" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="#00F2FE" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                {/* Garis referensi putus-putus (dashed line) di bagian tengah */}
-                <line 
-                  x1="0" 
-                  y1={chartHeight / 2} 
-                  x2={chartWidth} 
-                  y2={chartHeight / 2} 
-                  stroke="rgba(111, 231, 255, 0.2)" 
-                  strokeDasharray="4 4" 
-                  strokeWidth="1.5"
-                />
-
-                {/* Area under line */}
-                {chartPaths && (
-                  <path 
-                    d={chartPaths.areaPath} 
-                    fill="url(#chart-area-grad)" 
-                  />
-                )}
-
-                {/* Main chart line */}
-                {chartPaths && (
-                  <path 
-                    d={chartPaths.linePath} 
-                    fill="none" 
-                    stroke="#00F2FE" 
-                    strokeWidth="2.5" 
-                    strokeLinecap="round"
-                    className="drop-shadow-[0_2px_8px_rgba(111,231,255,0.4)]"
-                  />
-                )}
-              </svg>
-
-              <span className="absolute top-2.5 right-3 text-[8px] font-mono text-gray-600 uppercase tracking-widest pointer-events-none">
-                Live Shard telemetry indexer
-              </span>
-            </div>
-
-            {/* User-Defined 6. Filter Rentang Waktu (Bottom Bar) */}
-            <div className="flex border-t border-sui-cyan/5 pt-3 justify-between items-center z-10">
-              <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider hidden sm:block">
-                Select Range
-              </span>
-              
-              <div className="flex gap-2">
-                {(['1D', '1W', '1M', '1Y', 'ALL'] as const).map(opt => {
-                  const isActive = timeframe === opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => setTimeframe(opt)}
-                      className={`px-3.5 py-1.5 rounded-full font-mono text-[10px] font-bold tracking-wider transition-all cursor-pointer ${
-                        isActive
-                          ? 'bg-gradient-to-r from-sui-cyan to-tatum-purple text-deep-space shadow-cyber-glow'
-                          : 'bg-walrus-blue/40 border border-sui-cyan/10 text-gray-500 hover:text-white hover:border-sui-cyan/30'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
+          )
         )}
 
         {/* Match Feed Content Area */}

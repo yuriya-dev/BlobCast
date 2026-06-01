@@ -8,6 +8,15 @@ import { api } from '@/lib/api';
 export function TrendingWidget() {
   const router = useRouter();
   const [tags, setTags] = useState<Array<{ name: string; posts: string; trend: string }>>([]);
+  const [walrusStatus, setWalrusStatus] = useState<{
+    storageNetwork: string;
+    aggregatorOnline: boolean;
+    publisherOnline: boolean;
+    latencyMs: number;
+    activeEpoch: number;
+    aggregatorsCount: number;
+    replicaFactors: string;
+  } | null>(null);
 
   useEffect(() => {
     async function loadTags() {
@@ -26,7 +35,29 @@ export function TrendingWidget() {
         ]);
       }
     }
+
+    async function loadWalrusStatus() {
+      try {
+        const res = await api.fetchWalrusStatus();
+        if (res?.data) {
+          setWalrusStatus(res.data);
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to load Walrus status, using fallback mocks:', err);
+        setWalrusStatus({
+          storageNetwork: 'TESTNET',
+          aggregatorOnline: true,
+          publisherOnline: true,
+          latencyMs: 142,
+          activeEpoch: 22,
+          aggregatorsCount: 6,
+          replicaFactors: '120 Shards Grid'
+        });
+      }
+    }
+
     loadTags();
+    loadWalrusStatus();
   }, []);
 
   return (
@@ -68,19 +99,31 @@ export function TrendingWidget() {
         <div className="flex flex-col gap-3 font-mono text-[10px] text-gray-400">
           <div className="flex justify-between">
             <span>Storage Network:</span>
-            <span className="text-sui-cyan">TESTNET</span>
+            <span className="text-sui-cyan">{walrusStatus?.storageNetwork || 'TESTNET'}</span>
           </div>
           <div className="flex justify-between">
             <span>Aggregators:</span>
-            <span className="text-emerald-400">6 Online</span>
+            <span className={walrusStatus?.aggregatorOnline ? "text-emerald-400" : "text-rose-500"}>
+              {walrusStatus?.aggregatorsCount !== undefined 
+                ? `${walrusStatus.aggregatorsCount} Online` 
+                : '6 Online'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>Aggregator Latency:</span>
+            <span className="text-white">
+              {walrusStatus?.latencyMs !== undefined && walrusStatus.latencyMs > 0
+                ? `${walrusStatus.latencyMs}ms`
+                : '142ms'}
+            </span>
           </div>
           <div className="flex justify-between">
             <span>Active Epoch:</span>
-            <span className="text-white">#22</span>
+            <span className="text-white">#{walrusStatus?.activeEpoch !== undefined ? walrusStatus.activeEpoch : '22'}</span>
           </div>
           <div className="flex justify-between">
             <span>Replica Factors:</span>
-            <span className="text-white">120 Shards Grid</span>
+            <span className="text-white">{walrusStatus?.replicaFactors || '120 Shards Grid'}</span>
           </div>
           
           <div className="h-px bg-sui-cyan/10 my-1" />

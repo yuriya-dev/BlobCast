@@ -473,6 +473,40 @@ export const api = {
   async fetchSpotlightCreators(): Promise<{ status: string; data: { creators: Array<{ id: string; displayName: string; username: string; walletAddress: string; followers: number; bio: string; verified: boolean }> } }> {
     const res = await fetch(`${BASE_URL}/users/spotlight`, requestInit({ cache: 'no-store' }));
     return parseJsonResponse(res, 'Failed to fetch spotlight creators');
+  },
+
+  /**
+   * Fetch live Walrus Storage network status from backend.
+   */
+  async fetchWalrusStatus(): Promise<{ status: string; data: { storageNetwork: string; aggregatorOnline: boolean; publisherOnline: boolean; latencyMs: number; activeEpoch: number; aggregatorsCount: number; replicaFactors: string } }> {
+    const res = await fetch(`${BASE_URL}/walrus/status`, requestInit({ cache: 'no-store' }));
+    return parseJsonResponse(res, 'Failed to fetch Walrus network status');
+  },
+
+  /**
+   * Fetch dynamic real-time ticker token details and historical charts.
+   */
+  async fetchTickerChart(ticker: string, timeframe: string): Promise<{
+    status: string;
+    tokenNotFound?: boolean;
+    isFallback?: boolean;
+    data?: {
+      name: string;
+      symbol: string;
+      meta: string;
+      marketCap: string;
+      currentPrice: number;
+      changePct: number;
+      isPositive: boolean;
+      avatarBg: string;
+      avatarText: string;
+      timeframeValues: number[];
+    };
+  }> {
+    const res = await fetch(`${BASE_URL}/tokens/${ticker}/chart?timeframe=${timeframe}`, requestInit({
+      cache: 'no-store'
+    }));
+    return parseJsonResponse(res, 'Failed to fetch token chart');
   }
 };
 

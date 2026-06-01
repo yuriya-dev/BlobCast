@@ -139,7 +139,7 @@ export function SearchInputWithRecommendations({
   ];
 
   const recommendedTags = ['blobcast', 'suinetwork', 'walrus'];
-  const recommendedTickers = ['SUI', 'SNEK', 'CETUS'];
+  const recommendedTickers = ['SUI', 'WAL', 'CETUS'];
   const recommendedCaptions = ['Decentralized social', 'Walrus protocol'];
 
   // Filter matching creators based on query
