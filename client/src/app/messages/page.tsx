@@ -198,27 +198,27 @@ export default function MessagesPage() {
       
       return (
         <div className="flex flex-col gap-2.5">
-          {cleanText && <div className="break-words font-sans">{cleanText}</div>}
-          <div className="flex flex-col gap-2 max-w-[280px] sm:max-w-sm rounded-xl overflow-hidden border border-sui-cyan/15 bg-walrus-blue/30 mt-1">
+          {cleanText && <div className="break-words font-sans text-gray-200">{cleanText}</div>}
+          <div className="flex flex-col gap-2 max-w-[260px] sm:max-w-[320px] rounded-xl overflow-hidden border border-sui-cyan/15 bg-[#080e18]/80 mt-1 shadow-lg">
             {matches.map((match, idx) => {
               const mediaBlobId = match[1];
               const resolvedUrl = walrus.resolveImageUrl(mediaBlobId);
               const isVideo = mediaBlobId.includes('video') || mediaBlobId.endsWith('.mp4') || resolvedUrl.includes('video');
               
               return (
-                <div key={idx} className="relative aspect-video w-full flex items-center justify-center bg-black/40 overflow-hidden">
+                <div key={idx} className="relative w-full flex items-center justify-center bg-[#050910] overflow-hidden">
                   {isVideo ? (
                     <video 
                       src={resolvedUrl} 
                       controls 
-                      className="w-full h-full object-contain max-h-48"
+                      className="w-full h-auto max-h-60 object-contain"
                       playsInline
                     />
                   ) : (
                     <img 
                       src={resolvedUrl} 
                       alt="Decentralized Attachment" 
-                      className="w-full h-full object-cover max-h-48 cursor-zoom-in"
+                      className="w-full h-auto max-h-64 object-contain cursor-zoom-in hover:opacity-95 transition-opacity"
                       onClick={() => window.open(resolvedUrl, '_blank')}
                       loading="lazy"
                     />
@@ -235,20 +235,20 @@ export default function MessagesPage() {
       const resolvedUrl = walrus.resolveImageUrl(msgText);
       const isVideo = msgText.includes('video') || msgText.endsWith('.mp4') || resolvedUrl.includes('video');
       return (
-        <div className="max-w-[280px] sm:max-w-sm rounded-xl overflow-hidden border border-sui-cyan/15 bg-walrus-blue/30">
-          <div className="relative aspect-video w-full flex items-center justify-center bg-black/40 overflow-hidden">
+        <div className="max-w-[260px] sm:max-w-[320px] rounded-xl overflow-hidden border border-sui-cyan/15 bg-[#080e18]/80">
+          <div className="relative w-full flex items-center justify-center bg-[#050910] overflow-hidden">
             {isVideo ? (
               <video 
                 src={resolvedUrl} 
                 controls 
-                className="w-full h-full object-contain max-h-48"
+                className="w-full h-auto max-h-60 object-contain"
                 playsInline
               />
             ) : (
               <img 
                 src={resolvedUrl} 
                 alt="Decentralized Attachment" 
-                className="w-full h-full object-cover max-h-48 cursor-zoom-in"
+                className="w-full h-auto max-h-64 object-contain cursor-zoom-in hover:opacity-95 transition-opacity"
                 onClick={() => window.open(resolvedUrl, '_blank')}
               />
             )}
