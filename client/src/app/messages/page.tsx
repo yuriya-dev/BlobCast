@@ -412,11 +412,11 @@ export default function MessagesPage() {
       // Attempt Seal encryption + Walrus upload (falls back gracefully)
       let walrusBlobId: string | null = null;
       if (isSealAvailable() && activeConv?.suiObjectId) {
-        const sealResult = await sealEncryptMessage(activeConvId, text);
+        const sealResult = await sealEncryptMessage(activeConvId, finalMsgText);
         walrusBlobId = sealResult.walrusBlobId;
       }
 
-      const res = await api.sendMessage(activeConvId, text, walrusBlobId);
+      const res = await api.sendMessage(activeConvId, finalMsgText, walrusBlobId);
       const savedMsg = res.data.message;
 
       // Replace optimistic message with real one
