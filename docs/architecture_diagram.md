@@ -10,57 +10,52 @@ BlobCast uses a **hybrid Web3 architecture** designed to combine the absolute tr
 
 ```mermaid
 graph TB
-    subgraph Client Layer [Frontend Client Layer - Next.js 16]
-        ClientApp[Next.js App Router]
-        DappKit[@mysten/dapp-kit Wallet Gateway]
+    subgraph Client["Frontend Client Layer - Next.js 16"]
+        ClientApp["Next.js App Router"]
+        DappKit["Mysten DappKit Wallet Gateway"]
     end
 
-    subgraph API Layer [Backend Gateway Layer - Express]
-        API[Express API Service]
-        Auth[Wallet Sign-in Auth]
-        Indexer[BlobCast Indexer Daemon]
+    subgraph API["Backend Gateway Layer - Express"]
+        APIService["Express API Service"]
+        Auth["Wallet Sign-in Auth"]
+        Indexer["BlobCast Indexer Daemon"]
     end
 
-    subgraph Storage Layer [Decentralized Storage Layer]
-        Walrus[Walrus Decentralized Blob Storage]
-        WalrusSim[Local Simulated Blob DB Fallback]
+    subgraph Storage["Decentralized Storage Layer"]
+        Walrus["Walrus Decentralized Blob Storage"]
     end
 
-    subgraph RPC Layer [RPC Infrastructure Layer]
-        Tatum[Tatum Enterprise Sui RPC]
-        PublicSui[Public Sui RPC Gateways Fallback]
+    subgraph RPC["RPC Infrastructure Layer"]
+        Tatum["Tatum Enterprise Sui RPC"]
+        PublicSui["Public Sui RPC Gateways Fallback"]
     end
 
-    subgraph Chain Layer [Sui Blockchain Layer]
-        Move[Move Smart Contracts]
+    subgraph Chain["Sui Blockchain Layer"]
+        Move["Move Smart Contracts"]
     end
 
-    subgraph Cache Layer [Metadata & Caching Layer]
-        Prisma[Prisma ORM]
-        DB[(Supabase PostgreSQL)]
-        Redis[(Upstash Redis Cache)]
+    subgraph Cache["Metadata & Caching Layer"]
+        Prisma["Prisma ORM"]
+        DB[("Supabase PostgreSQL")]
+        Redis[("Upstash Redis Cache")]
     end
 
-    %% Client Interactions
-    ClientApp -->|1. Connects Wallet| DappKit
-    ClientApp -->|2. REST API / JWT Auth| API
-    ClientApp -->|3. Uploads heavy media| Walrus
-    DappKit -->|4. Signs transactions / tips| Move
+    ClientApp -->|"1. Connects Wallet"| DappKit
+    ClientApp -->|"2. REST API / JWT Auth / Walrus Proxy"| APIService
+    DappKit -->|"3. Signs transactions / tips"| Move
 
-    %% Backend Interactions
-    API -->|5. Syncs metadata / index| Prisma
-    API -->|6. Resolves/Pushes RPC data| Tatum
-    API -->|7. Local developer fallback| WalrusSim
-    Indexer -->|8. Listens to Sui events| Tatum
-    Indexer -->|9. Syncs events & tags| DB
-    Indexer -->|10. Updates trending feeds| Redis
+    APIService -->|"4. Syncs metadata / index"| Prisma
+    APIService -->|"5. Resolves/Pushes RPC data"| Tatum
+    APIService -->|"6. Proxies & Caches Blobs (1.8s Timeout)"| Walrus
 
-    %% Failover Fallbacks
-    Tatum -.->|Fallback if busy| PublicSui
-    Walrus -.->|Fallback if offline| WalrusSim
+    Indexer -->|"7. Listens to Sui events"| Tatum
+    Indexer -->|"8. Syncs events & tags"| DB
+    Indexer -->|"9. Updates trending feeds"| Redis
+
+    Tatum -.->|"Fallback if busy"| PublicSui
+
     Prisma --> DB
 ```
-
 ---
 
 ## 2. Dynamic Post & Content Lifecycle
@@ -177,5 +172,8 @@ To avoid infinite looping, excessive database writes, and memory leaks when the 
 - If the current local block tracker lags behind the live Sui block tip by more than **50 checkpoints**, the indexer triggers the *Auto-FastForward Guard*.
 - It logs a sequence skip message and jumps the pointer directly to the current live tip block sequence, ensuring immediate real-time event updates without system freeze.
 
-### C. Walrus Storage Simulation Fallback
-The client-side Walrus SDK contains a mock/simulated fallback gateway. If an active Walrus publishing node cannot be resolved on local development machines, the client falls back to the server's simulated endpoint `/api/walrus/blobs`. This writes the binary media or serialized JSON posts directly into the PostgreSQL database under the `SimulatedBlob` model and serves it with normal HTTP content-types, simulating full permanent decentralized blob storage operations seamlessly.
+### C. Server-Side Walrus Aggregator Proxy & Caching
+To completely bypass browser cross-domain network connection limits (maximum 6 concurrent connections per host) and prevent page-loading freezes caused by slow, rate-limited public Walrus aggregators, BlobCast routes all blob downloads through the Express API backend proxy at `/api/walrus/blobs/:blobId`.
+- **Database Caching**: If the requested blob is in the `SimulatedBlob` PostgreSQL database table, the server resolves it in sub-milliseconds (Cache Hit).
+- **Aggregator Proxy with Caching**: If not found (Cache Miss), the backend server actively queries the decentralized Walrus testnet aggregator (`https://aggregator.walrus-testnet.walrus.space`) with a strict **1.8-second timeout**, caches the returned content in PostgreSQL, and serves it to the browser.
+- **Offline Resilience**: If the aggregator fails or is offline, the backend serves a clean, structural mockup JSON fallback directly, ensuring 100% feed uptime.

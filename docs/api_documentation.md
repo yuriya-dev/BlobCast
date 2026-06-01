@@ -187,14 +187,42 @@ BlobCast implements **Sovereign Cryptographic Sign-in** (passwordless authentica
 
 ---
 
-### G. Walrus Storage Simulator Endpoints
-Used as a high-availability fallback when active Walrus storage publisher nodes are offline.
+### G. Walrus Storage Proxy & Caching Endpoints
+Used to bypass browser connection pool limits and cache decentralized blobs for high performance.
 - **`POST /api/walrus/blobs`**
-  - *Description*: Stores text content in PostgreSQL and returns a mock Walrus URL.
-  - *Payload*: `{ "content": "Raw post text content or base64 asset data" }`
-  - *Response*: `{ "newlyCreated": { "blobObject": { "blobId": "sim_blob_174850" } } }`
+  - *Description*: Synchronizes or simulated-uploads raw JSON or base64 contents directly to the PostgreSQL index.
+  - *Payload*: `{ "blobId": "sim_blob_abc...", "content": "Raw post text content or base64 string" }`
+  - *Response*: `{ "status": "success", "data": { "blob": { "id": "sim_blob_abc..." } } }`
 
 - **`GET /api/walrus/blobs/:blobId`**
-  - *Description*: Retrieves raw text/JSON content for a simulated blob.
+  - *Description*: Fetches JSON/text blob content. If the blob is not cached locally, it proxies to the real Walrus testnet aggregator with a 1.8-second timeout, caches it in PostgreSQL, and serves it.
 - **`GET /api/walrus/blobs/:blobId/image`**
-  - *Description*: Serve base64 simulated image as binary (useful for loading avatar images).
+  - *Description*: Decodes and serves base64 image strings as raw binaries with full cache-control headers, proxying from the real aggregator if necessary.
+
+---
+
+### H. Token Analytics & Market Charts Endpoints
+Provides real-time price feeds and historical OHLCV sparklines.
+- **`GET /api/tokens/:ticker/chart`**
+  - *Description*: Resolves the top liquidity pool address for any ticker (SUI, CETUS, BTC, ETH, PEPE, etc.) across all supported networks via GeckoTerminal, computes closing prices for the timeframe, and caches the payload in Redis for 5 minutes.
+  - *Query Parameters*: `timeframe` (default: `1D`, supports `1D`, `1W`, `1M`, `1Y`, `ALL`).
+  - *Response*:
+    ```json
+    {
+      "status": "success",
+      "tokenNotFound": false,
+      "data": {
+        "name": "cbBTC",
+        "symbol": "BTC",
+        "meta": "ETH • Crypto • Cross-Chain",
+        "marketCap": "$3.1B FDV",
+        "currentPrice": 72942.78,
+        "changePct": -1.59,
+        "isPositive": false,
+        "avatarBg": "from-amber-500 to-walrus-blue",
+        "avatarText": "BTC",
+        "timeframeValues": [74119.9, ..., 72942.78]
+      }
+    }
+    ```
+
