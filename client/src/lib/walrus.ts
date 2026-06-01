@@ -169,6 +169,68 @@ const idbSimulator = typeof window !== 'undefined' ? new IndexedDBSimulator() : 
 // RAM-backed Simulated Storage fallback to avoid LocalStorage QuotaExceededErrors on massive image uploads
 const simulatedMemoryStore = new Map<string, string>();
 
+/**
+ * Compresses an image file on the client side using HTML5 Canvas.
+ * Resizes the image to fit within maxDimensions (default 1200px) and exports as JPEG with 0.8 quality.
+ */
+export function compressImageFile(file: File, maxDimension: number = 1200, quality: number = 0.8): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        }
+      } else {
+        if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      
+      console.log(`🖼️ [Image Compression] Compressed '${file.name}' from ${(file.size / 1024).toFixed(1)} KB to ${(dataUrl.length * 0.75 / 1024).toFixed(1)} KB.`);
+      resolve(dataUrl);
+    };
+    img.onerror = () => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    };
+  });
+}
+
 export const walrus = {
   /**
    * Upload raw JSON or string content to Walrus publisher

@@ -5,7 +5,7 @@ import { Image, Send, Link, Smile, Globe, Loader2, Sparkles, Database, X } from 
 import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
-import { walrus } from '@/lib/walrus';
+import { walrus, compressImageFile } from '@/lib/walrus';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
@@ -254,7 +254,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         setIsUploadingMedia(true);
         setShowMediaInput(true);
         try {
-          const base64data = await readFileAsDataURL(file);
+          const base64data = await compressImageFile(file);
           const blobInfo = await walrus.uploadBlob(base64data);
           newItems.push({
             blobId: blobInfo.blobId,

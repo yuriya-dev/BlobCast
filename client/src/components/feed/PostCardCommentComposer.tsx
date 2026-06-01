@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Loader2, Smile, Image } from 'lucide-react';
 import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
-import { walrus } from '@/lib/walrus';
+import { walrus, compressImageFile } from '@/lib/walrus';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
 import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
@@ -188,7 +188,7 @@ export function PostCardCommentComposer({
         setIsUploadingMedia(true);
         setShowMediaInput(true);
         try {
-          const base64data = await readFileAsDataURL(file);
+          const base64data = await compressImageFile(file);
           const blobInfo = await walrus.uploadBlob(base64data);
           newItems.push({ blobId: blobInfo.blobId, type: 'image' });
           setMediaItems([...newItems]);

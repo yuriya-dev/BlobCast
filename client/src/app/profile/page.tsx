@@ -25,7 +25,7 @@ import { TrendingWidget } from '@/components/feed/TrendingWidget';
 import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWithRecommendations';
 import { PostCard } from '@/components/feed/PostCard';
 import { mockDb, MockUser, MockPost } from '@/lib/db';
-import { walrus } from '@/lib/walrus';
+import { walrus, compressImageFile } from '@/lib/walrus';
 import { api } from '@/lib/api';
 import {
   githubDisplay,
@@ -276,17 +276,13 @@ export default function ProfilePage() {
 
     setIsUploadingAvatar(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        const blobInfo = await walrus.uploadBlob(base64data);
-        setAvatarUrl(blobInfo.blobId);
-        setIsUploadingAvatar(false);
-      };
-      reader.readAsDataURL(file);
+      const base64data = await compressImageFile(file);
+      const blobInfo = await walrus.uploadBlob(base64data);
+      setAvatarUrl(blobInfo.blobId);
     } catch (err) {
       console.error("Failed uploading avatar:", err);
       alert("Error: Failed to upload avatar to Walrus.");
+    } finally {
       setIsUploadingAvatar(false);
     }
   };
@@ -297,17 +293,13 @@ export default function ProfilePage() {
 
     setIsUploadingBanner(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        const blobInfo = await walrus.uploadBlob(base64data);
-        setBannerUrl(blobInfo.blobId);
-        setIsUploadingBanner(false);
-      };
-      reader.readAsDataURL(file);
+      const base64data = await compressImageFile(file);
+      const blobInfo = await walrus.uploadBlob(base64data);
+      setBannerUrl(blobInfo.blobId);
     } catch (err) {
       console.error("Failed uploading banner:", err);
       alert("Error: Failed to upload banner to Walrus.");
+    } finally {
       setIsUploadingBanner(false);
     }
   };
