@@ -36,4 +36,4 @@ EXPOSE 31415
 
 # Set entrypoint to run our startup script
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["--bind-address", "0.0.0.0:31415", "--sub-wallets-dir", "/wallets/walrus-sub-wallets"]
+CMD ["--bind-address", "0.0.0.0:31415", "--sub-wallets-dir", "/wallets/walrus-sub-wallets", "--wallet", "/wallets/walrus-sub-wallets/sui_client_0.yaml", "--config", "/wallets/walrus-sub-wallets/client_config.yaml", "--sub-wallets-min-balance", "50000000", "--gas-refill-amount", "50000000", "--wal-refill-amount", "50000000"]
