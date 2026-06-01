@@ -190,11 +190,11 @@ export default function MessagesPage() {
 
   // Helper to parse message text and render media dynamically
   const renderMessageContent = (msgText: string) => {
-    const mediaRegex = /\[media:(walrus:\/\/[a-zA-Z0-9_\-\.]+)/g;
+    const mediaRegex = /\[media:([a-zA-Z0-9_\-\:\.\/]+)\]/g;
     const matches = [...msgText.matchAll(mediaRegex)];
     
     if (matches.length > 0) {
-      const cleanText = msgText.replace(/\[media:walrus:\/\/[a-zA-Z0-9_\-\.]+\]/g, '').trim();
+      const cleanText = msgText.replace(/\[media:[a-zA-Z0-9_\-\:\.\/]+\]/g, '').trim();
       
       return (
         <div className="flex flex-col gap-2.5">
