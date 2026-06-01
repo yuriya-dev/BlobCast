@@ -172,6 +172,11 @@ export const walrus = {
               console.warn("⚠️ LocalStorage quota exceeded. Falling back to in-memory store.");
               simulatedMemoryStore.set(blobId, serialized);
             }
+
+            // Bulletproof IndexedDB caching for large uploads (like 9.6MB files) so they survive refreshes
+            if (idbSimulator) {
+              idbSimulator.set(blobId, serialized).catch(() => {});
+            }
           }
 
           return {
@@ -279,6 +284,27 @@ export const walrus = {
       }
     }
 
+    // Check IndexedDB asynchronously for ALL blobIds before falling back to remote network fetch
+    if (typeof window !== 'undefined' && idbSimulator) {
+      try {
+        const dbCached = await idbSimulator.get(cleanId);
+        if (dbCached) {
+          // Re-cache back into RAM memory store for instant subsequent access
+          simulatedMemoryStore.set(cleanId, dbCached);
+          try {
+            const cleanContent = dbCached.startsWith('"') && dbCached.endsWith('"')
+              ? JSON.parse(dbCached)
+              : dbCached;
+            return typeof cleanContent === 'string' ? JSON.parse(cleanContent) as T : cleanContent as T;
+          } catch {
+            return dbCached as unknown as T;
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ IndexedDB check failed in getBlob:', err);
+      }
+    }
+
     // Check if it's simulated
     if (cleanId.startsWith('walrus_sim_')) {
       let content: string | null = null;
@@ -356,6 +382,18 @@ export const walrus = {
 
       if (response.ok) {
         const text = await response.text();
+
+        // Cache the content locally so subsequent calls are synchronous and instant!
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(cleanId, text);
+          } catch {}
+          simulatedMemoryStore.set(cleanId, text);
+          if (idbSimulator) {
+            idbSimulator.set(cleanId, text).catch(() => {});
+          }
+        }
+
         try {
           return JSON.parse(text) as T;
         } catch {
@@ -440,7 +478,8 @@ export const walrus = {
       return '';
     }
     
-    // Return standard Walrus testnet aggregator endpoint for raw binary media
-    return `${WALRUS_AGGREGATOR}/v1/blobs/${cleanId}`;
+    // Return Express backend binary image proxy endpoint (decodes base64 and serves with correct content-type)
+    const baseUrl = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api';
+    return `${baseUrl}/walrus/blobs/${cleanId}/image`;
   }
 };

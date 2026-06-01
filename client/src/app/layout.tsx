@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: 'BlobCast — Own your posts forever',
   description: 'A decentralized social protocol powered by Walrus decentralized storage, Sui blockchain, and Tatum enterprise RPC infrastructure.',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/logo.svg',
   }
 };
 

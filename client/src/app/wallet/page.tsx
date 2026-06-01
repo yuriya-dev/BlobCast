@@ -26,6 +26,8 @@ import { SearchInputWithRecommendations } from '@/components/feed/SearchInputWit
 import { useAuth } from '@/components/providers/AuthProvider';
 import { api } from '@/lib/api';
 import { tatum } from '@/lib/tatum';
+import { walrus } from '@/lib/walrus';
+import { mockDb } from '@/lib/db';
 import { 
   AreaChart, 
   Area, 
@@ -37,11 +39,28 @@ import {
 
 // ─── Network Config ──────────────────────────────────────────────────────────
 const SUI_NETWORK = (process.env.NEXT_PUBLIC_SUI_NETWORK as 'testnet' | 'mainnet') || 'testnet';
+const WAL_COIN_TYPE = '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatSui(mistBalance: bigint): string {
   const sui = Number(mistBalance) / 1_000_000_000;
   return sui.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function formatWal(mistBalance: bigint): string {
+  const wal = Number(mistBalance) / 1_000_000_000;
+  return wal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function isSuiCoin(coinType: string): boolean {
+  const cleanCoin = coinType.toLowerCase().replace(/^0x0*/, '0x');
+  return cleanCoin === '0x2::sui::sui';
+}
+
+function isWalCoin(coinType: string): boolean {
+  const cleanCoin = coinType.toLowerCase().replace(/^0x0*/, '0x');
+  const cleanTarget = WAL_COIN_TYPE.toLowerCase().replace(/^0x0*/, '0x');
+  return cleanCoin === cleanTarget;
 }
 
 function formatBytes(bytes: number): string {
@@ -82,6 +101,7 @@ export default function MyWalletPage() {
   // ─── Balance & Tipping State (Strictly Real Data) ───────────────────────────
   const [suiBalance, setSuiBalance] = useState<string | null>(null);
   const [suiBalanceRaw, setSuiBalanceRaw] = useState<bigint>(BigInt(0));
+  const [walBalance, setWalBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [balanceError, setBalanceError] = useState(false);
 
@@ -111,10 +131,18 @@ export default function MyWalletPage() {
     setBalanceError(false);
     try {
       const balances = await suiClient.getAllBalances({ owner: walletAddr });
-      const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => b.coinType === '0x2::sui::SUI');
+      console.log('💰 [Sui Balance Decoder] Raw balances from primary RPC:', balances);
+      
+      // Parse SUI
+      const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => isSuiCoin(b.coinType));
       const totalMist = suiToken ? BigInt(suiToken.totalBalance) : BigInt(0);
       setSuiBalanceRaw(totalMist);
       setSuiBalance(formatSui(totalMist));
+
+      // Parse WAL
+      const walToken = balances.find((b: { coinType: string; totalBalance: string }) => isWalCoin(b.coinType));
+      const totalWalMist = walToken ? BigInt(walToken.totalBalance) : BigInt(0);
+      setWalBalance(formatWal(totalWalMist));
     } catch (err) {
       console.warn('⚠️ Primary Sui client failed, attempting fallback to public fullnode RPC:', err);
       try {
@@ -136,10 +164,18 @@ export default function MyWalletPage() {
         if (json.error) throw new Error(json.error.message || 'RPC JSON Error');
 
         const balances = json.result || [];
-        const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => b.coinType === '0x2::sui::SUI');
+        console.log('💰 [Sui Balance Decoder] Raw balances from Tatum RPC:', balances);
+        
+        // Parse SUI
+        const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => isSuiCoin(b.coinType));
         const totalMist = suiToken ? BigInt(suiToken.totalBalance) : BigInt(0);
         setSuiBalanceRaw(totalMist);
         setSuiBalance(formatSui(totalMist));
+
+        // Parse WAL
+        const walToken = balances.find((b: { coinType: string; totalBalance: string }) => isWalCoin(b.coinType));
+        const totalWalMist = walToken ? BigInt(walToken.totalBalance) : BigInt(0);
+        setWalBalance(formatWal(totalWalMist));
       } catch (fallbackErr) {
         console.warn('⚠️ Tatum RPC fallback failed (429 or network error). Trying public Sui RPC fullnode...', fallbackErr);
         try {
@@ -163,10 +199,18 @@ export default function MyWalletPage() {
           if (json.error) throw new Error(json.error.message || 'RPC JSON Error');
 
           const balances = json.result || [];
-          const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => b.coinType === '0x2::sui::SUI');
+          console.log('💰 [Sui Balance Decoder] Raw balances from public Sui RPC:', balances);
+          
+          // Parse SUI
+          const suiToken = balances.find((b: { coinType: string; totalBalance: string }) => isSuiCoin(b.coinType));
           const totalMist = suiToken ? BigInt(suiToken.totalBalance) : BigInt(0);
           setSuiBalanceRaw(totalMist);
           setSuiBalance(formatSui(totalMist));
+
+          // Parse WAL
+          const walToken = balances.find((b: { coinType: string; totalBalance: string }) => isWalCoin(b.coinType));
+          const totalWalMist = walToken ? BigInt(walToken.totalBalance) : BigInt(0);
+          setWalBalance(formatWal(totalWalMist));
         } catch (publicErr) {
           console.error('❌ All Sui RPC queries failed:', publicErr);
           setBalanceError(true);
@@ -200,18 +244,150 @@ export default function MyWalletPage() {
       }
 
       if (user) {
-        const userPosts = user.posts || [];
+        // Merge Supabase PostgreSQL database-backed posts with client-side localStorage fallback mock posts
+        const dbPosts = user.posts || [];
+        const localUserPosts = mockDb.posts.filter((p: any) => {
+          return p.authorId === user.id || p.walrusContent?.author_wallet?.toLowerCase() === walletAddr.toLowerCase();
+        });
+
+        const mergedPosts = [...dbPosts];
+        localUserPosts.forEach((lp: any) => {
+          if (!mergedPosts.some((dp: any) => dp.walrusBlobId === lp.walrusBlobId)) {
+            mergedPosts.push({
+              id: lp.id,
+              authorId: lp.authorId,
+              suiObjectId: lp.suiObjectId,
+              walrusBlobId: lp.walrusBlobId,
+              blobHash: lp.blobHash,
+              contentType: lp.contentType,
+              visibility: lp.visibility,
+              createdAt: lp.createdAt,
+              media: lp.walrusContent?.media || []
+            });
+          }
+        });
+
+        const userPosts = mergedPosts;
         setPostsCount(userPosts.length);
 
-        // Footprints calculation based on real posts stored on Walrus
-        let byteCount = 0;
+        // 1. Initial quick baseline estimation (so the UI is instant)
+        let initialByteCount = 0;
         userPosts.forEach((p: any) => {
           const mediaBlobSize = (p.media?.length || 0) * 50 * 1024;
           const textBlobSize = 800;
-          byteCount += textBlobSize + mediaBlobSize;
+          initialByteCount += textBlobSize + mediaBlobSize;
         });
-        setStorageBytes(byteCount);
+        setStorageBytes(initialByteCount);
         setWalrusShardsCount(userPosts.length * 120);
+
+        // 2. Asynchronous exact footprint resolver from local memory and Walrus aggregator
+        (async () => {
+          const allBlobIds: string[] = [];
+
+          // Query the JSON post blobs from Walrus first to find actual media attachments listed inside the JSON content
+          const postLoadPromises = userPosts.map(async (p: any) => {
+            if (p.walrusBlobId) {
+              allBlobIds.push(p.walrusBlobId);
+              try {
+                // Fetch the JSON post payload from Walrus (extremely fast if cached)
+                const content = await walrus.getBlob(p.walrusBlobId);
+                if (content && typeof content === 'object') {
+                  const mediaList = content.media || content.content?.media || [];
+                  if (Array.isArray(mediaList)) {
+                    mediaList.forEach((m: any) => {
+                      const mId = m.blob_id || m.blobUrl || m.url;
+                      if (mId) {
+                        allBlobIds.push(mId);
+                      }
+                    });
+                  }
+                }
+              } catch (err) {
+                console.warn(`⚠️ Failed to load post blob ${p.walrusBlobId} for footprint:`, err);
+              }
+            }
+          });
+
+          // Wait for all post contents to be fetched and analyzed
+          await Promise.all(postLoadPromises);
+
+          if (allBlobIds.length === 0) {
+            setStorageBytes(0);
+            setWalrusShardsCount(0);
+            return;
+          }
+
+          // Update shards count dynamically based on the sum of all JSON and media blobs
+          setWalrusShardsCount(allBlobIds.length * 120);
+
+          const sizePromises = allBlobIds.map(async (blobId) => {
+            const cleanId = blobId.replace('walrus://', '');
+
+            // A. Check localStorage first
+            if (typeof window !== 'undefined') {
+              try {
+                const cached = localStorage.getItem(cleanId);
+                if (cached) {
+                  // If base64/dataURL, estimate size from string length
+                  if (cached.startsWith('data:')) {
+                    const base64Str = cached.split(',')[1] || '';
+                    return Math.floor((base64Str.length * 3) / 4);
+                  }
+                  return new Blob([cached]).size;
+                }
+              } catch {}
+            }
+
+            // B. If simulated, fetch from mock server
+            if (cleanId.startsWith('walrus_sim_')) {
+              try {
+                const syncUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'}/walrus/blobs/${cleanId}`;
+                const res = await fetch(syncUrl);
+                if (res.ok) {
+                  const rawText = await res.text();
+                  if (rawText.startsWith('data:')) {
+                    const base64Str = rawText.split(',')[1] || '';
+                    return Math.floor((base64Str.length * 3) / 4);
+                  }
+                  return new Blob([rawText]).size;
+                }
+              } catch {}
+              return 800; // default simulated post JSON size
+            }
+
+            // C. Real Walrus Testnet blob: Query the aggregator via HEAD
+            try {
+              const response = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${cleanId}`, {
+                method: 'HEAD',
+                signal: AbortSignal.timeout(3000) // 3 seconds timeout
+              });
+
+              if (response.ok) {
+                const cl = response.headers.get('content-length');
+                if (cl) {
+                  const size = parseInt(cl, 10);
+                  if (size > 0) return size;
+                }
+              }
+            } catch (err) {
+              console.warn(`⚠️ Failed to resolve size for Walrus blob ${cleanId} via HEAD:`, err);
+            }
+
+            // D. Fallback estimation if remote request fails (e.g. rate limit/network)
+            const isMediaBlob = cleanId.length > 40;
+            return isMediaBlob ? 100 * 1024 : 800;
+          });
+
+          try {
+            const sizes = await Promise.all(sizePromises);
+            const totalRealBytes = sizes.reduce((acc, s) => acc + s, 0);
+            if (totalRealBytes > 0) {
+              setStorageBytes(totalRealBytes);
+            }
+          } catch (err) {
+            console.error('❌ Failed resolving exact Walrus storage footprints:', err);
+          }
+        })();
 
         // 2. Fetch tips received from backend database strictly
         const tipsRes = await api.fetchTipsReceived(user.id);
@@ -434,9 +610,19 @@ export default function MyWalletPage() {
             </div>
             <div className="border-r border-sui-cyan/5 flex flex-col justify-center gap-1">
               <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">
-                <Cpu className="h-3 w-3 text-amber-400" /> Walrus Storage Stake
+                <Cpu className="h-3 w-3 text-amber-400" /> WAL Balance
               </span>
-              <p className="text-sm font-bold text-white">450 WAL</p>
+              {!walletAddress ? (
+                <p className="text-xs text-amber-400 font-bold leading-normal">Connect Wallet</p>
+              ) : isLoadingBalance && walBalance === null ? (
+                <div className="h-4 w-20 bg-walrus-blue/50 animate-pulse rounded" />
+              ) : balanceError && walBalance === null ? (
+                <p className="text-[10px] text-amber-400 font-semibold leading-normal truncate" title="Sui fullnode RPC endpoints are currently rate-limited or unreachable.">
+                  RPC Rate Limited
+                </p>
+              ) : (
+                <p className="text-sm font-bold text-white truncate">{walBalance || '0.00'} WAL</p>
+              )}
             </div>
             <div className="border-r border-sui-cyan/5 flex flex-col justify-center gap-1">
               <span className="text-[9px] uppercase text-gray-500 tracking-wider flex items-center gap-1">

@@ -67,9 +67,26 @@ export const serveSimulatedImage = asyncHandler(async (req: Request, res: Respon
         throw new AppError('blobId parameter is required', 400);
     }
 
-    const blob = await prisma.simulatedBlob.findUnique({
+    let blob = await prisma.simulatedBlob.findUnique({
         where: { id: blobId }
     });
+
+    if (!blob) {
+        // Automatically fetch from real Walrus aggregator on backend (bypasses CORS restrictions)
+        try {
+            const url = `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
+            const response = await fetch(url);
+            if (response.ok) {
+                const text = await response.text();
+                // Cache in PostgreSQL
+                blob = await prisma.simulatedBlob.create({
+                    data: { id: blobId, content: text }
+                });
+            }
+        } catch (err) {
+            console.warn(`⚠️ Failed to auto-proxy blob ${blobId} from Walrus aggregator:`, err);
+        }
+    }
 
     if (!blob) {
         return res.status(404).send('Not Found');

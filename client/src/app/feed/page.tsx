@@ -305,6 +305,7 @@ export default function SocialFeedPage() {
     }
 
     mockDb.posts.unshift(mockPostObj);
+    mockDb.savePosts();
     loadFeed();
   };
 

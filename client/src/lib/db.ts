@@ -87,6 +87,31 @@ class InMemoryDatabase {
 
   constructor() {
     this.seed();
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('blobcast_local_posts');
+        if (saved) {
+          // Parse Dates correctly
+          const parsed = JSON.parse(saved);
+          this.posts = parsed.map((p: any) => ({
+            ...p,
+            createdAt: p.createdAt ? new Date(p.createdAt) : new Date()
+          }));
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to load local posts from localStorage:', err);
+      }
+    }
+  }
+
+  savePosts() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('blobcast_local_posts', JSON.stringify(this.posts));
+      } catch (err) {
+        console.warn('⚠️ Failed to save local posts to localStorage:', err);
+      }
+    }
   }
 
   private seed() {
