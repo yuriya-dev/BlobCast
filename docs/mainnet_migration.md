@@ -78,19 +78,59 @@ sui client publish --gas-budget 50000000
 
 ---
 
-## 📦 Step 2: Walrus Mainnet Storage Integration
+## 📦 Step 2: Walrus Mainnet Storage Integration & Operator Publisher Setup
 
-Walrus Permanent Blob Storage charges for storage space based on storage size and the number of **Epochs** requested. On Mainnet, this is paid using **WAL tokens** on the SUI blockchain.
+Walrus Permanent Blob Storage charges for storage space based on storage size and the number of **Epochs** requested. On Mainnet, this is paid using **WAL tokens** on the SUI blockchain. Because Mainnet does not host an open public publisher endpoint without payment authorizations, you must run and operate an authorized local publisher daemon.
 
-### 1. Source Mainnet WAL Tokens
-1. Purchase native **WAL tokens** on Sui DEXs (e.g. Cetus, Aftermath) or bridge them onto the SUI chain.
-2. Fund your deployer/server wallet with WAL tokens. These will be used by the server to pay for post registration and metadata epochs.
+### 1. Source Mainnet WAL & SUI Tokens
+1. Purchase native **WAL tokens** on Sui DEXs (e.g., Cetus, Aftermath) or bridge them onto the SUI chain.
+2. Ensure your active CLI wallet address has a healthy balance of **SUI** (for gas fees) and **WAL** (for storage costs). A minimum starting balance of **5 SUI** and **20 WAL** is highly recommended to establish sub-wallet reserves.
 
-### 2. Configure Walrus Mainnet Node Endpoints
-Acquire native Mainnet publisher and aggregator endpoints from the Walrus Storage registry.
-Update the endpoints in the backend server's configurations:
-* **Aggregator URL**: `https://aggregator.walrus-mainnet.walrus.space` (or a dedicated private cluster gateway).
-* **Publisher URL**: use a private/authorized publisher (Mainnet has no public publisher without auth). Example: `https://publisher.walrus-mainnet.walrus.space` (requires signature authorization funded by your SUI/WAL gas address).
+### 2. Run the Authorized Local Walrus Publisher Daemon
+Start the native `walrus publisher` CLI daemon to manage concurrent transactions and storage object creations. The daemon automatically generates and maintains internal "sub-wallets" in a private directory to handle multiplexed uploads without transaction conflicts:
+
+```bash
+# 1. Create a secure directory within the backend server for sub-wallets
+mkdir -p server/walrus-sub-wallets
+
+# 2. Start the publisher service pointing to your local config and active mainnet context
+walrus publisher \
+  --sub-wallets-dir server/walrus-sub-wallets \
+  --bind-address 127.0.0.1:31415
+```
+
+> [!IMPORTANT]
+> The publisher daemon automatically spins up **8 concurrent client sub-wallets** (sui_0 to sui_7), registers them, and funds their MIST (gas) and FROST (WAL) balances directly from your active SUI CLI wallet.
+> Keep this service running in the background as a process manager daemon (e.g., via PM2 or a systemd service).
+
+### 3. Expose Keys and Wallet Export Utility
+To import any of the auto-generated operator sub-wallets into browser extensions (such as **Sui Wallet**, **Surf Wallet**, or **OKX**) for manual balance tracking and transfers:
+1. Access the `server/walrus-sub-wallets/` directory (which is safely ignored by `.gitignore` to prevent key exposure).
+2. Run the dynamic export utility script:
+   ```bash
+   node server/tools/export-keys.js
+   ```
+3. The script decodes the raw base64 keystores and outputs:
+   * **Sui Address**: Public destination address.
+   * **Hex Key (`0x...`)**: For OKX / Surf imports.
+   * **Bech32 Key (`suiprivkey...`)**: Direct drop-in for standard browser extensions.
+
+### 4. Adjust Congestion Connection Timeouts
+Writing 1,000 shards verifiably across a grid of 120 distributed storage nodes requires substantial validation. Standard network operations can take **15–20 seconds** during times of network load.
+To prevent premature transaction failure, verify that all backend and frontend timeouts are increased to **60 seconds**:
+* **Backend (`server/src/controllers/walrusSimController.ts`)**:
+  ```typescript
+  signal: AbortSignal.timeout(60000)
+  ```
+* **Frontend (`client/src/lib/walrus.ts`)**:
+  ```typescript
+  signal: AbortSignal.timeout(60000)
+  ```
+
+### 5. Configure Gateway Connections
+Update the environment variables to route all client and server requests through your active operator publisher daemon:
+* **Aggregator URL**: `https://aggregator.walrus-mainnet.walrus.space` (Public read-only grid).
+* **Publisher URL**: `http://127.0.0.1:31415` (Your running operator gateway).
 
 ---
 
@@ -120,8 +160,8 @@ SUI_RPC_URL="https://tatum-sui-mainnet-rpc-endpoint-here"
 SUI_BACKUP_RPC_URL="https://fullnode.mainnet.sui.io:443"
 
 # ─── Walrus Storage Mainnet Gateways ─────────────────────────────────────────
-WALRUS_PUBLISHER_URL="https://publisher.mainnet.walrus.space"
-WALRUS_AGGREGATOR_URL="https://aggregator.mainnet.walrus.space"
+WALRUS_PUBLISHER_URL="http://127.0.0.1:31415"
+WALRUS_AGGREGATOR_URL="https://aggregator.walrus-mainnet.walrus.space"
 
 # ─── Move Smart Contract IDs (Mainnet) ───────────────────────────────────────
 SUI_PACKAGE_ID="0x_YOUR_MAINNET_MOVE_PACKAGE_ID_HERE"
@@ -161,8 +201,8 @@ NEXT_PUBLIC_API_URL="https://api.blobcast.social/api"
 # ─── Client-Side Walrus Proxy Endpoints ────────────────────────────────────────
 # Note: The client routes all aggregator queries through our Express proxy 
 # to bypass connection pool freezes.
-NEXT_PUBLIC_WALRUS_AGGREGATOR_URL="https://api.blobcast.social/api/walrus"
-NEXT_PUBLIC_WALRUS_PUBLISHER_URL="https://publisher.mainnet.walrus.space"
+NEXT_PUBLIC_WALRUS_AGGREGATOR_URL="https://aggregator.walrus-mainnet.walrus.space"
+NEXT_PUBLIC_WALRUS_PUBLISHER_URL="http://127.0.0.1:31415"
 ```
 
 ### 2. Configure Mysten DappKit to Sui Mainnet
