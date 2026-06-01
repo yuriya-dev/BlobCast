@@ -1,5 +1,33 @@
 // Walrus Decentralized Storage Integration
 
+// Self-cleaning block to clear massive cached media strings in localStorage that cause QuotaExceededError
+if (typeof window !== 'undefined') {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        // Find simulated keys or direct 44/64-character hash keys
+        const isSimulated = key.startsWith('walrus_sim_');
+        const isBlobHash = key.length === 44 || key.length === 64;
+        if (isSimulated || isBlobHash) {
+          const val = localStorage.getItem(key);
+          // If the cached value is a large base64 media string (e.g., > 100KB)
+          if (val && val.length > 100000) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+    }
+    if (keysToRemove.length > 0) {
+      console.log(`🧹 Antigravity Self-Cleaning: Removing ${keysToRemove.length} large base64 items from localStorage to reclaim quota.`);
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    }
+  } catch (e) {
+    console.warn("⚠️ Failed to self-clean localStorage:", e);
+  }
+}
+
 export interface WalrusBlobInfo {
   blobId: string;
   size: number;
@@ -167,7 +195,11 @@ export const walrus = {
           // Cache the content locally so it can be resolved instantly on the same machine
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem(blobId, serialized);
+              if (serialized.length < 100000) {
+                localStorage.setItem(blobId, serialized);
+              } else {
+                simulatedMemoryStore.set(blobId, serialized);
+              }
             } catch (err) {
               console.warn("⚠️ LocalStorage quota exceeded. Falling back to in-memory store.");
               simulatedMemoryStore.set(blobId, serialized);
@@ -201,7 +233,11 @@ export const walrus = {
     // Store in LocalStorage or Memory if on server/client
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(simulatedBlobId, serialized);
+        if (serialized.length < 100000) {
+          localStorage.setItem(simulatedBlobId, serialized);
+        } else {
+          simulatedMemoryStore.set(simulatedBlobId, serialized);
+        }
       } catch (err) {
         console.warn("⚠️ LocalStorage quota exceeded. Gracefully falling back to high-capacity in-memory session cache for base64 storage.");
         simulatedMemoryStore.set(simulatedBlobId, serialized);
@@ -339,7 +375,11 @@ export const walrus = {
               // Cache it locally so subsequent calls are instant
               if (typeof window !== 'undefined') {
                 try {
-                  localStorage.setItem(cleanId, content);
+                  if (content.length < 100000) {
+                    localStorage.setItem(cleanId, content);
+                  } else {
+                    simulatedMemoryStore.set(cleanId, content);
+                  }
                 } catch {}
                 simulatedMemoryStore.set(cleanId, content);
               }
@@ -386,7 +426,11 @@ export const walrus = {
         // Cache the content locally so subsequent calls are synchronous and instant!
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem(cleanId, text);
+            if (text.length < 100000) {
+              localStorage.setItem(cleanId, text);
+            } else {
+              simulatedMemoryStore.set(cleanId, text);
+            }
           } catch {}
           simulatedMemoryStore.set(cleanId, text);
           if (idbSimulator) {

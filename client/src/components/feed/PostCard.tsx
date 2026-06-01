@@ -119,6 +119,15 @@ function PostActivityAvatar({ user }: { user: any }) {
   );
 }
 
+function getDeterministicViews(postId: string, likeCount: number, repostCount: number, commentCount: number): number {
+  let hash = 0;
+  for (let i = 0; i < postId.length; i++) {
+    hash = postId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const stableOffset = Math.abs(hash) % 250 + 45; // a stable number between 45 and 294
+  return (likeCount * 6) + (repostCount * 12) + (commentCount * 8) + stableOffset;
+}
+
 export function PostCard({ post, onCommentCreated, hideCommentComposer = false, onPin }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -268,11 +277,50 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     };
   }, [showMenu]);
 
-  // View count — derived from likes + reposts + a base offset
-  const [viewCount] = useState(() => {
-    const base = (post.likeCount * 4) + (post.repostCount * 8) + Math.floor(Math.random() * 200 + 50);
-    return base;
-  });
+  // View count — persistent and deterministic
+  const [viewCount, setViewCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storageKey = `blobcast_views_${targetPostId}`;
+        const cached = localStorage.getItem(storageKey);
+        
+        let currentViews = 0;
+        if (cached) {
+          currentViews = parseInt(cached, 10);
+        } else {
+          // Seed deterministic views based on post interactions and ID hash
+          currentViews = getDeterministicViews(
+            targetPostId, 
+            post.likeCount || 0, 
+            post.repostCount || 0, 
+            post.commentCount || 0
+          );
+        }
+
+        // Increment by 1 on first mount of this session to feel interactive and realistic
+        const sessionKey = `blobcast_viewed_${targetPostId}`;
+        const hasViewedInSession = sessionStorage.getItem(sessionKey);
+        
+        if (!hasViewedInSession) {
+          currentViews += 1;
+          localStorage.setItem(storageKey, currentViews.toString());
+          sessionStorage.setItem(sessionKey, 'true');
+        }
+        
+        setViewCount(currentViews);
+      } catch (err) {
+        // Fallback to deterministic seed if localStorage fails
+        setViewCount(getDeterministicViews(
+          targetPostId, 
+          post.likeCount || 0, 
+          post.repostCount || 0, 
+          post.commentCount || 0
+        ));
+      }
+    }
+  }, [targetPostId, post.likeCount, post.repostCount, post.commentCount]);
 
   // Post activity modal state
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -374,9 +422,9 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   const handleBookmarkToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (typeof window !== 'undefined') {
+      const walletKey = authUser?.walletAddress?.toLowerCase() || 'anon';
+      const bookmarksKey = `blobcast_bookmarks_${walletKey}`;
       try {
-        const walletKey = authUser?.walletAddress?.toLowerCase() || 'anon';
-        const bookmarksKey = `blobcast_bookmarks_${walletKey}`;
         const bookmarksRaw = localStorage.getItem(bookmarksKey);
         let bookmarks = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
         if (isBookmarked) {
@@ -394,8 +442,37 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
         }
         localStorage.setItem(bookmarksKey, JSON.stringify(bookmarks));
         setIsBookmarked(!isBookmarked);
-      } catch (err) {
-        console.error("Failed to update bookmarks:", err);
+      } catch (err: any) {
+        console.warn("⚠️ LocalStorage bookmark set failed. Attempting self-cleaning of large media keys...", err);
+        
+        try {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('walrus_sim_') || key.length === 44 || key.length === 64)) {
+              const val = localStorage.getItem(key);
+              if (val && val.length > 50000) { // Clear entries larger than 50KB to quickly reclaim quota
+                keysToRemove.push(key);
+              }
+            }
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+          console.log(`🧹 Reclaimed space by removing ${keysToRemove.length} entries. Retrying bookmark save...`);
+          
+          // Retry save
+          const bookmarksRaw = localStorage.getItem(bookmarksKey);
+          let bookmarks = bookmarksRaw ? JSON.parse(bookmarksRaw) : [];
+          if (isBookmarked) {
+            bookmarks = bookmarks.filter((id: string) => id !== targetPostId);
+          } else {
+            bookmarks.push(targetPostId);
+          }
+          localStorage.setItem(bookmarksKey, JSON.stringify(bookmarks));
+          setIsBookmarked(!isBookmarked);
+        } catch (retryErr) {
+          console.error("🚨 Bookmark save failed after retry:", retryErr);
+          alert("Bookmark quota exceeded! Please clear some browser storage space.");
+        }
       }
     }
   };
