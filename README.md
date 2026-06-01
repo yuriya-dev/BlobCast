@@ -325,7 +325,7 @@ Heavy content (text, images, video) is **never** stored on-chain — everything 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/BlobCast.git
+git clone https://github.com/yuriya-dev/BlobCast.git
 cd BlobCast
 ```
 
@@ -383,27 +383,37 @@ sui client publish --gas-budget 100000000
 
 ```bash
 # =========================================================================
-# BlobCast — Server Environment Configuration
+# BlobCast — Server Environment Configurations Example
 # =========================================================================
 
 # --- 1. Server Settings ---
+# Port that the Express API server will listen on
 PORT=8080
+# Node runtime mode: 'development' or 'production' (development shows stack traces)
 NODE_ENV=development
 
 # --- 2. Supabase Database Connection (PostgreSQL) ---
-# Format: postgresql://[user]:[password]@[host]:[port]/[database]
+# Format: postgresql://[user]:[password]@[host]:[port]/[database]?schema=public
 DATABASE_URL="postgresql://postgres:[password]@[host].supabase.co:5432/postgres?schema=public"
 
 # --- 3. Redis Cache Configuration ---
-# If left empty, the server will use an in-memory Redis simulator (for development)
+# Connection string for Upstash or local Redis instance
 REDIS_URL="redis://localhost:6379"
-# For Upstash: "rediss://:[password]@[host].upstash.io:6379"
 
-# --- 4. Tatum Sui RPC Infrastructure ---
-# If left empty, automatically falls back to public Sui gateways
+# --- 4. Tatum Sui RPC Infrastructure gateways ---
+# Custom Tatum gateway endpoints for Sui Testnet and Mainnet
+# If left blank, the Tatum client automatically falls back to Sui public gateways
 TATUM_SUI_TESTNET_RPC="https://sui-testnet.node.tatum.io"
 TATUM_SUI_MAINNET_RPC="https://sui-mainnet.node.tatum.io"
-TATUM_API_KEY="your_tatum_api_key_here"
+TATUM_API_KEY="ISI_DENGAN_TATUM_API_KEY_ANDA"
+
+SPONSOR_PRIVATE_KEY="suikey1..."
+
+# --- 5. Gemini AI Moderation ---
+# Get a key from https://aistudio.google.com/apikey
+GEMINI_API_KEY=""
+# Optional model override (default: gemini-2.0-flash)
+# GEMINI_MODEL="gemini-2.0-flash"
 ```
 
 > **💡 Tip:** If `REDIS_URL` is left empty, the server uses a built-in in-memory cache simulator — ideal for development without Redis.
@@ -412,11 +422,25 @@ TATUM_API_KEY="your_tatum_api_key_here"
 ### Client (`client/.env`)
 
 ```bash
-# Prisma Database Connection for Client
-DATABASE_URL="prisma+postgres://localhost:51213/?api_key=..."
+# =========================================================================
+# BlobCast — Frontend Client Environment Configurations Example
+# =========================================================================
 
-# Tatum API Key for client-side Sui queries
-TATUM_API_KEY="your_tatum_api_key_here"
+# --- 1. API Backend Url ---
+# URL of the Express API backend server
+NEXT_PUBLIC_API_URL="http://localhost:8080/api"
+
+# --- 2. Sui Blockchain Configuration ---
+# Deployed Move contract package ID on Sui Testnet/Mainnet
+NEXT_PUBLIC_BLOBCAST_PACKAGE_ID=""
+
+# --- 3. Active Sui network: 'testnet' or 'mainnet' ---
+NEXT_PUBLIC_SUI_NETWORK="testnet"
+
+# --- 4. Walrus Gateway Configuration ---
+# Public Walrus publisher and aggregator endpoints
+NEXT_PUBLIC_WALRUS_PUBLISHER_URL="https://publisher.walrus-testnet.walrus.space"
+NEXT_PUBLIC_WALRUS_AGGREGATOR_URL="https://aggregator.walrus-testnet.walrus.space"
 ```
 
 ---
