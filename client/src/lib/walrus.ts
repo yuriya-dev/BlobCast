@@ -415,9 +415,11 @@ export const walrus = {
     }
 
     try {
-      // Attempt real download from Walrus Testnet aggregator
-      const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${cleanId}`, {
-        signal: AbortSignal.timeout(5000), // 5 seconds timeout
+      // Bypass direct decentralized aggregator calls in the browser to prevent network connection queue blocks.
+      // Instead, fetch from our unified Express backend proxy which caches the parsed results in PostgreSQL.
+      const baseUrl = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api';
+      const response = await fetch(`${baseUrl}/walrus/blobs/${cleanId}`, {
+        signal: AbortSignal.timeout(3000), // strict timeout
       });
 
       if (response.ok) {
@@ -445,10 +447,10 @@ export const walrus = {
         }
       }
     } catch (e) {
-      console.warn(`⚠️ Failed to read from Walrus Testnet aggregator for ${cleanId}. Fetching from simulated registry.`, e);
+      console.warn(`⚠️ Failed to proxy read from Express aggregator proxy for ${cleanId}.`, e);
     }
 
-    throw new Error(`Walrus Blob ID ${cleanId} could not be retrieved from aggregator.`);
+    throw new Error(`Walrus Blob ID ${cleanId} could not be retrieved from aggregator proxy.`);
   },
 
   /**

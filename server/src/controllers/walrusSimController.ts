@@ -38,12 +38,41 @@ export const getSimulatedBlob = asyncHandler(async (req: Request, res: Response)
         throw new AppError('blobId parameter is required', 400);
     }
 
-    const blob = await prisma.simulatedBlob.findUnique({
+    let blob = await prisma.simulatedBlob.findUnique({
         where: { id: blobId }
     });
 
     if (!blob) {
-        throw new AppError('Simulated blob not found in database', 404);
+        // Automatically fetch from real Walrus aggregator on backend (bypasses CORS & client connection limits)
+        try {
+            const WALRUS_AGGREGATOR = process.env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+            console.log(`🌐 Server Proxy: Fetching blob ${blobId} from real Walrus aggregator...`);
+            const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`, {
+                signal: AbortSignal.timeout(1800) // strict timeout
+            });
+            if (response.ok) {
+                const text = await response.text();
+                // Cache in PostgreSQL
+                blob = await prisma.simulatedBlob.create({
+                    data: { id: blobId, content: text }
+                });
+                console.log(`💾 Server Proxy: Cached blob ${blobId} in PostgreSQL.`);
+            }
+        } catch (err) {
+            console.warn(`⚠️ Server Proxy: Failed to proxy blob ${blobId} from aggregator:`, err);
+        }
+    }
+
+    if (!blob) {
+        // Return a graceful mockup payload to prevent client-side crashes if aggregator is offline
+        const fallbackText = JSON.stringify({
+            content: {
+                text: 'This post content was verifiably registered on-chain in the Sui network but the raw Walrus Storage blob could not be retrieved from the aggregator.',
+                hashtags: ['decentralized', 'walrus']
+            },
+            media: []
+        });
+        return res.status(200).json(JSON.parse(fallbackText));
     }
 
     // Attempt to parse JSON content if possible
