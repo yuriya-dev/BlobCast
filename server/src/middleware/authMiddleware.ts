@@ -5,7 +5,12 @@ import { parseCookies, verifyAuthToken, AUTH_COOKIE_NAME } from '../lib/auth';
 
 async function attachAuthUser(req: Request): Promise<boolean> {
   const cookies = parseCookies(req.headers.cookie);
-  const token = cookies[AUTH_COOKIE_NAME];
+  let token = cookies[AUTH_COOKIE_NAME];
+
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    token = req.headers.authorization.substring(7);
+  }
+
   const payload = verifyAuthToken(token);
 
   if (!payload) {

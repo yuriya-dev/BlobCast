@@ -114,7 +114,7 @@ export function SessionSecurityPanel({
               <span className="text-white select-all break-all">{sponsorInfo.address}</span>
             </div>
             <a
-              href={`https://suiscan.xyz/testnet/account/${sponsorInfo.address}`}
+              href={`https://suiscan.xyz/${process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet'}/account/${sponsorInfo.address}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-0.5 text-sui-cyan hover:underline hover:text-white transition-colors"

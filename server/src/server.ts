@@ -12,7 +12,7 @@ process.on('uncaughtException', (err: Error) => {
 
 const PORT = process.env.PORT || 8080;
 
-// Create native HTTP server so WebSocket and Express share the same port
+// Create native HTTP server so WebSocket and Express share the same port - trigger hot reload
 const server = http.createServer(app);
 
 // Attach WebSocket server to the same HTTP server on path /ws

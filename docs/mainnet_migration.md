@@ -89,8 +89,8 @@ Walrus Permanent Blob Storage charges for storage space based on storage size an
 ### 2. Configure Walrus Mainnet Node Endpoints
 Acquire native Mainnet publisher and aggregator endpoints from the Walrus Storage registry.
 Update the endpoints in the backend server's configurations:
-* **Aggregator URL**: `https://aggregator.mainnet.walrus.space` (or a dedicated private cluster gateway).
-* **Publisher URL**: `https://publisher.mainnet.mainnet.space` (requires signature authorization funded by your SUI/WAL gas address).
+* **Aggregator URL**: `https://aggregator.walrus-mainnet.walrus.space` (or a dedicated private cluster gateway).
+* **Publisher URL**: use a private/authorized publisher (Mainnet has no public publisher without auth). Example: `https://publisher.walrus-mainnet.walrus.space` (requires signature authorization funded by your SUI/WAL gas address).
 
 ---
 

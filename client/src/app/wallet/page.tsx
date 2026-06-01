@@ -355,9 +355,10 @@ export default function MyWalletPage() {
               return 800; // default simulated post JSON size
             }
 
-            // C. Real Walrus Testnet blob: Query the aggregator via HEAD
+            // C. Real Walrus blob: Query the aggregator via HEAD
             try {
-              const response = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${cleanId}`, {
+              const WALRUS_AGGREGATOR = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+              const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${cleanId}`, {
                 method: 'HEAD',
                 signal: AbortSignal.timeout(3000) // 3 seconds timeout
               });

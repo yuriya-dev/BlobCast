@@ -1,8 +1,54 @@
 import { Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import jwt, { Algorithm } from 'jsonwebtoken';
 import { prisma } from '../lib/db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 import { tatum } from '../lib/tatum';
+
+type WalrusJwtClaims = {
+    exp: number;
+    iat: number;
+    jti: string;
+    send_object_to?: string;
+    epochs?: number;
+    max_epochs?: number;
+    size?: number;
+    max_size?: number;
+};
+
+const buildWalrusJwt = (params: {
+    epochs?: number;
+    size?: number;
+    sendObjectTo?: string;
+}): string | null => {
+    const secret = process.env.WALRUS_PUBLISHER_JWT_SECRET;
+    if (!secret) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    const expiresSec = parseInt(process.env.WALRUS_PUBLISHER_JWT_EXPIRES_SEC || '60', 10);
+    const algorithm = (process.env.WALRUS_PUBLISHER_JWT_ALG || 'HS256') as Algorithm;
+
+    const claim: WalrusJwtClaims = {
+        exp: now + (Number.isFinite(expiresSec) ? expiresSec : 60),
+        iat: now,
+        jti: randomUUID(),
+    };
+
+    if (params.epochs !== undefined) {
+        claim.epochs = params.epochs;
+    }
+
+    if (params.size !== undefined) {
+        claim.size = params.size;
+    }
+
+    if (params.sendObjectTo) {
+        claim.send_object_to = params.sendObjectTo;
+    }
+
+    return jwt.sign(claim, secret, { algorithm });
+};
 
 /**
  * Controller to upload a simulated Walrus blob
@@ -24,6 +70,100 @@ export const uploadSimulatedBlob = asyncHandler(async (req: Request, res: Respon
     res.status(201).json({
         status: 'success',
         data: { blob }
+    });
+});
+
+/**
+ * Controller to publish a real Walrus blob via server-side publisher
+ * POST /api/walrus/publish
+ */
+export const publishWalrusBlob = asyncHandler(async (req: Request, res: Response) => {
+    const { content, epochs, sendObjectTo } = req.body;
+
+    if (content === undefined || content === null) {
+        throw new AppError('content is required', 400);
+    }
+
+    const serialized = typeof content === 'string' ? content : JSON.stringify(content);
+    const WALRUS_PUBLISHER = process.env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
+    const parsedEpochs = typeof epochs === 'number' ? epochs : parseInt(epochs, 10);
+    const effectiveEpochs = Number.isFinite(parsedEpochs) ? parsedEpochs : 26;
+    const sizeBytes = Buffer.byteLength(serialized);
+
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+    };
+    const authHeader = process.env.WALRUS_PUBLISHER_AUTH;
+    if (authHeader) {
+        headers['Authorization'] = authHeader.startsWith('Bearer ')
+            ? authHeader
+            : `Bearer ${authHeader}`;
+    } else {
+        const jwtToken = buildWalrusJwt({
+            epochs: effectiveEpochs,
+            size: sizeBytes,
+            sendObjectTo: typeof sendObjectTo === 'string' ? sendObjectTo : undefined,
+        });
+        if (jwtToken) {
+            headers['Authorization'] = `Bearer ${jwtToken}`;
+        }
+    }
+
+    const sendObjectToParam = typeof sendObjectTo === 'string' && sendObjectTo.length > 0
+        ? `&send_object_to=${encodeURIComponent(sendObjectTo)}`
+        : '';
+
+    const response = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=${effectiveEpochs}${sendObjectToParam}`, {
+        method: 'PUT',
+        body: serialized,
+        headers,
+        signal: AbortSignal.timeout(60000)
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        const statusCode = response.status >= 400 && response.status < 600 ? response.status : 502;
+        throw new AppError(`Walrus publisher rejected the request (status ${response.status}).`, statusCode);
+    }
+
+    try {
+        res.status(response.status).json(JSON.parse(text));
+    } catch {
+        res.status(response.status).send(text);
+    }
+});
+
+/**
+ * Controller to mint a JWT for authenticated publisher uploads
+ * POST /api/walrus/auth
+ */
+export const mintWalrusUploadToken = asyncHandler(async (req: Request, res: Response) => {
+    if (!process.env.WALRUS_PUBLISHER_JWT_SECRET) {
+        throw new AppError('WALRUS_PUBLISHER_JWT_SECRET is not configured', 500);
+    }
+
+    const { epochs, size, sendObjectTo } = req.body;
+    const parsedEpochs = typeof epochs === 'number' ? epochs : parseInt(epochs, 10);
+    const parsedSize = typeof size === 'number' ? size : parseInt(size, 10);
+
+    const token = buildWalrusJwt({
+        epochs: Number.isFinite(parsedEpochs) ? parsedEpochs : undefined,
+        size: Number.isFinite(parsedSize) ? parsedSize : undefined,
+        sendObjectTo: typeof sendObjectTo === 'string' ? sendObjectTo : undefined,
+    });
+
+    if (!token) {
+        throw new AppError('Failed to create Walrus upload token', 500);
+    }
+
+    const expiresInSec = parseInt(process.env.WALRUS_PUBLISHER_JWT_EXPIRES_SEC || '60', 10);
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            token,
+            expiresInSec: Number.isFinite(expiresInSec) ? expiresInSec : 60,
+        }
     });
 });
 
@@ -104,7 +244,8 @@ export const serveSimulatedImage = asyncHandler(async (req: Request, res: Respon
     if (!blob) {
         // Automatically fetch from real Walrus aggregator on backend (bypasses CORS restrictions)
         try {
-            const url = `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
+            const WALRUS_AGGREGATOR = process.env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+            const url = `${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`;
             const response = await fetch(url);
             if (response.ok) {
                 const text = await response.text();
@@ -185,13 +326,16 @@ export const getWalrusStatus = asyncHandler(async (req: Request, res: Response) 
     }
     
     // 3. Dynamic Epoch Check from SUI network via Tatum
-    let activeEpoch = 22; // Default Testnet Epoch guess
+    let activeEpoch = 31; // Default Mainnet Epoch guess
     try {
-        const client = tatum.getClient('testnet');
+        const activeNetwork = (process.env.SUI_NETWORK as 'mainnet' | 'testnet') || 'testnet';
+        const client = tatum.getClient(activeNetwork);
         const latestCheckpoint = await client.getLatestCheckpointSequenceNumber();
         const sequence = parseInt(latestCheckpoint, 10);
         if (sequence > 0) {
-            activeEpoch = Math.floor(sequence / 800000) + 12;
+            activeEpoch = activeNetwork === 'mainnet'
+                ? Math.floor(sequence / 800000) + 31
+                : Math.floor(sequence / 800000) + 12;
         }
     } catch {
         // Fallback
@@ -207,7 +351,7 @@ export const getWalrusStatus = asyncHandler(async (req: Request, res: Response) 
     res.status(200).json({
         status: 'success',
         data: {
-            storageNetwork: process.env.NODE_ENV === 'production' ? 'MAINNET' : 'TESTNET',
+            storageNetwork: process.env.SUI_NETWORK === 'mainnet' ? 'MAINNET' : 'TESTNET',
             aggregatorOnline: finalAggregatorOnline,
             publisherOnline: publisherOnline || true, // keep publisher visually healthy
             latencyMs: finalLatencyMs,

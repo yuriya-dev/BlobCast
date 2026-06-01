@@ -42,7 +42,7 @@ export function PostCardVerificationPanel({
         <div className="flex items-center justify-between">
           <span>Sui Content Owner:</span>
           <a
-            href={`https://suiscan.xyz/testnet/account/${authorResolved.walletAddress}`}
+            href={`https://suiscan.xyz/${process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet'}/account/${authorResolved.walletAddress}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-gray-300 hover:text-sui-cyan hover:underline truncate w-48 text-right"
@@ -53,15 +53,21 @@ export function PostCardVerificationPanel({
         </div>
         <div className="flex items-center justify-between">
           <span>Walrus Blob Verification:</span>
-          <a
-            href={`https://walruscan.com/testnet/blob/${walrusBlobId.replace('walrus://', '')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sui-cyan flex items-center gap-1 hover:underline truncate w-48 justify-end"
-            title="Verify Blob on Walrus Scan"
-          >
-            {walrusBlobId.replace('walrus://', '').substring(0, 16)}... <ExternalLink className="h-3 w-3" />
-          </a>
+          {walrusBlobId.startsWith('walrus_sim_') || walrusBlobId.startsWith('walrus://walrus_sim_') ? (
+            <span className="text-amber-400 font-bold uppercase tracking-wider">
+              Simulated Local Cache
+            </span>
+          ) : (
+            <a
+              href={`https://walruscan.com/${process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet'}/blob/${walrusBlobId.replace('walrus://', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sui-cyan flex items-center gap-1 hover:underline truncate w-48 justify-end"
+              title="Verify Blob on Walrus Scan"
+            >
+              {walrusBlobId.replace('walrus://', '').substring(0, 16)}... <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
         </div>
         <div className="flex items-center justify-between">
           <span>Content Hash:</span>
@@ -73,7 +79,7 @@ export function PostCardVerificationPanel({
           <div className="flex items-center justify-between border-t border-sui-cyan/5 pt-2 mt-1">
             <span>Sui Object Reference ID:</span>
             <a
-              href={`https://suiscan.xyz/testnet/object/${suiObjectId}`}
+              href={`https://suiscan.xyz/${process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet'}/object/${suiObjectId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sui-cyan flex items-center gap-1 hover:underline"

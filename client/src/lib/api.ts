@@ -1,12 +1,22 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 function requestInit(init: RequestInit = {}): RequestInit {
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string> || {}),
+  };
+
+  if (typeof document !== 'undefined') {
+    const matches = document.cookie.match(/(?:^|; )blobcast_session=([^;]*)/);
+    const token = matches ? decodeURIComponent(matches[1]) : null;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
   return {
     credentials: 'include',
     ...init,
-    headers: {
-      ...(init.headers || {}),
-    },
+    headers,
   };
 }
 

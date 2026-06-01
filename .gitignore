@@ -71,3 +71,5 @@ docs/walrus-images
 
 # sponsor wallet key
 server/sponsor_wallet.key
+
+/walrus-sub-wallets

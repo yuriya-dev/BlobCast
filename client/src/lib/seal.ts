@@ -22,9 +22,11 @@
 
 import { SealClient, SessionKey, NoAccessError } from '@mysten/seal';
 
-const WALRUS_PUBLISHER = 'https://publisher.walrus-testnet.walrus.space';
-const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space';
-const SUI_TESTNET_RPC = 'https://fullnode.testnet.sui.io';
+const WALRUS_PUBLISHER = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
+const WALRUS_AGGREGATOR = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+const SUI_RPC = process.env.NEXT_PUBLIC_SUI_NETWORK === 'mainnet'
+  ? 'https://fullnode.mainnet.sui.io:443'
+  : 'https://fullnode.testnet.sui.io:443';
 
 // BlobCast DM access policy Move package on Sui Testnet
 // This package must implement a `seal_approve` function.
@@ -44,7 +46,7 @@ function getSealClient(): SealClient {
   if (!_sealClient) {
     // SealClient requires a suiClient — use a minimal fetch-based implementation
     const minimalSuiClient = {
-      url: SUI_TESTNET_RPC,
+      url: SUI_RPC,
       // Minimal interface that SealClient uses internally
       executeTransaction: async (args: any) => args,
       getObject: async (args: any) => args,
@@ -235,7 +237,7 @@ export async function createClientSessionKey(address: string): Promise<SessionKe
   if (!DM_PACKAGE_ID) return null;
   try {
     const minimalSuiClient = {
-      url: SUI_TESTNET_RPC,
+      url: SUI_RPC,
       executeTransaction: async (args: any) => args,
       getObject: async (args: any) => args,
     } as any;

@@ -8,7 +8,8 @@ class BlobCastIndexer {
     private network: 'testnet' | 'mainnet' = 'testnet';
 
     constructor() {
-        console.log("⚡ [BlobCast Indexer] Initializing Off-chain Indexing Engine...");
+        this.network = (process.env.SUI_NETWORK as 'testnet' | 'mainnet') || 'testnet';
+        console.log(`⚡ [BlobCast Indexer] Initializing Off-chain Indexing Engine for ${this.network}...`);
     }
 
     /**

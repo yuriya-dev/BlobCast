@@ -173,112 +173,104 @@ export const walrus = {
   /**
    * Upload raw JSON or string content to Walrus publisher
    */
-  async uploadBlob(content: string | Record<string, any>, epochs: number = 53): Promise<WalrusBlobInfo> {
+  async uploadBlob(content: string | Record<string, any>, epochs: number = 26): Promise<WalrusBlobInfo> {
     const serialized = typeof content === 'string' ? content : JSON.stringify(content);
     const size = new Blob([serialized]).size;
 
-    try {
-      // Attempt real publish to Walrus Testnet publisher
-      const response = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=${epochs}`, {
-        method: 'PUT',
-        body: serialized,
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(15000), // 15 seconds timeout fallback
-      });
+    const handlePublishResponse = async (response: Response): Promise<WalrusBlobInfo | null> => {
+      if (!response.ok) return null;
 
-      if (response.ok) {
-        const data = await response.json();
-        const blobObject = data.newlyCreated?.blobObject || data.alreadyCertified?.blobObject;
-        if (blobObject) {
-          const blobId = blobObject.blobId;
-          
-          // Cache the content locally so it can be resolved instantly on the same machine
-          if (typeof window !== 'undefined') {
-            try {
-              if (serialized.length < 100000) {
-                localStorage.setItem(blobId, serialized);
-              } else {
-                simulatedMemoryStore.set(blobId, serialized);
-              }
-            } catch (err) {
-              console.warn("⚠️ LocalStorage quota exceeded. Falling back to in-memory store.");
-              simulatedMemoryStore.set(blobId, serialized);
-            }
+      const data = await response.json().catch(() => null);
+      if (!data) return null;
 
-            // Bulletproof IndexedDB caching for large uploads (like 9.6MB files) so they survive refreshes
-            if (idbSimulator) {
-              idbSimulator.set(blobId, serialized).catch(() => {});
-            }
+      const blobObject = data.newlyCreated?.blobObject || data.alreadyCertified?.blobObject;
+      if (!blobObject) return null;
+
+      const blobId = blobObject.blobId;
+
+      // Cache the content locally so it can be resolved instantly on the same machine
+      if (typeof window !== 'undefined') {
+        try {
+          if (serialized.length < 100000) {
+            localStorage.setItem(blobId, serialized);
+          } else {
+            simulatedMemoryStore.set(blobId, serialized);
           }
+        } catch (err) {
+          console.warn("⚠️ LocalStorage quota exceeded. Falling back to in-memory store.");
+          simulatedMemoryStore.set(blobId, serialized);
+        }
 
-          return {
-            blobId,
-            size,
-            registeredEpoch: blobObject.registeredEpoch || 1,
-            startEpoch: blobObject.storage?.startEpoch || 1,
-            endEpoch: blobObject.storage?.endEpoch || (1 + epochs),
-            shardsCount: blobObject.erasureCodingInfo?.shards || 120,
-            isSimulated: false,
-            shardsMap: generateMockStorageNodes(blobId, size),
-          };
+        // Bulletproof IndexedDB caching for large uploads (like 9.6MB files) so they survive refreshes
+        if (idbSimulator) {
+          idbSimulator.set(blobId, serialized).catch(() => {});
         }
       }
-    } catch (e) {
-      console.warn("⚠️ Failed to write to Walrus Testnet publisher. Falling back to local encrypted simulated blob storage.", e);
-    }
 
-    // Secure Simulated Upload Fallback
-    const simulatedBlobId = `walrus_sim_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
-    
-    // Store in LocalStorage or Memory if on server/client
+      return {
+        blobId,
+        size,
+        registeredEpoch: blobObject.registeredEpoch || 1,
+        startEpoch: blobObject.storage?.startEpoch || 1,
+        endEpoch: blobObject.storage?.endEpoch || (1 + epochs),
+        shardsCount: blobObject.erasureCodingInfo?.shards || 120,
+        isSimulated: false,
+        shardsMap: generateMockStorageNodes(blobId, size),
+      };
+    };
+
+    const apiBaseUrl = typeof window !== 'undefined'
+      ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api')
+      : 'http://localhost:8080/api';
+
     if (typeof window !== 'undefined') {
       try {
-        if (serialized.length < 100000) {
-          localStorage.setItem(simulatedBlobId, serialized);
-        } else {
-          simulatedMemoryStore.set(simulatedBlobId, serialized);
+        const authResponse = await fetch(`${apiBaseUrl}/walrus/auth`, {
+          method: 'POST',
+          body: JSON.stringify({ epochs, size }),
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (authResponse.ok) {
+          const authData = await authResponse.json().catch(() => null);
+          const token = authData?.data?.token || authData?.token;
+          if (token) {
+            const response = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=${epochs}`, {
+              method: 'PUT',
+              body: serialized,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              signal: AbortSignal.timeout(60000),
+            });
+
+            const info = await handlePublishResponse(response);
+            if (info) return info;
+          }
         }
-      } catch (err) {
-        console.warn("⚠️ LocalStorage quota exceeded. Gracefully falling back to high-capacity in-memory session cache for base64 storage.");
-        simulatedMemoryStore.set(simulatedBlobId, serialized);
+      } catch (e) {
+        console.warn('⚠️ Failed to publish with signed JWT. Falling back to backend proxy.', e);
       }
 
-      // Concurrently persist in IndexedDB as a bulletproof background backup to survive page refreshes
-      if (idbSimulator) {
-        idbSimulator.set(simulatedBlobId, serialized).catch(() => {});
-      }
-    } else {
-      // Server-side cache helper
       try {
-        const { cache } = eval('require')('./redis');
-        await cache.set(simulatedBlobId, serialized, 3600 * 24); // 24 hours persistence
-      } catch (err) {
-        console.warn("⚠️ Failed to load server-side Redis cache helper:", err);
+        const response = await fetch(`${apiBaseUrl}/walrus/publish`, {
+          method: 'POST',
+          body: JSON.stringify({ content: serialized, epochs }),
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(60000),
+        });
+
+        const info = await handlePublishResponse(response);
+        if (info) return info;
+      } catch (e) {
+        console.warn('⚠️ Failed to publish via backend Walrus proxy. Falling back to direct publisher.', e);
       }
     }
 
-    // Sync simulated blob to Express backend for global cross-device synchronization
-    const syncUrl = `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api') : 'http://localhost:8080/api'}/walrus/blobs`;
-    try {
-      await fetch(syncUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blobId: simulatedBlobId, content: serialized }),
-      });
-    } catch (syncErr) {
-      console.warn('⚠️ Failed to sync simulated blob to backend database:', syncErr);
-    }
-
-    return {
-      blobId: simulatedBlobId,
-      size,
-      registeredEpoch: 22,
-      startEpoch: 22,
-      endEpoch: 22 + epochs,
-      shardsCount: 120,
-      isSimulated: true,
-      shardsMap: generateMockStorageNodes(simulatedBlobId, size),
-    };
+    // If we reach here, publishing failed. Do not fall back to simulated storage.
+    throw new Error('Failed to publish blob to Walrus publisher (no simulated fallback allowed).');
   },
 
   /**

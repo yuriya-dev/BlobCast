@@ -45,7 +45,9 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       console.warn('⚠️ [Tatum RPC] Rate limited (429). Dynamically falling back to SUI public fullnode...');
       const urlStr = typeof input === 'string' ? input : input.toString();
       if (urlStr.includes('tatum.io')) {
-        const publicUrl = 'https://fullnode.testnet.sui.io:443';
+        const publicUrl = process.env.NEXT_PUBLIC_SUI_NETWORK === 'mainnet'
+          ? 'https://fullnode.mainnet.sui.io:443'
+          : 'https://fullnode.testnet.sui.io:443';
         return fetch(publicUrl, init);
       }
     }
@@ -60,7 +62,9 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
           console.warn('⚠️ [Tatum RPC] Method not found (-32601). Dynamically falling back to SUI public fullnode...');
           const urlStr = typeof input === 'string' ? input : input.toString();
           if (urlStr.includes('tatum.io')) {
-            const publicUrl = 'https://fullnode.testnet.sui.io:443';
+            const publicUrl = process.env.NEXT_PUBLIC_SUI_NETWORK === 'mainnet'
+              ? 'https://fullnode.mainnet.sui.io:443'
+              : 'https://fullnode.testnet.sui.io:443';
             return fetch(publicUrl, init);
           }
         }
@@ -72,7 +76,9 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     console.warn('⚠️ [Tatum RPC] Fetch failed, attempting public fullnode fallback...', err);
     const urlStr = typeof input === 'string' ? input : input.toString();
     if (urlStr.includes('tatum.io')) {
-      const publicUrl = 'https://fullnode.testnet.sui.io:443';
+      const publicUrl = process.env.NEXT_PUBLIC_SUI_NETWORK === 'mainnet'
+        ? 'https://fullnode.mainnet.sui.io:443'
+        : 'https://fullnode.testnet.sui.io:443';
       return fetch(publicUrl, init);
     }
     throw err;
@@ -87,7 +93,7 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider 
         networks={networkConfig} 
-        defaultNetwork="testnet"
+        defaultNetwork={(process.env.NEXT_PUBLIC_SUI_NETWORK as 'mainnet' | 'testnet') || 'testnet'}
         createClient={(name, config) => {
           const transport = new JsonRpcHTTPTransport({
             url: config.url,

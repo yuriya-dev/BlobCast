@@ -879,7 +879,7 @@ export default function MessagesPage() {
                       <>
                         Sealed via <span className="text-sui-cyan font-bold">Walrus Seal</span> — E2E Encrypted. Room Policy:{' '}
                         <a
-                          href={`https://suiscan.xyz/testnet/object/${activeConv.suiObjectId}`}
+                          href={`https://suiscan.xyz/${process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet'}/object/${activeConv.suiObjectId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sui-cyan font-bold underline hover:text-white transition-colors"

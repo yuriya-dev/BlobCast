@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { 
     uploadSimulatedBlob, 
+    publishWalrusBlob,
+    mintWalrusUploadToken,
     getSimulatedBlob, 
     serveSimulatedImage,
     getWalrusStatus
@@ -13,6 +15,12 @@ router.get('/status', getWalrusStatus);
 
 // POST /api/walrus/blobs - Upload/sync a simulated blob to database
 router.post('/blobs', uploadSimulatedBlob);
+
+// POST /api/walrus/publish - Publish a real blob via server-side publisher
+router.post('/publish', publishWalrusBlob);
+
+// POST /api/walrus/auth - Mint a JWT token for authenticated publisher uploads
+router.post('/auth', mintWalrusUploadToken);
 
 // GET /api/walrus/blobs/:blobId - Retrieve raw content of a simulated blob
 router.get('/blobs/:blobId', getSimulatedBlob);

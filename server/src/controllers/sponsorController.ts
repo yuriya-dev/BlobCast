@@ -17,7 +17,9 @@ const customFetch = async (input: any, init?: any) => {
             console.warn('⚠️ [Backend Tatum RPC] Rate limited (429). Dynamically falling back to SUI public fullnode...');
             const urlStr = typeof input === 'string' ? input : input.toString();
             if (urlStr.includes('tatum.io')) {
-                const publicUrl = 'https://fullnode.testnet.sui.io:443';
+                const publicUrl = process.env.SUI_NETWORK === 'mainnet'
+                    ? 'https://fullnode.mainnet.sui.io:443'
+                    : 'https://fullnode.testnet.sui.io:443';
                 return fetch(publicUrl, init);
             }
         }
@@ -32,7 +34,9 @@ const customFetch = async (input: any, init?: any) => {
                     console.warn('⚠️ [Backend Tatum RPC] Method not found (-32601). Dynamically falling back to SUI public fullnode...');
                     const urlStr = typeof input === 'string' ? input : input.toString();
                     if (urlStr.includes('tatum.io')) {
-                        const publicUrl = 'https://fullnode.testnet.sui.io:443';
+                        const publicUrl = process.env.SUI_NETWORK === 'mainnet'
+                            ? 'https://fullnode.mainnet.sui.io:443'
+                            : 'https://fullnode.testnet.sui.io:443';
                         return fetch(publicUrl, init);
                     }
                 }
@@ -44,7 +48,9 @@ const customFetch = async (input: any, init?: any) => {
         console.warn('⚠️ [Backend Tatum RPC] Fetch failed, attempting public fullnode fallback...', err);
         const urlStr = typeof input === 'string' ? input : input.toString();
         if (urlStr.includes('tatum.io')) {
-            const publicUrl = 'https://fullnode.testnet.sui.io:443';
+            const publicUrl = process.env.SUI_NETWORK === 'mainnet'
+                ? 'https://fullnode.mainnet.sui.io:443'
+                : 'https://fullnode.testnet.sui.io:443';
             return fetch(publicUrl, init);
         }
         throw err;
@@ -72,8 +78,14 @@ async function ensureSdkLoaded() {
         Ed25519Keypair = keypairsMod.Ed25519Keypair;
         Transaction = txMod.Transaction;
 
-        let SUI_RPC_URL = 'https://fullnode.testnet.sui.io:443';
-        const tatumRpc = process.env.TATUM_SUI_TESTNET_RPC;
+        const isMainnet = process.env.SUI_NETWORK === 'mainnet';
+        let SUI_RPC_URL = isMainnet
+            ? 'https://fullnode.mainnet.sui.io:443'
+            : 'https://fullnode.testnet.sui.io:443';
+
+        const tatumRpc = isMainnet
+            ? process.env.TATUM_SUI_MAINNET_RPC
+            : process.env.TATUM_SUI_TESTNET_RPC;
         const apiKey = process.env.TATUM_API_KEY;
 
         if (tatumRpc) {
@@ -81,6 +93,8 @@ async function ensureSdkLoaded() {
             // Correct the incorrect hostname from .env if present
             if (tatumRpc.includes('sui-testnet.node.tatum.io')) {
                 normalizedRpc = 'https://sui-testnet.gateway.tatum.io';
+            } else if (tatumRpc.includes('sui-mainnet.node.tatum.io')) {
+                normalizedRpc = 'https://sui-mainnet.gateway.tatum.io';
             }
             
             if (apiKey && !normalizedRpc.includes('apiKey=')) {
@@ -90,6 +104,7 @@ async function ensureSdkLoaded() {
             }
         }
         
+        console.log(`📡 [Gas Station] Connecting to Sui network: ${isMainnet ? 'MAINNET' : 'TESTNET'} (${SUI_RPC_URL})...`);
         const transport = new JsonRpcHTTPTransport({
             url: SUI_RPC_URL,
             fetch: customFetch
