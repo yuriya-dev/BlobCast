@@ -117,7 +117,7 @@ export const publishWalrusBlob = asyncHandler(async (req: Request, res: Response
         method: 'PUT',
         body: serialized,
         headers,
-        signal: AbortSignal.timeout(60000)
+        signal: AbortSignal.timeout(120000)
     });
 
     const text = await response.text();

@@ -243,7 +243,7 @@ export const walrus = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
               },
-              signal: AbortSignal.timeout(60000),
+              signal: AbortSignal.timeout(120000),
             });
 
             const info = await handlePublishResponse(response);
@@ -259,7 +259,7 @@ export const walrus = {
           method: 'POST',
           body: JSON.stringify({ content: serialized, epochs }),
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(60000),
+          signal: AbortSignal.timeout(120000),
         });
 
         const info = await handlePublishResponse(response);
