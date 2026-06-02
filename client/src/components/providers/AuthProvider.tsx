@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const [user, setUser] = useState<ApiUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isWalletInitializing, setIsWalletInitializing] = useState(true);
 
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isAuthorizingSession, setIsAuthorizingSession] = useState(false);
@@ -204,9 +205,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     refreshSession();
+
+    const timer = setTimeout(() => {
+      setIsWalletInitializing(false);
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
+    if (isWalletInitializing) return;
+
     // 1. If the wallet is explicitly disconnected, invalidate the current session
     if (user && connectionStatus === 'disconnected') {
       console.log('🔄 [Auth Provider] Wallet disconnected. Logging out.');
@@ -220,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('🔄 [Auth Provider] Wallet changed. Logging out.');
       logout();
     }
-  }, [account?.address, connectionStatus, user]);
+  }, [account?.address, connectionStatus, user, isWalletInitializing]);
 
   const value = useMemo(() => ({
     user,
