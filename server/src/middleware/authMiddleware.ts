@@ -8,11 +8,14 @@ import { parseCookies, verifyAuthToken, AUTH_COOKIE_NAME } from '../lib/auth';
  * Throws precise, structured AppErrors to distinguish different failure modes.
  */
 async function verifyAndGetAuthUser(req: Request): Promise<any> {
-  const cookies = parseCookies(req.headers.cookie);
-  let token = cookies[AUTH_COOKIE_NAME];
+  // 1. Prioritize the Authorization header (Bearer Token)
+  const authHeader = req.headers.authorization || '';
+  let token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
-  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    token = req.headers.authorization.substring(7);
+  // 2. Fall back to reading from session cookies
+  if (!token) {
+    const cookies = parseCookies(req.headers.cookie);
+    token = cookies[AUTH_COOKIE_NAME];
   }
 
   if (!token) {
