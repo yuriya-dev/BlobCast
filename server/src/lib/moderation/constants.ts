@@ -5,7 +5,7 @@ export const MODERATION_STATUS = {
 
 export type ModerationStatus = (typeof MODERATION_STATUS)[keyof typeof MODERATION_STATUS];
 
-export const MODERATION_REASONS = ['none', 'spam', 'scam', 'hate', 'explicit'] as const;
+export const MODERATION_REASONS = ['none', 'spam', 'scam', 'hate', 'explicit', 'phishing', 'malware'] as const;
 export type ModerationReason = (typeof MODERATION_REASONS)[number];
 
 import type { Prisma } from '@prisma/client';

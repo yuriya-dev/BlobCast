@@ -20,7 +20,7 @@ or
 
 {
   "safe": false,
-  "reason": "spam|scam|hate|explicit"
+  "reason": "spam|scam|hate|explicit|phishing|malware"
 }
 
 Content:
@@ -56,6 +56,149 @@ export async function moderateTextContent(content: string): Promise<ModerationRe
   if (!content.trim()) {
     return { status: MODERATION_STATUS.VISIBLE, reason: 'none' };
   }
+
+  // --- Local Demo/Testing Fallback ---
+  // If Gemini API is rate-limited or offline, users can use these trigger tags to test moderation
+  const lowerContent = content.toLowerCase();
+
+  // SCAM / FRAUD
+  const scamPatterns = [
+    '[scam]',
+    'fake-airdrop',
+    'double your crypto',
+    'double your money',
+    'guaranteed profit',
+    '100% profit',
+    'send 1 sui get 2 sui',
+    'send 1 eth get 2 eth',
+    'free crypto giveaway',
+    'claim reward now',
+    'wallet verification required',
+    'connect wallet to claim',
+    'limited airdrop',
+    'instant riches',
+    'risk free investment',
+    'earn $1000 daily',
+  ];
+
+  // SPAM / PROMOTION
+  const spamPatterns = [
+    '[spam]',
+    'buy cheap followers',
+    'buy followers',
+    'buy likes',
+    'buy views',
+    'dm for promotion',
+    'check my profile',
+    'click link in bio',
+    'visit my website',
+    'earn money fast',
+    'work from home and earn',
+    'subscribe now',
+    'join telegram',
+    'join whatsapp group',
+    'marketing service',
+  ];
+
+  // HATE / HARASSMENT
+  const hatePatterns = [
+    '[hate]',
+    'kill all',
+    'go die',
+    'you should die',
+    'subhuman',
+    'racial slur',
+    'ethnic cleansing',
+    'hate group',
+    'nazi propaganda',
+    'white supremacy',
+  ];
+
+  // EXPLICIT / NSFW
+  const explicitPatterns = [
+    '[explicit]',
+    'onlyfans leak',
+    'sex video',
+    'porn',
+    'nude pics',
+    'adult content',
+    'xxx',
+    'escort service',
+    'sexual services',
+  ];
+
+  // PHISHING
+  const phishingPatterns = [
+    '[phishing]',
+    'enter your seed phrase',
+    'share your private key',
+    'verify wallet',
+    'wallet recovery required',
+    'import your wallet',
+    'connect wallet immediately',
+    'security verification',
+  ];
+
+  // MALWARE / SUSPICIOUS DOWNLOADS
+  const malwarePatterns = [
+    '[malware]',
+    'download crack',
+    'free premium software',
+    'keygen',
+    'disable antivirus',
+    'run this executable',
+    '.exe download',
+    'install patch',
+  ];
+
+// Check categories
+if (scamPatterns.some(p => lowerContent.includes(p))) {
+  console.log('🛡️ Local Moderation Triggered: SCAM');
+  return {
+    status: MODERATION_STATUS.HIDDEN,
+    reason: 'scam'
+  };
+}
+
+if (spamPatterns.some(p => lowerContent.includes(p))) {
+  console.log('🛡️ Local Moderation Triggered: SPAM');
+  return {
+    status: MODERATION_STATUS.HIDDEN,
+    reason: 'spam'
+  };
+}
+
+if (hatePatterns.some(p => lowerContent.includes(p))) {
+  console.log('🛡️ Local Moderation Triggered: HATE');
+  return {
+    status: MODERATION_STATUS.HIDDEN,
+    reason: 'hate'
+  };
+}
+
+if (explicitPatterns.some(p => lowerContent.includes(p))) {
+  console.log('🛡️ Local Moderation Triggered: EXPLICIT');
+  return {
+    status: MODERATION_STATUS.HIDDEN,
+    reason: 'explicit'
+  };
+}
+
+if (phishingPatterns.some(p => lowerContent.includes(p))) {
+  console.log('🛡️ Local Moderation Triggered: PHISHING');
+  return {
+    status: MODERATION_STATUS.HIDDEN,
+    reason: 'phishing'
+  };
+}
+
+if (malwarePatterns.some(p => lowerContent.includes(p))) {
+  console.log('🛡️ Local Moderation Triggered: MALWARE');
+  return {
+    status: MODERATION_STATUS.HIDDEN,
+    reason: 'malware'
+  };
+}
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
