@@ -52,24 +52,31 @@ export function useDMWebSocket({
   const activeConvIdRef = useRef<string | null>(null);
   const isUnmountedRef = useRef(false);
 
+  // Sync volatile props to refs to avoid infinite loops and keep callback references static
+  const onNewMessageRef = useRef(onNewMessage);
+  const conversationIdRef = useRef(conversationId);
+  const enabledRef = useRef(enabled);
+
+  useEffect(() => {
+    onNewMessageRef.current = onNewMessage;
+  }, [onNewMessage]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
   const sendMessage = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
     }
   }, []);
 
-  const joinConversation = useCallback((convId: string) => {
-    sendMessage({ type: 'join_conversation', conversationId: convId });
-    activeConvIdRef.current = convId;
-  }, [sendMessage]);
-
-  const leaveConversation = useCallback((convId: string) => {
-    sendMessage({ type: 'leave_conversation', conversationId: convId });
-    activeConvIdRef.current = null;
-  }, [sendMessage]);
-
   const connect = useCallback(() => {
-    if (!enabled || typeof window === 'undefined') return;
+    if (!enabledRef.current || typeof window === 'undefined') return;
 
     try {
       const ws = new WebSocket(WS_URL);
@@ -81,9 +88,10 @@ export function useDMWebSocket({
 
         // Re-subscribe to current conversation after reconnect
         if (activeConvIdRef.current) {
-          joinConversation(activeConvIdRef.current);
-        } else if (conversationId) {
-          joinConversation(conversationId);
+          sendMessage({ type: 'join_conversation', conversationId: activeConvIdRef.current });
+        } else if (conversationIdRef.current) {
+          sendMessage({ type: 'join_conversation', conversationId: conversationIdRef.current });
+          activeConvIdRef.current = conversationIdRef.current;
         }
       };
 
@@ -91,8 +99,8 @@ export function useDMWebSocket({
         try {
           const data: WSMessage = JSON.parse(event.data);
 
-          if (data.type === 'new_message' && data.conversationId === conversationId && data.message) {
-            onNewMessage(data.message);
+          if (data.type === 'new_message' && data.conversationId === conversationIdRef.current && data.message) {
+            onNewMessageRef.current(data.message);
           }
         } catch {
           // ignore malformed messages
@@ -120,7 +128,7 @@ export function useDMWebSocket({
     } catch (err) {
       console.warn('🔌 [WS Client] Failed to create WebSocket:', err);
     }
-  }, [enabled, conversationId, onNewMessage, joinConversation]);
+  }, [sendMessage]);
 
   // Connect on mount
   useEffect(() => {
@@ -134,16 +142,19 @@ export function useDMWebSocket({
     };
   }, [connect]);
 
-  // Subscribe to new conversation when it changes
+  // Subscribe to new conversation when it changes without reconnecting
   useEffect(() => {
     if (!conversationId) return;
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       // Leave old conversation
       if (activeConvIdRef.current && activeConvIdRef.current !== conversationId) {
-        leaveConversation(activeConvIdRef.current);
+        sendMessage({ type: 'leave_conversation', conversationId: activeConvIdRef.current });
       }
-      joinConversation(conversationId);
+      sendMessage({ type: 'join_conversation', conversationId: conversationId });
+      activeConvIdRef.current = conversationId;
+    } else {
+      activeConvIdRef.current = conversationId;
     }
-  }, [conversationId, joinConversation, leaveConversation]);
+  }, [conversationId, sendMessage]);
 }
