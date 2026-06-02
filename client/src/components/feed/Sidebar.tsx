@@ -20,6 +20,7 @@ import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { mockDb, type MockPost } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { ModerationWarningModal } from '@/components/moderation/ModerationWarningModal';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -28,6 +29,12 @@ export function Sidebar() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [moderationWarning, setModerationWarning] = useState<{
+    isOpen: boolean;
+    message: string;
+    reason?: string;
+    walrusBlobId?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -110,7 +117,12 @@ export function Sidebar() {
         contentText: newPost.walrusContent?.content?.text || '',
       });
       if (res?.data?.post?.moderationStatus === 'HIDDEN') {
-        alert(res.message || 'Your cast was stored on Walrus but hidden from the feed due to content guidelines.');
+        setModerationWarning({
+          isOpen: true,
+          message: res.message || 'Your cast was stored on Walrus but hidden from the feed due to content guidelines.',
+          reason: res.data?.post?.moderationReason || res.data?.moderation?.reason || undefined,
+          walrusBlobId: newPost.walrusBlobId
+        });
         return;
       }
     } catch (err) {
@@ -244,6 +256,16 @@ export function Sidebar() {
           </div>
         </div>,
         document.body
+      )}
+
+      {moderationWarning && (
+        <ModerationWarningModal
+          isOpen={moderationWarning.isOpen}
+          onClose={() => setModerationWarning(null)}
+          message={moderationWarning.message}
+          reason={moderationWarning.reason}
+          walrusBlobId={moderationWarning.walrusBlobId}
+        />
       )}
 
     </div>

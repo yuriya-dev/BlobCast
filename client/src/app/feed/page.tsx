@@ -18,6 +18,7 @@ import { api, ApiPost } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useCurrentAccount } from '@mysten/dapp-kit';
+import { ModerationWarningModal } from '@/components/moderation/ModerationWarningModal';
 
 export default function SocialFeedPage() {
   const { user: authUser } = useAuth();
@@ -25,6 +26,12 @@ export default function SocialFeedPage() {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [moderationWarning, setModerationWarning] = useState<{
+    isOpen: boolean;
+    message: string;
+    reason?: string;
+    walrusBlobId?: string;
+  } | null>(null);
 
   // Handle pin: move post to the very top of the feed (only for owner)
   const handlePinPost = async (postId: string, pinned: boolean) => {
@@ -296,7 +303,12 @@ export default function SocialFeedPage() {
           contentText: newPost.walrusContent?.content?.text || '',
         });
         if (createRes?.data?.post?.moderationStatus === 'HIDDEN') {
-          alert(createRes.message || 'Your cast was stored on Walrus but hidden from the feed due to content guidelines.');
+          setModerationWarning({
+            isOpen: true,
+            message: createRes.message || 'Your cast was stored on Walrus but hidden from the feed due to content guidelines.',
+            reason: createRes.data?.post?.moderationReason || createRes.data?.moderation?.reason || undefined,
+            walrusBlobId: newPost.walrusBlobId
+          });
           return;
         }
         loadFeed();
@@ -388,6 +400,16 @@ export default function SocialFeedPage() {
         </div>
         <TrendingWidget />
       </aside>
+
+      {moderationWarning && (
+        <ModerationWarningModal
+          isOpen={moderationWarning.isOpen}
+          onClose={() => setModerationWarning(null)}
+          message={moderationWarning.message}
+          reason={moderationWarning.reason}
+          walrusBlobId={moderationWarning.walrusBlobId}
+        />
+      )}
 
     </div>
   );
