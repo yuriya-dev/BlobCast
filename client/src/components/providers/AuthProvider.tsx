@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, type ApiUser } from '@/lib/api';
-import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignPersonalMessage, useCurrentWallet } from '@mysten/dapp-kit';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 type AuthContextValue = {
@@ -55,6 +55,7 @@ function storeCachedUser(user: ApiUser | null) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const account = useCurrentAccount();
+  const { connectionStatus } = useCurrentWallet();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const [user, setUser] = useState<ApiUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -206,13 +207,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // If the wallet changes, invalidate the current session
+    // 1. If the wallet is explicitly disconnected, invalidate the current session
+    if (user && connectionStatus === 'disconnected') {
+      console.log('🔄 [Auth Provider] Wallet disconnected. Logging out.');
+      logout();
+      return;
+    }
+
+    // 2. If the wallet changes, invalidate the current session
     const activeWallet = account?.address;
     if (user && activeWallet && user.walletAddress.toLowerCase() !== activeWallet.toLowerCase()) {
       console.log('🔄 [Auth Provider] Wallet changed. Logging out.');
       logout();
     }
-  }, [account?.address, user]);
+  }, [account?.address, connectionStatus, user]);
 
   const value = useMemo(() => ({
     user,

@@ -55,6 +55,7 @@ import { api } from '@/lib/api';
 import { walrus } from '@/lib/walrus';
 import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -63,6 +64,7 @@ interface PageProps {
 export default function PostDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const { user: authUser } = useAuth();
+  const account = useCurrentAccount();
   const [post, setPost] = useState<any | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -321,6 +323,10 @@ export default function PostDetailPage({ params }: PageProps) {
   const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
     e.preventDefault();
     if (!commentText.trim() && commentMediaItems.length === 0) return;
+    if (!account?.address) {
+      alert('Please connect your wallet first.');
+      return;
+    }
     if (!authUser) {
       alert('Please login first.');
       return;

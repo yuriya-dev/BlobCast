@@ -277,6 +277,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     e.preventDefault();
     if (!text.trim() && mediaItems.length === 0) return;
 
+    if (!account?.address) {
+      alert('Please connect your wallet first to publish verifiably to Sui and Walrus.');
+      return;
+    }
+
     const activeUser = authUser || currentUser;
     if (!activeUser) {
       alert('Please login first.');
