@@ -128,7 +128,7 @@ export const publishWalrusBlob = asyncHandler(async (req: Request, res: Response
             method: 'PUT',
             body: serialized,
             headers,
-            signal: AbortSignal.timeout(8000) // 8 seconds timeout
+            signal: AbortSignal.timeout(120000)
         });
     } catch (fetchErr: any) {
         console.warn(`⚠️ WALRUS_PUBLISHER fetch failed for ${WALRUS_PUBLISHER}. Trying fallback to Fly.io publisher...`, fetchErr);
@@ -138,7 +138,7 @@ export const publishWalrusBlob = asyncHandler(async (req: Request, res: Response
                 method: 'PUT',
                 body: serialized,
                 headers,
-                signal: AbortSignal.timeout(8000) // 8 seconds timeout
+                signal: AbortSignal.timeout(120000)
             });
         } else {
             throw fetchErr;
