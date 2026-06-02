@@ -101,6 +101,9 @@ interface PostCardProps {
   onPin?: (postId: string, pinned: boolean) => void;
 }
 
+// Global in-memory set to track posts viewed in the current session (resets on page refresh)
+const viewedPostsInSession = new Set<string>();
+
 function PostActivityAvatar({ user }: { user: any }) {
   const avatarUrlResolved = useWalrusImage(user?.avatarBlobId || null);
   const finalAvatar = avatarUrlResolved || (user?.username ? `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` : '');
@@ -281,13 +284,11 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   useEffect(() => {
     if (!targetPostId) return;
 
-    const sessionKey = `blobcast_viewed_${targetPostId}`;
-    const hasViewedInSession = typeof window !== 'undefined' ? sessionStorage.getItem(sessionKey) : 'false';
+    // Use in-memory tracker which is highly resilient to dev server restarts and hot reloading
+    const hasViewedInSession = viewedPostsInSession.has(targetPostId);
 
     if (!hasViewedInSession) {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem(sessionKey, 'true');
-      }
+      viewedPostsInSession.add(targetPostId);
       
       api.incrementPostViews(targetPostId)
         .then(res => {
