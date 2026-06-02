@@ -67,24 +67,64 @@ BlobCast implements **Sovereign Cryptographic Sign-in** (passwordless authentica
     ```
 
 - **`POST /api/posts`** *(Auth Required)*
-  - *Description*: Register metadata for a new post uploaded to Walrus.
+  - *Description*: Register metadata for a new post uploaded to Walrus. This endpoint automatically triggers **Gemini AI content moderation** on the post text. Flagged posts will be stored on Walrus but hidden from timeline queries.
   - *Payload*:
     ```json
     {
       "walrusBlobId": "walrus://post_98765",
       "blobHash": "sha256-qwerty543",
       "contentType": 0,
-      "visibility": 0
+      "visibility": 0,
+      "contentText": "This is the raw content text of the post to be moderated",
+      "mentions": ["@username1", "@username2"]
     }
     ```
-  - *Response*:
+  - *Response (Visible Post)*:
     ```json
     {
-      "success": true,
-      "post": {
-        "id": "z9y8x7w6-...",
-        "walrusBlobId": "walrus://post_98765",
-        "createdAt": "2026-06-01T07:10:00Z"
+      "status": "success",
+      "message": "Post reference registered verifiably in Supabase database",
+      "data": {
+        "post": {
+          "id": "z9y8x7w6-...",
+          "authorId": "a1b2c3d4-...",
+          "suiObjectId": "0x56ab...",
+          "walrusBlobId": "walrus://post_98765",
+          "blobHash": "sha256-qwerty543",
+          "contentType": 0,
+          "visibility": 0,
+          "score": 0,
+          "likeCount": 0,
+          "commentCount": 0,
+          "repostCount": 0,
+          "moderationStatus": "VISIBLE",
+          "moderationReason": null,
+          "createdAt": "2026-06-01T07:10:00Z",
+          "viewCount": 0
+        },
+        "moderation": {
+          "status": "VISIBLE",
+          "reason": "none"
+        }
+      }
+    }
+    ```
+  - *Response (Hidden Post due to violation)*:
+    ```json
+    {
+      "status": "success",
+      "message": "Post stored on Walrus but hidden from the BlobCast feed due to content guidelines.",
+      "data": {
+        "post": {
+          "id": "z9y8x7w6-...",
+          "moderationStatus": "HIDDEN",
+          "moderationReason": "scam"
+          // other post fields...
+        },
+        "moderation": {
+          "status": "HIDDEN",
+          "reason": "scam"
+        }
       }
     }
     ```
@@ -94,9 +134,37 @@ BlobCast implements **Sovereign Cryptographic Sign-in** (passwordless authentica
   - *Response*: `{ "success": true, "liked": true }`
 
 - **`POST /api/posts/:id/comments`** *(Auth Required)*
-  - *Description*: Comment on a post. The comment body is stored in Walrus.
-  - *Payload*: `{ "walrusBlobId": "walrus://comment_123" }`
-  - *Response*: `{ "success": true, "commentId": "c7b8..." }`
+  - *Description*: Comment on a post. The comment text is analyzed by Gemini AI moderation. If flagged, it is hidden from the UI comment section.
+  - *Payload*:
+    ```json
+    {
+      "walrusBlobId": "walrus://comment_123",
+      "contentText": "This is the comment text",
+      "mentions": ["@author"]
+    }
+    ```
+  - *Response*:
+    ```json
+    {
+      "status": "success",
+      "message": "Comment registered successfully in Supabase database",
+      "data": {
+        "comment": {
+          "id": "c7b8...",
+          "postId": "z9y8x7w6-...",
+          "authorId": "a1b2c3d4-...",
+          "walrusBlobId": "walrus://comment_123",
+          "moderationStatus": "VISIBLE",
+          "moderationReason": null,
+          "createdAt": "2026-06-01T07:12:00Z"
+        },
+        "moderation": {
+          "status": "VISIBLE",
+          "reason": "none"
+        }
+      }
+    }
+    ```
 
 - **`GET /api/posts/notifications`**
   - *Description*: Fetches the single latest active telemetry notification log from Redis (`notifications:latest`) for real-time console dashboards.

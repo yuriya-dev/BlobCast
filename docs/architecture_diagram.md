@@ -177,3 +177,57 @@ To completely bypass browser cross-domain network connection limits (maximum 6 c
 - **Database Caching**: If the requested blob is in the `SimulatedBlob` PostgreSQL database table, the server resolves it in sub-milliseconds (Cache Hit).
 - **Aggregator Proxy with Caching**: If not found (Cache Miss), the backend server actively queries the decentralized Walrus testnet aggregator (`https://aggregator.walrus-testnet.walrus.space`) with a strict **1.8-second timeout**, caches the returned content in PostgreSQL, and serves it to the browser.
 - **Offline Resilience**: If the aggregator fails or is offline, the backend serves a clean, structural mockup JSON fallback directly, ensuring 100% feed uptime.
+
+---
+
+## 5. Gemini AI Content Moderation & Filtering
+
+To maintain compliance with platform safety standards without violating the Web3 principle of absolute user ownership, BlobCast utilizes a **hybrid content filtering architecture**:
+1. **Immutable Storage**: Heavy media and raw JSON post objects are committed permanently to **Walrus Storage**. Because of Walrus's decentralized nature, once a blob is written, it cannot be edited or deleted by anyone.
+2. **AI Moderation Pipeline**: When a new post or comment is registered in the database, the backend Express server intercepts the raw text (retrieved either from the request body or via the Walrus Aggregator Proxy) and executes an asynchronous classification query against the **Gemini API** using `gemini-2.0-flash`.
+3. **Soft-Filtering (UI masking)**: If Gemini flags the content as containing spam, scams, hate speech, explicit material, phishing, or malware:
+   - The registry is saved in the Supabase PostgreSQL database with `moderationStatus` set to `HIDDEN` and `moderationReason` containing the categorized safety violation.
+   - Database read queries utilize the predefined Prisma filters [visiblePostWhere](file:///Users/wahyutricahya/Hackathon/BlobCast/server/src/lib/moderation/constants.ts#L13) and [visibleCommentWhere](file:///Users/wahyutricahya/Hackathon/BlobCast/server/src/lib/moderation/constants.ts#L21) to filter out flagged posts/comments from timeline feeds.
+   - The content is hidden at the presentation layer, but the decentralized Walrus blob ID remains unchanged and completely verifiable on-chain.
+
+### Content Moderation Lifecycle Workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User Client
+    participant API as Express API Server
+    participant Gemini as Gemini AI API
+    participant DB as PostgreSQL (Supabase)
+    participant Walrus as Walrus Aggregator
+
+    User->>API: POST /api/posts { walrusBlobId, contentText }
+    activate API
+    alt contentText is missing
+        API->>Walrus: Fetch JSON blob content
+        Walrus-->>API: Return JSON content
+    end
+    API->>Gemini: Classify contentText (MODERATION_PROMPT + content)
+    activate Gemini
+    alt API Key is Missing / Offline
+        Note over API: Run Local Pattern Match Fallback
+    else API Key Present
+        Gemini-->>API: Return JSON { "safe": false, "reason": "scam" }
+    end
+    deactivate Gemini
+    API->>DB: Create Post record { moderationStatus: "HIDDEN", moderationReason: "scam" }
+    DB-->>API: Sync Success
+    API-->>User: Return 201 Created { success: true, moderation: { status: "HIDDEN", reason: "scam" } }
+    deactivate API
+```
+
+### Local Developer Testing & Fallback
+
+To support local offline development and bypass rate limits, the moderation engine includes an active **local regex pattern matcher** in [geminiModeration.ts](file:///Users/wahyutricahya/Hackathon/BlobCast/server/src/lib/moderation/geminiModeration.ts). Developers can use specific trigger tags in their posts or comments to test moderation states instantly:
+- `[spam]` or `buy cheap followers` -> Flags as **spam**
+- `[scam]` or `send 1 sui get 2 sui` -> Flags as **scam**
+- `[hate]` or `hate group` -> Flags as **hate**
+- `[explicit]` or `nude pics` -> Flags as **explicit**
+- `[phishing]` or `enter your seed phrase` -> Flags as **phishing**
+- `[malware]` or `run this executable` -> Flags as **malware**
+
