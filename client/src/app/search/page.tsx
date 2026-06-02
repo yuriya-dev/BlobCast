@@ -232,9 +232,21 @@ function SearchContent() {
             likeCount: p.likeCount,
             commentCount: p.commentCount,
             repostCount: p.repostCount,
+            viewCount: p.viewCount,
             createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
             likes: p.likes || [],
-            reposts: p.reposts || []
+            reposts: p.reposts || [],
+            repostOf: (p as any).repostOf ? {
+              id: (p as any).repostOf.id,
+              viewCount: (p as any).repostOf.viewCount,
+              author: {
+                displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
+                username: (p as any).repostOf.author?.username || 'anonymous',
+                walletAddress: (p as any).repostOf.author?.walletAddress || '0x000000...',
+                avatarBlobId: (p as any).repostOf.author?.avatarBlobId || '',
+                verified: (p as any).repostOf.author?.verified || false
+              }
+            } : null
           };
         }));
         setPosts(mapped);

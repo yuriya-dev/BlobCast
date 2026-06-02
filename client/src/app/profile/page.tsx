@@ -455,12 +455,14 @@ export default function ProfilePage() {
               likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
               commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
               repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
+              viewCount: p.viewCount,
               suiObjectId: p.suiObjectId || undefined,
               createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
               likes: (p as any).repostOf ? ((p as any).repostOf.likes || []) : ((p as any).likes || []),
               reposts: (p as any).repostOf ? ((p as any).repostOf.reposts || []) : ((p as any).reposts || []),
               repostOf: (p as any).repostOf ? {
                 id: (p as any).repostOf.id,
+                viewCount: (p as any).repostOf.viewCount,
                 author: {
                   displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
                   username: (p as any).repostOf.author?.username || 'anonymous',
@@ -664,12 +666,14 @@ export default function ProfilePage() {
             likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
             commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
             repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
+            viewCount: p.viewCount,
             suiObjectId: p.suiObjectId || undefined,
             createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
             likes: p.repostOf ? (p.repostOf.likes || []) : (p.likes || []),
             reposts: p.repostOf ? (p.repostOf.reposts || []) : (p.reposts || []),
             repostOf: p.repostOf ? {
               id: p.repostOf.id,
+              viewCount: p.repostOf.viewCount,
               author: {
                 displayName: p.repostOf.author?.displayName || 'Anonymous Caster',
                 username: p.repostOf.author?.username || 'anonymous',

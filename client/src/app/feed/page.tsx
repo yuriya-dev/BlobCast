@@ -181,6 +181,7 @@ export default function SocialFeedPage() {
             likeCount: p.repostOf ? p.repostOf.likeCount : p.likeCount,
             commentCount: p.repostOf ? p.repostOf.commentCount : p.commentCount,
             repostCount: p.repostOf ? p.repostOf.repostCount : p.repostCount,
+            viewCount: p.viewCount,
             suiObjectId: p.suiObjectId || undefined,
             moderationStatus: p.moderationStatus,
             moderationReason: p.moderationReason,
@@ -190,6 +191,7 @@ export default function SocialFeedPage() {
             repostOf: (p as any).repostOf ? {
               id: (p as any).repostOf.id,
               moderationStatus: (p as any).repostOf.moderationStatus,
+              viewCount: (p as any).repostOf.viewCount,
               author: {
                 displayName: (p as any).repostOf.author?.displayName || 'Anonymous Caster',
                 username: (p as any).repostOf.author?.username || 'anonymous',
