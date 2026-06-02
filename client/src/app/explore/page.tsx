@@ -82,11 +82,11 @@ export default function ExplorePage() {
         setCreators([
           {
             id: 'c1',
-            displayName: 'Vitalik Buterin',
-            username: 'vitalik',
+            displayName: 'Walrus',
+            username: 'walrus',
             walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
             followers: 4800000,
-            bio: 'Fascinated by decentralized cryptography, social scaling layers, and permanent information archives.',
+            bio: 'Walrus is a Verifiable Data Platform for builders in AI and onchain finance.',
             verified: true
           },
           {

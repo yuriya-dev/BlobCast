@@ -559,8 +559,8 @@ export const walrus = {
     
     // Fallbacks for mock avatars in db.ts to make the design look stunning
     if (cleanId.includes('avatar') || cleanId.includes('banner')) {
-      if (cleanId.includes('vitalik-avatar')) return 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=150&q=80';
-      if (cleanId.includes('vitalik-banner')) return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80';
+      if (cleanId.includes('walrus-avatar')) return 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=150&q=80';
+      if (cleanId.includes('walrus-banner')) return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80';
       if (cleanId.includes('yuriya-avatar')) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
       if (cleanId.includes('yuriya-banner')) return 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=1200&q=80';
       if (cleanId.includes('mysten-avatar')) return 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=150&q=80';

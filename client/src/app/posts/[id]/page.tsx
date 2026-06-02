@@ -293,9 +293,9 @@ export default function PostDetailPage({ params }: PageProps) {
       const existingComments = mockDb.comments.filter(c => c.postId === id);
       const mappedComments = existingComments.map(c => {
         const u = mockDb.users.find(user => user.id === c.authorId) || {
-          displayName: 'Vitalik Buterin',
-          username: 'vitalik',
-          avatarBlobId: 'walrus://vitalik-avatar'
+          displayName: 'Walrus',
+          username: 'walrus',
+          avatarBlobId: 'walrus://walrus-avatar'
         };
         return {
           id: c.id,

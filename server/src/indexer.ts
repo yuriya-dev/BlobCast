@@ -118,8 +118,8 @@ class BlobCastIndexer {
      * 1. Index profile registrations
      */
     private async simulateProfileCreated() {
-        const names = ['Vitalik Buterin', 'Yuriya', 'Mysten Labs', 'Tatum Dev', 'Sui Enthusiast', 'Walrus Miner'];
-        const handles = ['vitalik', 'yuriya', 'mystenlabs', 'tatum_dev', 'sui_enthusiast', 'walrus_miner'];
+        const names = ['Walrus', 'Yuriya', 'Mysten Labs', 'Tatum Dev', 'Sui Enthusiast', 'Walrus Miner'];
+        const handles = ['walrus', 'yuriya', 'mystenlabs', 'tatum_dev', 'sui_enthusiast', 'walrus_miner'];
         const idx = Math.floor(Math.random() * names.length);
 
         console.log(`👤 [Indexer::Event] Detected event blobcast::events::ProfileCreated`);

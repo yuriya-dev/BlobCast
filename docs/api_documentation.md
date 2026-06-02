@@ -35,7 +35,7 @@ BlobCast implements **Sovereign Cryptographic Sign-in** (passwordless authentica
       "user": {
         "id": "a1b2c3d4-...",
         "walletAddress": "0x91ab3fdfcf98ae...",
-        "username": "vitalik"
+        "username": "walrus"
       }
     }
     ```
@@ -59,7 +59,7 @@ BlobCast implements **Sovereign Cryptographic Sign-in** (passwordless authentica
           "createdAt": "2026-06-01T07:00:00Z",
           "author": {
             "walletAddress": "0x91ab3f...",
-            "displayName": "Vitalik"
+            "displayName": "walrus"
           }
         }
       ]
@@ -119,17 +119,22 @@ BlobCast implements **Sovereign Cryptographic Sign-in** (passwordless authentica
   - *Description*: Get user profile details by SUI address.
 - **`POST /api/users`** *(Auth Required)*
   - *Description*: Upsert a user profile identity.
+  - *Username Validation Rules*:
+    - **Length**: 3-20 characters.
+    - **Allowed Characters**: Alphanumeric and underscores (`^[a-zA-Z0-9_]+$`).
+    - **Normalization**: Automatically normalized and stored as **lowercase** (e.g. `Yuriya_Dev` -> `yuriya_dev`).
+    - **Blocked / Reserved Usernames**: `admin`, `support`, `blobcast`, `api`, `root`, `system`, `official`, `wallet`, `moderator`, `null`, `undefined`.
   - *Payload*:
     ```json
     {
-      "username": "yuriya",
-      "displayName": "Yuriya Dev",
-      "avatarBlobId": "walrus://avatar_yuriya",
-      "bannerBlobId": "walrus://banner_yuriya",
+      "username": "sui_dev",
+      "displayName": "Sui Dev",
+      "avatarBlobId": "walrus://avatar_sui_dev",
+      "bannerBlobId": "walrus://banner_sui_dev",
       "bio": "Web3 Solutions Architect"
     }
     ```
-  - *Response*: `{ "success": true, "user": { "username": "yuriya" } }`
+  - *Response*: `{ "success": true, "user": { "username": "sui_dev" } }`
 
 - **`GET /api/users/notifications`** *(Auth Required)*
   - *Description*: Fetch the authenticated user's notifications.

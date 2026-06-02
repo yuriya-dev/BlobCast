@@ -134,7 +134,7 @@ export function SearchInputWithRecommendations({
   // Recommendations data
   const recommendedCreators = [
     { username: 'yuriya', displayName: 'Yuriya', walletAddress: '0x14b6a2164130de573dcdd114299ba144629979fe9423bc8e81bc06754e6b3e43' },
-    { username: 'vitalik', displayName: 'Vitalik Buterin', walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12' },
+    { username: 'walrus', displayName: 'Walrus', walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12' },
     { username: 'mystenlabs', displayName: 'Mysten Labs', walletAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7' }
   ];
 
