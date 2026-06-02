@@ -206,9 +206,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // If the wallet changes or is disconnected, invalidate the current session
+    // If the wallet changes, invalidate the current session
     const activeWallet = account?.address;
-    if (user && (!activeWallet || user.walletAddress.toLowerCase() !== activeWallet.toLowerCase())) {
+    if (user && activeWallet && user.walletAddress.toLowerCase() !== activeWallet.toLowerCase()) {
+      console.log('🔄 [Auth Provider] Wallet changed. Logging out.');
       logout();
     }
   }, [account?.address, user]);
