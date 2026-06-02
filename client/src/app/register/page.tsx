@@ -116,11 +116,22 @@ export default function RegisterPage() {
       return;
     }
 
-    const nextUsername = username.trim();
+    const nextUsername = username.trim().toLowerCase();
     const nextDisplayName = displayName.trim();
 
     if (!nextUsername || !nextDisplayName) {
       setErrorMessage('Username and display name are required.');
+      return;
+    }
+
+    if (nextUsername.length < 3 || nextUsername.length > 20) {
+      setErrorMessage('Username must be between 3 and 20 characters.');
+      return;
+    }
+
+    const reservedUsernames = ['admin', 'support', 'blobcast', 'api', 'root', 'system', 'official', 'wallet', 'moderator', 'null', 'undefined'];
+    if (reservedUsernames.includes(nextUsername)) {
+      setErrorMessage(`Username "${nextUsername}" is reserved and cannot be used.`);
       return;
     }
 
@@ -227,7 +238,7 @@ export default function RegisterPage() {
               <label className="block text-[10px] font-mono font-bold tracking-[0.25em] uppercase text-gray-500 mb-2">Username *</label>
               <input
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-zA-Z0-9_]/g, ''))}
                 disabled={!account?.address}
                 placeholder="yourhandle"
                 className="w-full rounded-2xl bg-walrus-blue/70 border border-sui-cyan/10 px-4 py-3 text-sm text-white placeholder:text-gray-500 outline-none transition-colors focus:border-sui-cyan/50 disabled:opacity-50 disabled:cursor-not-allowed"

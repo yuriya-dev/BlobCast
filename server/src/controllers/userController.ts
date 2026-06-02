@@ -3,6 +3,7 @@ import { prisma } from '../lib/db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 import { visiblePostWhere } from '../lib/moderation';
+import { validateAndNormalizeUsername } from '../utils/validation';
 
 const withTimeout = <T>(promise: Promise<T>, ms = 1500, fallback: T): Promise<T> => {
     return Promise.race([
@@ -121,10 +122,15 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
         throw new AppError('You can only update your own profile', 403);
     }
 
+    let normalizedUsername = undefined;
+    if (username) {
+        normalizedUsername = await validateAndNormalizeUsername(username, walletAddress);
+    }
+
     const user = await prisma.user.upsert({
         where: { walletAddress },
         update: {
-            username: username || undefined,
+            username: normalizedUsername || undefined,
             displayName: displayName || undefined,
             avatarBlobId: avatarBlobId || undefined,
             bannerBlobId: bannerBlobId || undefined,
@@ -135,7 +141,7 @@ export const upsertUserProfile = asyncHandler(async (req: Request, res: Response
         },
         create: {
             walletAddress,
-            username: username || `anon_${walletAddress.substring(2, 8)}`,
+            username: normalizedUsername || `anon_${walletAddress.substring(2, 8).toLowerCase()}`,
             displayName: displayName || 'Anonymous Caster',
             avatarBlobId: avatarBlobId || null,
             bannerBlobId: bannerBlobId || null,

@@ -3,6 +3,7 @@ import { prisma } from '../lib/db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 import { buildAuthCookie, clearAuthCookie, createAuthToken, verifyAuthToken } from '../lib/auth';
+import { validateAndNormalizeUsername } from '../utils/validation';
 
 const userSelect = {
   id: true,
@@ -26,10 +27,15 @@ async function upsertIdentityProfile(body: Record<string, any>) {
     throw new AppError('Wallet address is required', 400);
   }
 
+  let normalizedUsername = undefined;
+  if (username) {
+    normalizedUsername = await validateAndNormalizeUsername(username, walletAddress);
+  }
+
   return prisma.user.upsert({
     where: { walletAddress },
     update: {
-      username: username || undefined,
+      username: normalizedUsername || undefined,
       displayName: displayName || undefined,
       avatarBlobId: avatarBlobId || undefined,
       bannerBlobId: bannerBlobId || undefined,
@@ -40,7 +46,7 @@ async function upsertIdentityProfile(body: Record<string, any>) {
     },
     create: {
       walletAddress,
-      username: username || `anon_${walletAddress.substring(2, 8)}`,
+      username: normalizedUsername || `anon_${walletAddress.substring(2, 8).toLowerCase()}`,
       displayName: displayName || 'Anonymous Caster',
       avatarBlobId: avatarBlobId || null,
       bannerBlobId: bannerBlobId || null,
