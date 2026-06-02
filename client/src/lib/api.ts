@@ -252,13 +252,12 @@ export const api = {
       if (res.status === 401) {
         const errData = await res.json().catch(() => ({}));
         
-        // Strict production-grade session invalidation check
-        const isSessionInvalid = errData.code === 'INVALID_TOKEN' || errData.code === 'TOKEN_EXPIRED';
-        if (isSessionInvalid) {
-          if (typeof window !== 'undefined') {
-            console.warn('🔒 [Auth Provider] Invalid or expired session token detected. Clearing local session.');
-            window.localStorage.removeItem('blobcast_token');
-          }
+        // Clear session on any explicit 401 Unauthorized to break out of persistent auth loops.
+        // 401 is only returned when credentials are rejected (not on connection errors/502s).
+        if (typeof window !== 'undefined') {
+          console.warn('🔒 [Auth Provider] Unauthorized session token. Clearing local session.');
+          window.localStorage.removeItem('blobcast_token');
+          window.localStorage.removeItem('blobcast_auth_user');
         }
         
         throw new Error(errData.message || 'Not authenticated');
