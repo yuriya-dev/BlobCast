@@ -84,7 +84,7 @@ export default function ExplorePage() {
             id: 'c1',
             displayName: 'Walrus',
             username: 'walrus',
-            walletAddress: '0x321a5cf4de7c89f01a34d284a1e948cde7231456107b22d148cd90ef718cda12',
+            walletAddress: '0x09bd97f5d3c919d9bd0c5f9751fb8e7ab825468b3e82997de886e9c1794ae69e',
             followers: 4800000,
             bio: 'Walrus is a Verifiable Data Platform for builders in AI and onchain finance.',
             verified: true
@@ -100,11 +100,11 @@ export default function ExplorePage() {
           },
           {
             id: 'c3',
-            displayName: 'Mysten Labs',
-            username: 'mystenlabs',
-            walletAddress: '0x81b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7',
+            displayName: 'Tatum',
+            username: 'tatum',
+            walletAddress: '0xc14074c3f1f511c90afa32b19a2dfffba505ddfcd189e48c32d82ee822dcf432',
             followers: 320000,
-            bio: 'Official builders of the Sui blockchain. Scaling transaction execution and web3 performance.',
+            bio: 'The fastest way to build, test and run blockchain apps! 🚀',
             verified: true
           }
         ]);

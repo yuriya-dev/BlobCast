@@ -77,6 +77,7 @@ export interface ApiPost {
   likes?: any[];
   reposts?: any[];
   repostOf?: ApiPost | null;
+  viewCount?: number;
 }
 
 export const api = {
@@ -300,6 +301,16 @@ export const api = {
       cache: 'no-store'
     }));
     return parseJsonResponse(res, 'Failed to fetch post');
+  },
+
+  /**
+   * Increment post view count in Redis.
+   */
+  async incrementPostViews(id: string): Promise<{ status: string; data: { views: number } }> {
+    const res = await fetch(`${BASE_URL}/posts/${id}/view`, requestInit({
+      method: 'POST'
+    }));
+    return parseJsonResponse(res, 'Failed to increment post views');
   },
 
   /**

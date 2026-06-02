@@ -8,7 +8,8 @@ import {
     createComment, 
     repostPost,
     getTrendingTags,
-    getTrendingCasts
+    getTrendingCasts,
+    incrementPostViews
 } from '../controllers/postController';
 import { requireAuth } from '../middleware/authMiddleware';
 
@@ -40,5 +41,8 @@ router.post('/:id/comments', requireAuth, createComment);
 
 // POST /api/posts/:id/repost - Repost an existing post reference
 router.post('/:id/repost', requireAuth, repostPost);
+
+// POST /api/posts/:id/view - Increment post view count in Redis
+router.post('/:id/view', incrementPostViews);
 
 export default router;

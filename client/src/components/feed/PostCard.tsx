@@ -92,7 +92,9 @@ interface PostCardProps {
       id: string;
       author: PostAuthor;
       moderationStatus?: string;
+      viewCount?: number;
     } | null;
+    viewCount?: number;
   };
   onCommentCreated?: (comment: unknown) => void;
   hideCommentComposer?: boolean;
@@ -277,50 +279,48 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
     };
   }, [showMenu]);
 
-  // View count — persistent and deterministic
-  const [viewCount, setViewCount] = useState<number>(0);
+  // View count — persistent and real-time backend synchronized
+  const [viewCount, setViewCount] = useState<number>(() => {
+    const backendViews = post.repostOf ? post.repostOf.viewCount : post.viewCount;
+    if (typeof backendViews === 'number' && backendViews > 0) return backendViews;
+
+    // Seed deterministic views based on post interactions and ID hash
+    return getDeterministicViews(
+      targetPostId, 
+      post.likeCount || 0, 
+      post.repostCount || 0, 
+      post.commentCount || 0
+    );
+  });
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const storageKey = `blobcast_views_${targetPostId}`;
-        const cached = localStorage.getItem(storageKey);
-        
-        let currentViews = 0;
-        if (cached) {
-          currentViews = parseInt(cached, 10);
-        } else {
-          // Seed deterministic views based on post interactions and ID hash
-          currentViews = getDeterministicViews(
-            targetPostId, 
-            post.likeCount || 0, 
-            post.repostCount || 0, 
-            post.commentCount || 0
-          );
-        }
+    if (!targetPostId) return;
 
-        // Increment by 1 on first mount of this session to feel interactive and realistic
-        const sessionKey = `blobcast_viewed_${targetPostId}`;
-        const hasViewedInSession = sessionStorage.getItem(sessionKey);
-        
-        if (!hasViewedInSession) {
-          currentViews += 1;
-          localStorage.setItem(storageKey, currentViews.toString());
-          sessionStorage.setItem(sessionKey, 'true');
-        }
-        
-        setViewCount(currentViews);
-      } catch (err) {
-        // Fallback to deterministic seed if localStorage fails
-        setViewCount(getDeterministicViews(
-          targetPostId, 
-          post.likeCount || 0, 
-          post.repostCount || 0, 
-          post.commentCount || 0
-        ));
+    const sessionKey = `blobcast_viewed_${targetPostId}`;
+    const hasViewedInSession = typeof window !== 'undefined' ? sessionStorage.getItem(sessionKey) : 'false';
+
+    if (!hasViewedInSession) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(sessionKey, 'true');
+      }
+      
+      api.incrementPostViews(targetPostId)
+        .then(res => {
+          if (res && res.data && typeof res.data.views === 'number') {
+            setViewCount(res.data.views);
+          }
+        })
+        .catch(err => {
+          console.warn("⚠️ Failed to increment view count on backend, falling back to local simulation:", err);
+          setViewCount(prev => prev + 1);
+        });
+    } else {
+      const propViews = post.repostOf ? post.repostOf.viewCount : post.viewCount;
+      if (typeof propViews === 'number' && propViews > viewCount) {
+        setViewCount(propViews);
       }
     }
-  }, [targetPostId, post.likeCount, post.repostCount, post.commentCount]);
+  }, [targetPostId, post.viewCount, post.repostOf]);
 
   // Post activity modal state
   const [showActivityModal, setShowActivityModal] = useState(false);

@@ -17,6 +17,65 @@ const withTimeout = <T>(promise: Promise<T>, ms = 1500, fallback: T): Promise<T>
     ]);
 };
 
+function getDeterministicViews(postId: string, likeCount: number, repostCount: number, commentCount: number): number {
+    let hash = 0;
+    for (let i = 0; i < postId.length; i++) {
+        hash = postId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const stableOffset = Math.abs(hash) % 250 + 45; // stable number between 45 and 294
+    return (likeCount * 6) + (repostCount * 12) + (commentCount * 8) + stableOffset;
+}
+
+export const getPostViews = async (post: any): Promise<number> => {
+    if (!post || !post.id) return 0;
+    const key = `post:views:${post.id}`;
+    try {
+        let viewsStr = await cache.get(key);
+        if (!viewsStr) {
+            const initialViews = getDeterministicViews(
+                post.id,
+                post.likeCount || 0,
+                post.repostCount || 0,
+                post.commentCount || 0
+            );
+            await cache.set(key, initialViews.toString());
+            return initialViews;
+        }
+        return parseInt(viewsStr, 10);
+    } catch (err) {
+        console.warn(`⚠️ Failed to read/set views for post ${post.id} from Redis:`, err);
+        return getDeterministicViews(
+            post.id,
+            post.likeCount || 0,
+            post.repostCount || 0,
+            post.commentCount || 0
+        );
+    }
+};
+
+export const hydratePostViews = async (post: any): Promise<any> => {
+    if (!post) return post;
+    try {
+        const viewCount = await getPostViews(post);
+        let repostOf = post.repostOf;
+        if (repostOf) {
+            const repostOfViews = await getPostViews(repostOf);
+            repostOf = {
+                ...repostOf,
+                viewCount: repostOfViews
+            };
+        }
+        return {
+            ...post,
+            viewCount,
+            repostOf
+        };
+    } catch (err) {
+        console.warn(`⚠️ Error hydrating views for post ${post.id}:`, err);
+        return post;
+    }
+};
+
 /**
  * Controller to fetch all posts / timeline feed from Supabase with pagination support.
  */
@@ -62,6 +121,7 @@ export const getAllPosts = asyncHandler(async (req: Request, res: Response) => {
     });
 
     const totalPosts = await prisma.post.count({ where: visiblePostWhere });
+    const postsWithViews = await Promise.all(posts.map(hydratePostViews));
 
     res.status(200).json({
         status: 'success',
@@ -72,7 +132,7 @@ export const getAllPosts = asyncHandler(async (req: Request, res: Response) => {
             totalPages: Math.ceil(totalPosts / limit),
             totalPosts
         },
-        data: { posts }
+        data: { posts: postsWithViews }
     });
 });
 
@@ -128,9 +188,11 @@ export const getPostById = asyncHandler(async (req: Request, res: Response) => {
         throw new AppError('Post registry not found in database', 404);
     }
 
+    const postWithViews = await hydratePostViews(post);
+
     res.status(200).json({
         status: 'success',
-        data: { post }
+        data: { post: postWithViews }
     });
 });
 
@@ -213,13 +275,15 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
         }
     }
 
+    const postWithViews = await hydratePostViews(post);
+
     res.status(201).json({
         status: 'success',
         message:
             moderation.status === MODERATION_STATUS.HIDDEN
                 ? 'Post stored on Walrus but hidden from the BlobCast feed due to content guidelines.'
                 : 'Post reference registered verifiably in Supabase database',
-        data: { post, moderation }
+        data: { post: postWithViews, moderation }
     });
 });
 
@@ -644,8 +708,48 @@ export const getTrendingCasts = asyncHandler(async (req: Request, res: Response)
         []
     );
     
+    const postsWithViews = await Promise.all(posts.map(hydratePostViews));
+    
     res.status(200).json({
         status: 'success',
-        data: { posts }
+        data: { posts: postsWithViews }
+    });
+});
+
+/**
+ * Controller to increment post view count in Redis.
+ */
+export const incrementPostViews = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id) {
+        throw new AppError('Post ID parameter is required', 400);
+    }
+
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post) {
+        throw new AppError('Post not found', 404);
+    }
+
+    const key = `post:views:${id}`;
+    let viewsStr = await cache.get(key);
+    
+    let nextViews: number;
+    if (!viewsStr) {
+        const initialViews = getDeterministicViews(
+            id,
+            post.likeCount || 0,
+            post.repostCount || 0,
+            post.commentCount || 0
+        );
+        nextViews = initialViews + 1;
+        await cache.set(key, nextViews.toString());
+    } else {
+        nextViews = await cache.incr(key);
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: { views: nextViews }
     });
 });
