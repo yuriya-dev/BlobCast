@@ -31,6 +31,7 @@ export interface MockPost {
   repostCount: number;
   score: number;
   createdAt: Date;
+  viewCount?: number;
   walrusContent?: any;
 }
 

@@ -4,6 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 import { visiblePostWhere } from '../lib/moderation';
 import { validateAndNormalizeUsername } from '../utils/validation';
+import { hydratePostViews } from './postController';
 
 const withTimeout = <T>(promise: Promise<T>, ms = 1500, fallback: T): Promise<T> => {
     return Promise.race([
@@ -93,11 +94,16 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
         isFollowing = !!followRecord;
     }
 
+    const postsWithViews = user.posts
+        ? await Promise.all(user.posts.map(hydratePostViews))
+        : [];
+
     res.status(200).json({
         status: 'success',
         data: { 
             user: {
                 ...user,
+                posts: postsWithViews,
                 followersCount,
                 followingCount,
                 isFollowing
