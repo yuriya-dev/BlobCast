@@ -301,7 +301,7 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
         });
     } else {
       const propViews = post.repostOf ? post.repostOf.viewCount : post.viewCount;
-      if (typeof propViews === 'number') {
+      if (typeof propViews === 'number' && propViews > viewCount) {
         setViewCount(propViews);
       }
     }
