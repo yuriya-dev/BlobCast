@@ -2,7 +2,24 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 
-const WS_URL = 'ws://localhost:8080/ws';
+const getWsUrl = (): string => {
+  if (typeof window === 'undefined') return 'ws://localhost:8080/ws';
+
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+  try {
+    const url = new URL(apiUrl);
+    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${url.host}/ws`;
+  } catch (e) {
+    return 'ws://localhost:8080/ws';
+  }
+};
+
+const WS_URL = getWsUrl();
 
 type WSMessageType = 'new_message' | 'conversation_update' | 'pong' | 'error';
 
