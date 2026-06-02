@@ -17,39 +17,20 @@ const withTimeout = <T>(promise: Promise<T>, ms = 1500, fallback: T): Promise<T>
     ]);
 };
 
-function getDeterministicViews(postId: string, likeCount: number, repostCount: number, commentCount: number): number {
-    let hash = 0;
-    for (let i = 0; i < postId.length; i++) {
-        hash = postId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const stableOffset = Math.abs(hash) % 250 + 45; // stable number between 45 and 294
-    return (likeCount * 6) + (repostCount * 12) + (commentCount * 8) + stableOffset;
-}
-
 export const getPostViews = async (post: any): Promise<number> => {
     if (!post || !post.id) return 0;
     const key = `post:views:${post.id}`;
     try {
         let viewsStr = await cache.get(key);
         if (!viewsStr) {
-            const initialViews = getDeterministicViews(
-                post.id,
-                post.likeCount || 0,
-                post.repostCount || 0,
-                post.commentCount || 0
-            );
+            const initialViews = 0;
             await cache.set(key, initialViews.toString());
             return initialViews;
         }
         return parseInt(viewsStr, 10);
     } catch (err) {
         console.warn(`⚠️ Failed to read/set views for post ${post.id} from Redis:`, err);
-        return getDeterministicViews(
-            post.id,
-            post.likeCount || 0,
-            post.repostCount || 0,
-            post.commentCount || 0
-        );
+        return 0;
     }
 };
 
@@ -736,12 +717,7 @@ export const incrementPostViews = asyncHandler(async (req: Request, res: Respons
     
     let nextViews: number;
     if (!viewsStr) {
-        const initialViews = getDeterministicViews(
-            id,
-            post.likeCount || 0,
-            post.repostCount || 0,
-            post.commentCount || 0
-        );
+        const initialViews = 0;
         nextViews = initialViews + 1;
         await cache.set(key, nextViews.toString());
     } else {

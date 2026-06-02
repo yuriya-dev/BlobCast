@@ -121,15 +121,6 @@ function PostActivityAvatar({ user }: { user: any }) {
   );
 }
 
-function getDeterministicViews(postId: string, likeCount: number, repostCount: number, commentCount: number): number {
-  let hash = 0;
-  for (let i = 0; i < postId.length; i++) {
-    hash = postId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const stableOffset = Math.abs(hash) % 250 + 45; // a stable number between 45 and 294
-  return (likeCount * 6) + (repostCount * 12) + (commentCount * 8) + stableOffset;
-}
-
 export function PostCard({ post, onCommentCreated, hideCommentComposer = false, onPin }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -282,15 +273,9 @@ export function PostCard({ post, onCommentCreated, hideCommentComposer = false, 
   // View count — persistent and real-time backend synchronized
   const [viewCount, setViewCount] = useState<number>(() => {
     const backendViews = post.repostOf ? post.repostOf.viewCount : post.viewCount;
-    if (typeof backendViews === 'number' && backendViews > 0) return backendViews;
+    if (typeof backendViews === 'number' && backendViews >= 0) return backendViews;
 
-    // Seed deterministic views based on post interactions and ID hash
-    return getDeterministicViews(
-      targetPostId, 
-      post.likeCount || 0, 
-      post.repostCount || 0, 
-      post.commentCount || 0
-    );
+    return 0;
   });
 
   useEffect(() => {
