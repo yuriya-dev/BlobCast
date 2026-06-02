@@ -14,11 +14,13 @@ export const errorMiddleware = (
     let statusCode = 500;
     let status = 'error';
     let message = 'Internal Server Error';
+    let code: string | undefined = undefined;
 
     if (err instanceof AppError) {
         statusCode = err.statusCode;
         status = err.status;
         message = err.message;
+        code = err.code;
     } else {
         // Log unexpected programming or system crashes internally
         console.error("🔥 [System Crash Error]:", err);
@@ -29,6 +31,7 @@ export const errorMiddleware = (
     res.status(statusCode).json({
         status,
         message,
+        ...(code && { code }),
         ...(isDevelopment && { stack: err.stack })
     });
 };

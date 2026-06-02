@@ -116,7 +116,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
   const payload = verifyAuthToken(token);
 
   if (!payload) {
-    throw new AppError('Session expired or invalid', 401);
+    throw new AppError('Session expired or invalid', 401, 'INVALID_TOKEN');
   }
 
   const user = await prisma.user.findUnique({
@@ -125,7 +125,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
   });
 
   if (!user) {
-    throw new AppError('Authenticated user not found', 401);
+    throw new AppError('Authenticated user not found', 401, 'INVALID_TOKEN');
   }
 
   res.status(200).json({

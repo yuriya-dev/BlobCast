@@ -15,6 +15,7 @@ type AuthContextValue = {
   isAuthorizingSession: boolean;
   authorizeSessionKey: (explicitAddress?: string) => Promise<boolean>;
   revokeSessionKey: () => Promise<void>;
+  isConnectionLost: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isAuthorizingSession, setIsAuthorizingSession] = useState(false);
+  const [isConnectionLost, setIsConnectionLost] = useState(false);
 
   // Scoped session key validation
   useEffect(() => {
@@ -144,18 +146,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await api.fetchCurrentSession();
       setUser(response.data.user);
       storeCachedUser(response.data.user);
+      setIsConnectionLost(false);
       return response.data.user;
     } catch (error) {
-      const isNotAuthenticated = error instanceof Error && 
-        (error.message.includes('Not authenticated') || error.message.includes('expired') || error.message.includes('Authentication required') || error.message.includes('invalid') || error.message.includes('session'));
+      // Check if token was explicitly wiped by api.ts (meaning it's a true 401 INVALID_TOKEN)
+      const tokenWiped = typeof window !== 'undefined' && !window.localStorage.getItem('blobcast_token');
 
-      if (isNotAuthenticated) {
+      if (tokenWiped) {
         setUser(null);
         storeCachedUser(null);
+        setIsConnectionLost(false);
         return null;
       }
 
-      // If it's a network outage or other backend error, fall back to cached user for offline resiliency
+      // If the token is still in localStorage, it means we had a transient infrastructure error
+      // (network drop, 502/504 gateway, DB cold start, server restart). Preserve the active session
+      // and load the cached user for seamless UX.
+      console.warn('📡 [Auth Provider] Server connection lost or transient error. Preserving active session.');
+      setIsConnectionLost(true);
+      
       const cachedUser = readCachedUser();
       setUser(cachedUser);
       return cachedUser;
@@ -163,6 +172,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   };
+
+  // Auto-retry server connection every 5 seconds when connection is lost
+  useEffect(() => {
+    if (!isConnectionLost) return;
+
+    const interval = setInterval(() => {
+      console.log('🔄 [Auth Provider] Retrying server connection...');
+      refreshSession();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isConnectionLost]);
 
   const logout = async () => {
     try {
@@ -200,10 +221,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isSessionActive,
     isAuthorizingSession,
     authorizeSessionKey,
-    revokeSessionKey
-  }), [user, isLoading, isSessionActive, isAuthorizingSession]);
+    revokeSessionKey,
+    isConnectionLost
+  }), [user, isLoading, isSessionActive, isAuthorizingSession, isConnectionLost]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {isConnectionLost && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500/90 backdrop-blur-md text-slate-900 font-mono text-xs font-semibold py-2 px-4 text-center border-b border-amber-400/20 shadow-lg flex items-center justify-center gap-2 animate-pulse">
+          <span className="inline-block w-2 h-2 rounded-full bg-slate-900 animate-ping"></span>
+          📡 Connection lost. Re-establishing secure server link, retrying in 5 seconds...
+        </div>
+      )}
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

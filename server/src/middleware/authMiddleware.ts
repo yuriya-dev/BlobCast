@@ -3,7 +3,11 @@ import { prisma } from '../lib/db';
 import { AppError } from '../utils/appError';
 import { parseCookies, verifyAuthToken, AUTH_COOKIE_NAME } from '../lib/auth';
 
-async function attachAuthUser(req: Request): Promise<boolean> {
+/**
+ * Verifies the incoming request token and retrieves the authenticated user.
+ * Throws precise, structured AppErrors to distinguish different failure modes.
+ */
+async function verifyAndGetAuthUser(req: Request): Promise<any> {
   const cookies = parseCookies(req.headers.cookie);
   let token = cookies[AUTH_COOKIE_NAME];
 
@@ -11,40 +15,45 @@ async function attachAuthUser(req: Request): Promise<boolean> {
     token = req.headers.authorization.substring(7);
   }
 
+  if (!token) {
+    throw new AppError('Authentication required', 401, 'INVALID_TOKEN');
+  }
+
   const payload = verifyAuthToken(token);
 
   if (!payload) {
-    return false;
+    throw new AppError('Session expired or invalid', 401, 'INVALID_TOKEN');
   }
 
+  // Any DB query errors here will propagate as 500 Internal Server Errors,
+  // which is correct (it indicates infrastructure failure, not an authentication issue).
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
 
   if (!user) {
-    return false;
+    throw new AppError('Authenticated user not found in database', 401, 'USER_NOT_FOUND');
   }
 
-  req.authUser = user;
-  return true;
+  return user;
 }
 
-/** Sets req.authUser when a valid session cookie is present; does not reject anonymous requests. */
+/** Sets req.authUser when a valid session token is present; does not reject anonymous requests. */
 export const optionalAuth = async (req: Request, _res: Response, next: NextFunction) => {
   try {
-    await attachAuthUser(req);
+    const user = await verifyAndGetAuthUser(req).catch(() => null);
+    if (user) {
+      req.authUser = user;
+    }
     next();
   } catch (error) {
     next(error);
   }
 };
 
+/** Protects endpoints by requiring a valid authenticated session. */
 export const requireAuth = async (req: Request, _res: Response, next: NextFunction) => {
   try {
-    const authenticated = await attachAuthUser(req);
-
-    if (!authenticated) {
-      throw new AppError('Authentication required', 401);
-    }
-
+    const user = await verifyAndGetAuthUser(req);
+    req.authUser = user;
     next();
   } catch (error) {
     next(error);

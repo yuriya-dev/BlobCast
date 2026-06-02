@@ -249,14 +249,19 @@ export const api = {
         cache: 'no-store'
       }));
       
-      // Only remove the token if the server explicitly responds with a 401 Unauthorized.
-      // This protects the session from being wiped out during temporary network glitches,
-      // server restarts, or 502/504 Bad Gateway deployment transitions.
       if (res.status === 401) {
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem('blobcast_token');
+        const errData = await res.json().catch(() => ({}));
+        
+        // Strict production-grade session invalidation check
+        const isSessionInvalid = errData.code === 'INVALID_TOKEN' || errData.code === 'TOKEN_EXPIRED';
+        if (isSessionInvalid) {
+          if (typeof window !== 'undefined') {
+            console.warn('🔒 [Auth Provider] Invalid or expired session token detected. Clearing local session.');
+            window.localStorage.removeItem('blobcast_token');
+          }
         }
-        throw new Error('Not authenticated');
+        
+        throw new Error(errData.message || 'Not authenticated');
       }
       
       return await parseJsonResponse<ApiSessionResponse>(res, 'Not authenticated');
