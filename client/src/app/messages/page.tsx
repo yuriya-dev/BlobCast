@@ -30,7 +30,7 @@ import { Sidebar } from '@/components/feed/Sidebar';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useWalrusImage } from '@/hooks/useWalrusImage';
 import { useDMWebSocket } from '@/hooks/useDMWebSocket';
-import { walrus } from '@/lib/walrus';
+import { walrus, compressImageFile } from '@/lib/walrus';
 import { api, ApiConversation, ApiDirectMessage } from '@/lib/api';
 import { 
   sealEncryptMessage, 
@@ -160,14 +160,21 @@ export default function MessagesPage() {
     setIsUploadingAttachment(true);
 
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
+      if (fileType === 'image') {
+        const base64data = await compressImageFile(file);
         const blobInfo = await walrus.uploadBlob(base64data);
         setAttachmentBlobId(blobInfo.blobId);
         setIsUploadingAttachment(false);
-      };
-      reader.readAsDataURL(file);
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          const blobInfo = await walrus.uploadBlob(base64data);
+          setAttachmentBlobId(blobInfo.blobId);
+          setIsUploadingAttachment(false);
+        };
+        reader.readAsDataURL(file);
+      }
     } catch (err) {
       console.error("Failed uploading attachment to Walrus:", err);
       alert("Failed uploading attachment to Walrus.");
