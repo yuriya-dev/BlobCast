@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef, use } from 'react';
-import { ArrowLeft, Loader2, Terminal, ShieldCheck, Database, MessageSquare, Image, Smile } from 'lucide-react';
+import { ArrowLeft, Loader2, Terminal, ShieldCheck, Database, MessageSquare, Image, Smile, X } from 'lucide-react';
 import EmojiPicker, { Theme, type EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/feed/Sidebar';
 import { TrendingWidget } from '@/components/feed/TrendingWidget';
-import { PostCard } from '@/components/feed/PostCard';
+import { PostCard, PostMediaGallery } from '@/components/feed/PostCard';
 import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
 import { AutocompleteDropdown } from '@/components/feed/AutocompleteDropdown';
@@ -65,6 +66,60 @@ export default function PostDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const { user: authUser } = useAuth();
   const account = useCurrentAccount();
+  const router = useRouter();
+
+  const renderFormattedText = (text: string) => {
+    const parts = text.split(/(\s+)/);
+    return parts.map((part, idx) => {
+      if (part.startsWith('#') && part.length > 1) {
+        const tag = part.substring(1).replace(/[^a-zA-Z0-9_]/g, '');
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/search?q=${encodeURIComponent('#' + tag)}`);
+            }}
+            className="text-sui-cyan hover:underline cursor-pointer font-mono font-semibold no-navigate"
+          >
+            {part}
+          </span>
+        );
+      }
+      if (part.startsWith('@') && part.length > 1) {
+        const username = part.substring(1).replace(/[^a-zA-Z0-9_]/g, '');
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/profile?username=${encodeURIComponent(username)}`);
+            }}
+            className="text-tatum-purple hover:underline cursor-pointer font-mono font-semibold no-navigate"
+          >
+            {part}
+          </span>
+        );
+      }
+      if (part.startsWith('$') && part.length > 1) {
+        const ticker = part.substring(1).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        return (
+          <span
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/search?q=${encodeURIComponent('$' + ticker)}`);
+            }}
+            className="text-amber-400 hover:underline cursor-pointer font-mono font-semibold text-neon-glow no-navigate"
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   const [post, setPost] = useState<any | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -222,6 +277,7 @@ export default function PostDetailPage({ params }: PageProps) {
         const rawComments = p.comments || [];
         const mappedComments = await Promise.all(rawComments.map(async (c: any) => {
           let commentText = 'Verifiable sub-blob commentary published on Walrus.';
+          let commentMedia: any[] = [];
           if (c.walrusBlobId) {
             try {
               const content = await walrus.getBlob(c.walrusBlobId);
@@ -229,7 +285,10 @@ export default function PostDetailPage({ params }: PageProps) {
                 const contentObj = content as any;
                 if (contentObj.content?.text) {
                   commentText = contentObj.content.text;
+                } else if (contentObj.text) {
+                  commentText = contentObj.text;
                 }
+                commentMedia = contentObj.media || contentObj.content?.media || [];
               }
             } catch (err) {
               console.warn(`⚠️ Failed to resolve Walrus comment content for ${c.walrusBlobId}:`, err);
@@ -242,7 +301,8 @@ export default function PostDetailPage({ params }: PageProps) {
             walrusBlobId: c.walrusBlobId,
             createdAt: c.createdAt,
             author: c.author,
-            text: commentText
+            text: commentText,
+            media: commentMedia
           };
         }));
 
@@ -293,21 +353,40 @@ export default function PostDetailPage({ params }: PageProps) {
 
       // Load offline comments
       const existingComments = mockDb.comments.filter(c => c.postId === id);
-      const mappedComments = existingComments.map(c => {
+      const mappedComments = await Promise.all(existingComments.map(async (c) => {
         const u = mockDb.users.find(user => user.id === c.authorId) || {
           displayName: 'Walrus',
           username: 'walrus',
           avatarBlobId: 'walrus://walrus-avatar'
         };
+        let commentText = (c.walrusBlobId || '').startsWith('walrus://blob-comment-')
+          ? 'Excellent point! Storing this commentary permanently on Walrus as well.'
+          : 'Verifiable sub-blob published on Walrus.';
+        let commentMedia: any[] = [];
+        if (c.walrusBlobId) {
+          try {
+            const content = await walrus.getBlob(c.walrusBlobId);
+            if (content && typeof content === 'object') {
+              const contentObj = content as any;
+              if (contentObj.content?.text) {
+                commentText = contentObj.content.text;
+              } else if (contentObj.text) {
+                commentText = contentObj.text;
+              }
+              commentMedia = contentObj.media || contentObj.content?.media || [];
+            }
+          } catch (err) {
+            console.warn(`⚠️ Failed to resolve Walrus comment content offline for ${c.walrusBlobId}:`, err);
+          }
+        }
         return {
           id: c.id,
           author: u,
-          text: (c.walrusBlobId || '').startsWith('walrus://blob-comment-')
-            ? 'Excellent point! Storing this commentary permanently on Walrus as well.'
-            : 'Verifiable sub-blob published on Walrus.',
+          text: commentText,
+          media: commentMedia,
           createdAt: c.createdAt
         };
-      });
+      }));
 
       setComments(mappedComments);
       setIsLoading(false);
@@ -322,9 +401,9 @@ export default function PostDetailPage({ params }: PageProps) {
   }, [id]);
   
 
-  const handleCommentSubmit = async (e: React.FormEvent, commentMediaItems: { blobId: string; type: 'image'|'video' }[] = []) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim() && commentMediaItems.length === 0) return;
+    if (!commentText.trim() && mediaItems.length === 0) return;
     if (!account?.address) {
       alert('Please connect your wallet first.');
       return;
@@ -347,8 +426,8 @@ export default function PostDetailPage({ params }: PageProps) {
         }
       };
 
-      if (commentMediaItems.length > 0) {
-        commentBlob.media = commentMediaItems.map(item => ({
+      if (mediaItems.length > 0) {
+        commentBlob.media = mediaItems.map(item => ({
           type: item.type,
           blob_id: item.blobId.startsWith('walrus') ? item.blobId : `walrus://${item.blobId}`,
           mime: item.type === 'video' ? 'video/mp4' : 'image/png',
@@ -381,6 +460,7 @@ export default function PostDetailPage({ params }: PageProps) {
         if (response && response.data && response.data.comment) {
           await loadPostAndComments();
           setCommentText('');
+          setMediaItems([]);
           return;
         }
       } catch (apiErr) {
@@ -398,6 +478,7 @@ export default function PostDetailPage({ params }: PageProps) {
 
       await loadPostAndComments();
       setCommentText('');
+      setMediaItems([]);
 
     } catch (err) {
       console.error("❌ Failed to upload comment to Walrus:", err);
@@ -602,6 +683,61 @@ export default function PostDetailPage({ params }: PageProps) {
                         />
                       </div>
 
+                      {/* Comment composer media upload preview list */}
+                      {(mediaItems.length > 0 || isUploadingMedia) && (
+                        <div className="border border-sui-cyan/15 rounded-cyber-md bg-walrus-blue/30 p-2.5 text-xs flex flex-col gap-1.5 relative">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                              ⚡ Walrus Storage Shard ({mediaItems.length} media)
+                            </span>
+                            {mediaItems.length > 0 && !isUploadingMedia && (
+                              <button 
+                                type="button"
+                                onClick={() => setMediaItems([])}
+                                className="text-[9px] font-mono text-rose-400 hover:text-white uppercase transition-colors"
+                              >
+                                [Remove All]
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {mediaItems.map((item, idx) => (
+                              <div key={item.blobId} className="relative group rounded-cyber-sm overflow-hidden border border-sui-cyan/20 bg-deep-space w-24 h-16 flex items-center justify-center">
+                                {item.type === 'image' ? (
+                                  <WalrusImage 
+                                    blobId={item.blobId} 
+                                    alt="Comment upload preview" 
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <VideoPreview blobId={item.blobId} />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = mediaItems.filter((_, i) => i !== idx);
+                                    setMediaItems(updated);
+                                  }}
+                                  className="absolute top-1 right-1 bg-black/75 hover:bg-rose-600/90 text-white rounded-full p-0.5 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                  title="Remove item"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                            {isUploadingMedia && (
+                              <div className="border border-sui-cyan/15 rounded-cyber-sm bg-walrus-blue/20 w-24 h-16 flex flex-col items-center justify-center text-center p-1">
+                                <Loader2 className="h-3.5 w-3.5 text-sui-cyan animate-spin mb-0.5" />
+                                <span className="text-[8px] font-mono text-sui-cyan animate-pulse uppercase tracking-wider">
+                                  Uploading...
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between">
                         {/* Shard verification status indicator */}
                         <div className="flex items-center gap-1.5 font-mono text-[9px] text-gray-400">
@@ -709,8 +845,15 @@ export default function PostDetailPage({ params }: PageProps) {
                           </div>
                           
                           <p className="text-gray-200 font-sans text-xs leading-relaxed mt-1">
-                            {comment.text}
+                            {renderFormattedText(comment.text)}
                           </p>
+
+                          {/* Optional Comment Media rendering */}
+                          {comment.media && comment.media.length > 0 && (
+                            <div className="mt-2 max-w-md">
+                              <PostMediaGallery items={comment.media} />
+                            </div>
+                          )}
 
                           {/* Cryptographic sub-verification info indicator */}
                           {comment.walrusBlobId && (
@@ -739,5 +882,60 @@ export default function PostDetailPage({ params }: PageProps) {
       </aside>
 
     </div>
+  );
+}
+
+function VideoPreview({ blobId }: { blobId: string }) {
+  const videoUrl = useWalrusImage(blobId);
+  const [resolvedUrl, setResolvedUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!videoUrl) {
+      setResolvedUrl('');
+      return;
+    }
+
+    if (videoUrl.startsWith('data:')) {
+      try {
+        const parts = videoUrl.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([uInt8Array], { type: contentType });
+        const objUrl = URL.createObjectURL(blob);
+        setResolvedUrl(objUrl);
+
+        return () => {
+          URL.revokeObjectURL(objUrl);
+        };
+      } catch (e) {
+        console.warn("Failed to convert base64 video to Object URL:", e);
+        setResolvedUrl(videoUrl);
+      }
+    } else {
+      setResolvedUrl(videoUrl);
+    }
+  }, [videoUrl]);
+
+  if (!resolvedUrl) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-black/40">
+        <Loader2 className="h-4 w-4 text-sui-cyan animate-spin mb-0.5" />
+        <span className="text-[8px] font-mono text-gray-500">Loading...</span>
+      </div>
+    );
+  }
+
+  return (
+    <video 
+      src={resolvedUrl} 
+      className="w-full h-full object-contain bg-black"
+      playsInline
+      muted
+    />
   );
 }

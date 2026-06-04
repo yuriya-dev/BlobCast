@@ -1182,7 +1182,7 @@ function VideoPlayer({ blobId }: { blobId: string }) {
   );
 }
 
-function PostMediaGallery({ items }: { items: any[] }) {
+export function PostMediaGallery({ items }: { items: any[] }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const getGridClass = (count: number) => {

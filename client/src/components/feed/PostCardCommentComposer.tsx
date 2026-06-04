@@ -2,10 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Smile, Image } from 'lucide-react';
+import { Loader2, Smile, Image, X } from 'lucide-react';
 import EmojiPicker, { type EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import EmojiModal from '@/components/common/EmojiModal';
 import { walrus, compressImageFile } from '@/lib/walrus';
+import { useWalrusImage, WalrusImage } from '@/hooks/useWalrusImage';
 import { api } from '@/lib/api';
 import { mockDb } from '@/lib/db';
 import { useTextAutocomplete } from '@/hooks/useTextAutocomplete';
@@ -33,6 +34,14 @@ export function PostCardCommentComposer({
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [mediaItems, setMediaItems] = useState<{ blobId: string; type: 'image'|'video' }[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // Reset media items when composer is closed
+  useEffect(() => {
+    if (!showComments) {
+      setMediaItems([]);
+      setShowMediaInput(false);
+    }
+  }, [showComments]);
 
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -214,9 +223,9 @@ export function PostCardCommentComposer({
       className="mt-4 border-t border-sui-cyan/10 pt-4"
       onClick={(e) => e.stopPropagation()}
     >
-      <form onSubmit={(e) => handleCommentSubmit(e, mediaItems)} className="flex gap-3 items-start mt-1">
+      <form onSubmit={(e) => handleCommentSubmit(e, mediaItems)} className="flex flex-col gap-2 mt-1 relative">
         {/* Textarea with autocomplete */}
-        <div ref={containerRef} className="flex-1 relative">
+        <div ref={containerRef} className="relative">
           <textarea
             ref={textareaRef}
             value={text}
@@ -249,42 +258,107 @@ export function PostCardCommentComposer({
           />
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0 pt-1">
-          <button
-            ref={emojiTriggerRef}
-            type="button"
-            onClick={() => setShowEmojiPicker((prev) => !prev)}
-            className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"
-            title="Insert emoji"
-          >
-            <Smile className="h-4 w-4" />
-          </button>
-          <input
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            id="comment-media-file-input"
-            className="hidden"
-            onChange={handleMediaUpload}
-          />
-          <label htmlFor="comment-media-file-input" className="p-2 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all cursor-pointer" title="Upload media">
-            <Image className="h-4 w-4" />
-          </label>
+        {/* Dynamic media file selector & preview */}
+        {showMediaInput && (mediaItems.length > 0 || isUploadingMedia) && (
+          <div className="border border-sui-cyan/15 rounded-cyber-md bg-walrus-blue/30 p-2.5 text-xs flex flex-col gap-1.5 relative">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                ⚡ Walrus Storage Shard ({mediaItems.length} media)
+              </span>
+              {mediaItems.length > 0 && !isUploadingMedia && (
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setMediaItems([]);
+                    setShowMediaInput(false);
+                  }}
+                  className="text-[9px] font-mono text-rose-400 hover:text-white uppercase transition-colors"
+                >
+                  [Remove All]
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {mediaItems.map((item, idx) => (
+                <div key={item.blobId} className="relative group rounded-cyber-sm overflow-hidden border border-sui-cyan/20 bg-deep-space w-24 h-16 flex items-center justify-center">
+                  {item.type === 'image' ? (
+                    <WalrusImage 
+                      blobId={item.blobId} 
+                      alt="Comment upload preview" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <VideoPreview blobId={item.blobId} />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = mediaItems.filter((_, i) => i !== idx);
+                      setMediaItems(updated);
+                      if (updated.length === 0) setShowMediaInput(false);
+                    }}
+                    className="absolute top-1 right-1 bg-black/75 hover:bg-rose-600/90 text-white rounded-full p-0.5 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                    title="Remove item"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              {isUploadingMedia && (
+                <div className="border border-sui-cyan/15 rounded-cyber-sm bg-walrus-blue/20 w-24 h-16 flex flex-col items-center justify-center text-center p-1">
+                  <Loader2 className="h-3.5 w-3.5 text-sui-cyan animate-spin mb-0.5" />
+                  <span className="text-[8px] font-mono text-sui-cyan animate-pulse uppercase tracking-wider">
+                    Uploading...
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Actions Row */}
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-1.5">
+            <button
+              ref={emojiTriggerRef}
+              type="button"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
+              className="p-1.5 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all"
+              title="Insert emoji"
+            >
+              <Smile className="h-4 w-4" />
+            </button>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              id="comment-media-file-input"
+              className="hidden"
+              onChange={handleMediaUpload}
+            />
+            <label htmlFor="comment-media-file-input" className="p-1.5 rounded-cyber-sm text-gray-400 hover:text-sui-cyan hover:bg-sui-cyan/10 transition-all cursor-pointer" title="Upload media">
+              <Image className="h-4 w-4" />
+            </label>
+          </div>
+
           <button
             type="submit"
             disabled={isPostingComment || (!text.trim() && mediaItems.length === 0)}
             className="px-4 py-2 rounded-cyber-sm bg-linear-to-r from-sui-cyan to-tatum-purple text-deep-space font-semibold font-mono text-xs hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 flex items-center gap-1.5 cursor-pointer"
           >
             {isPostingComment ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Replying...</span>
+              </>
             ) : (
               'Reply'
             )}
           </button>
         </div>
 
-        <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-[10%] left-[66.5%] mb-2 z-50">
+        <EmojiModal visible={showEmojiPicker} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiTriggerRef as any} className="bottom-full mb-2 z-50">
           <div
             className="rounded-cyber-lg border border-sui-cyan/20 bg-deep-space/95 shadow-cyber-glow overflow-hidden"
             style={{ width: `${320 * 0.7}px`, height: `${360 * 0.7}px` }}
@@ -301,20 +375,62 @@ export function PostCardCommentComposer({
             />
           </div>
         </EmojiModal>
-
-        {showMediaInput && mediaItems.length > 0 ? (
-          <div className="absolute left-0 bottom-20 z-10 w-[280px] p-2 rounded-cyber-md bg-walrus-blue/30 border border-sui-cyan/10">
-            <div className="flex gap-2">
-              {mediaItems.map((m) => (
-                <div key={m.blobId} className="w-16 h-10 bg-black/30 rounded-cyber-sm overflow-hidden flex items-center justify-center text-[10px] font-mono">
-                  {m.type === 'image' ? '🖼️' : '🎥'}
-                </div>
-              ))}
-              {isUploadingMedia && <Loader2 className="h-4 w-4 animate-spin text-sui-cyan" />}
-            </div>
-          </div>
-        ) : null}
       </form>
     </motion.div>
+  );
+}
+
+function VideoPreview({ blobId }: { blobId: string }) {
+  const videoUrl = useWalrusImage(blobId);
+  const [resolvedUrl, setResolvedUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!videoUrl) {
+      setResolvedUrl('');
+      return;
+    }
+
+    if (videoUrl.startsWith('data:')) {
+      try {
+        const parts = videoUrl.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([uInt8Array], { type: contentType });
+        const objUrl = URL.createObjectURL(blob);
+        setResolvedUrl(objUrl);
+
+        return () => {
+          URL.revokeObjectURL(objUrl);
+        };
+      } catch (e) {
+        console.warn("Failed to convert base64 video to Object URL:", e);
+        setResolvedUrl(videoUrl);
+      }
+    } else {
+      setResolvedUrl(videoUrl);
+    }
+  }, [videoUrl]);
+
+  if (!resolvedUrl) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-black/40">
+        <Loader2 className="h-4 w-4 text-sui-cyan animate-spin mb-0.5" />
+        <span className="text-[8px] font-mono text-gray-500">Loading...</span>
+      </div>
+    );
+  }
+
+  return (
+    <video 
+      src={resolvedUrl} 
+      className="w-full h-full object-contain bg-black"
+      playsInline
+      muted
+    />
   );
 }
