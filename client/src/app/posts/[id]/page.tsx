@@ -53,7 +53,7 @@ function CommentAuthorAvatar({ author }: { author: any }) {
   );
 }
 import { api } from '@/lib/api';
-import { walrus } from '@/lib/walrus';
+import { walrus, compressImageFile } from '@/lib/walrus';
 import { mockDb } from '@/lib/db';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useCurrentAccount } from '@mysten/dapp-kit';
@@ -570,7 +570,7 @@ export default function PostDetailPage({ params }: PageProps) {
 
         setIsUploadingMedia(true);
         try {
-          const base64data = await readFileAsDataURL(file);
+          const base64data = await compressImageFile(file);
           const blobInfo = await walrus.uploadBlob(base64data);
           newItems.push({ blobId: blobInfo.blobId, type: 'image' });
           setMediaItems([...newItems]);
